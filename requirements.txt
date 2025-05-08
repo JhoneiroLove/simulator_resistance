@@ -1,0 +1,12 @@
+# GUI
+PyQt5>=5.15.4
+# Gráficos en tiempo real
+pyqtgraph>=0.12.3
+# Algoritmo genético
+deap>=2.0.0
+# Manejo de datos y CSV
+pandas>=1.2.0
+# ORM y base de datos
+SQLAlchemy>=1.4.0
+# Python
+python>=3.7
