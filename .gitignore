@@ -2,6 +2,10 @@
 __pycache__
 pycache/
 **/pycache/
+src/gui/__pycache__/main_window.cpython-313.pyc
+src/gui/widgets/__pycache__/detailed_results.cpython-313.pyc
+src/gui/widgets/__pycache__/input_form.cpython-313.pyc
+src/gui/widgets/__pycache__/results_view.cpython-313.pyc
 *.py[cod]
 *.py[cod]
 *.pyo

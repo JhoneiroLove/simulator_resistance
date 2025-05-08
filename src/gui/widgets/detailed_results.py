@@ -1,16 +1,44 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QTextEdit,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+)
 from PyQt5.QtGui import QFont
 
 class DetailedResults(QWidget):
+    """
+    Widget para mostrar los resultados detallados de la simulación:
+    - Resistencia promedio de la población
+    - Resistencia máxima (clón más resistente)
+    - Tabla de resultados por antibiótico
+    - Recomendaciones clínicas según el antibiótico
+    """
+
     def __init__(self):
         super().__init__()
 
-        # Configurar layout
+        # Layout principal
         self.layout = QVBoxLayout(self)
 
-        # Etiqueta de resistencia
-        self.lbl_resistencia = QLabel("Resistencia Predicha: ")
-        self.lbl_resistencia.setFont(QFont("Arial", 14, QFont.Bold))
+        # Etiquetas para resistencias
+        self.lbl_promedio = QLabel("Resistencia Promedio: ")
+        self.lbl_promedio.setFont(QFont("Arial", 14, QFont.Bold))
+
+        self.lbl_maxima = QLabel("Resistencia Máxima: ")
+        self.lbl_maxima.setFont(QFont("Arial", 14, QFont.Bold))
+
+        # Tabla de resultados por antibiótico
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(
+            ["Antibiótico", "% Resistencia", "Interpretación"]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
         # Área de recomendaciones
         self.txt_recomendacion = QTextEdit()
@@ -23,14 +51,37 @@ class DetailedResults(QWidget):
             }
         """)
 
-        # Añadir elementos
-        self.layout.addWidget(self.lbl_resistencia)
+        # Añadir widgets al layout
+        self.layout.addWidget(self.lbl_promedio)
+        self.layout.addWidget(self.lbl_maxima)
+        self.layout.addWidget(self.table)
         self.layout.addWidget(self.txt_recomendacion)
 
-    def update_results(self, resistencia, antibiotico):
-        """Actualiza la interfaz con nuevos resultados."""
-        self.lbl_resistencia.setText(f"Resistencia a {antibiotico}: {resistencia:.2%}")
+    def update_results(
+        self, avg_resistencia, max_resistencia, antibiotico, antibioticos_results
+    ):
+        """
+        Actualiza los valores mostrados:
+        :param avg_resistencia: float (0.0–1.0) resistencia promedio
+        :param max_resistencia: float (0.0–1.0) resistencia máxima
+        :param antibiotico: str, antibiótico principal evaluado
+        :param antibioticos_results: list de tuplas (nombre, valor_float, interpretacion_str)
+        """
+        # Formatear y mostrar porcentajes principales
+        self.lbl_promedio.setText(f"Resistencia Promedio: {avg_resistencia:.1%}")
+        self.lbl_maxima.setText(f"Resistencia Máxima: {max_resistencia:.1%}")
 
+        # Rellenar tabla de antibióticos
+        self.table.setRowCount(len(antibioticos_results))
+        for row, (name, value, interp) in enumerate(antibioticos_results):
+            item_name = QTableWidgetItem(name)
+            item_val = QTableWidgetItem(f"{value:.1%}")
+            item_interp = QTableWidgetItem(interp)
+            self.table.setItem(row, 0, item_name)
+            self.table.setItem(row, 1, item_val)
+            self.table.setItem(row, 2, item_interp)
+
+        # Recomendaciones clínicas para el antibiótico principal
         recomendaciones = {
             "Meropenem": (
                 "Recomendación Clínica:\n"
@@ -44,9 +95,10 @@ class DetailedResults(QWidget):
                 "• Considerar Levofloxacino + Aminoglucósido."
             ),
         }
+
         self.txt_recomendacion.setText(
             recomendaciones.get(
                 antibiotico,
-                "Consulte con el servicio de infectología para recomendaciones personalizadas.",
+                "Consulte con infectología para recomendaciones personalizadas.",
             )
         )

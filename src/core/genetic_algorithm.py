@@ -3,13 +3,20 @@ import copy
 from deap import base, creator, tools
 
 # ——— DEFINICIÓN DE TIPOS DE DEAP ———
-creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-creator.create("Individual", list, fitness=creator.FitnessMax)
+# Evitar recrear si ya existen
+try:
+    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    creator.create("Individual", list, fitness=creator.FitnessMax)
+except RuntimeError:
+    pass
 
 class GeneticAlgorithm:
     def __init__(self, genes, mutation_rate=0.05, generations=50, pop_size=100):
         """
         genes: lista de objetos con atributos .id y .peso_resistencia
+        mutation_rate: probabilidad de mutación por gen
+        generations: número de generaciones a ejecutar
+        pop_size: tamaño de la población
         """
         self.genes = genes
         self.mutation_rate = mutation_rate
@@ -33,21 +40,31 @@ class GeneticAlgorithm:
         return creator.Individual([random.randint(0, 1) for _ in self.genes])
 
     def evaluate(self, individual):
-        """Calcula la resistencia basada en los genes activos."""
+        """Calcula la resistencia total de un individuo."""
         resistencia = sum(
             gene.peso_resistencia * active
             for gene, active in zip(self.genes, individual)
         )
         return (max(0.0, resistencia),)
 
-    def run(self, selected_gene_ids, progress_callback=None):
+    def run(self, selected_gene_ids=None, progress_callback=None):
         """
-        Ejecuta el AG:
-        - selected_gene_ids: iterable de IDs que el usuario marcó
-        - progress_callback(generation, best, avg): opcional
-        Devuelve: (best_history, avg_history)
+        Ejecuta el algoritmo genético.
+
+        Args:
+            selected_gene_ids: iterable de IDs de genes que deben forzarse a 1
+            progress_callback: función opcional con firma
+                               (gen, best, avg, minimum, cnt_max, cnt_avg, cnt_min)
+
+        Returns:
+            best_history: lista de fitness máximo por generación
+            avg_history: lista de fitness promedio por generación
+            min_history: lista de fitness mínimo por generación
+            cnt_max_history: lista de conteos de individuos con fitness == best
+            cnt_avg_history: lista de conteos de individuos cerca del promedio (3 decimales)
+            cnt_min_history: lista de conteos de individuos con fitness == minimum
         """
-        # 1) Población inicial aleatoria
+        # 1) Crear población inicial
         population = self.toolbox.population(n=self.pop_size)
 
         # 2) Forzar genes seleccionados a 1
@@ -61,6 +78,10 @@ class GeneticAlgorithm:
 
         best_history = []
         avg_history = []
+        min_history = []
+        cnt_max_history = []
+        cnt_avg_history = []
+        cnt_min_history = []
 
         # 3) Bucle evolutivo
         for gen in range(self.generations):
@@ -71,8 +92,7 @@ class GeneticAlgorithm:
             # Cruce
             for c1, c2 in zip(offspring[::2], offspring[1::2]):
                 self.toolbox.mate(c1, c2)
-                del c1.fitness.values
-                del c2.fitness.values
+                del c1.fitness.values, c2.fitness.values
 
             # Mutación
             for mutant in offspring:
@@ -81,23 +101,41 @@ class GeneticAlgorithm:
 
             # Evaluación de inválidos
             invalids = [ind for ind in offspring if not ind.fitness.valid]
-            fits = map(self.toolbox.evaluate, invalids)
-            for ind, fit in zip(invalids, fits):
-                ind.fitness.values = fit
+            for ind in invalids:
+                ind.fitness.values = self.evaluate(ind)
 
-            # Reemplazo
+            # Reemplazo de población
             population[:] = offspring
 
-            # Cálculo de métricas
+            # Calcular métricas de fitness
             fitness_vals = [ind.fitness.values[0] for ind in population]
             best = max(fitness_vals)
             avg = sum(fitness_vals) / len(fitness_vals)
+            minimum = min(fitness_vals)
 
+            # Conteos de individuos
+            cnt_max = fitness_vals.count(best)
+            avg_rounded = round(avg, 3)
+            cnt_avg = sum(1 for v in fitness_vals if round(v, 3) == avg_rounded)
+            cnt_min = fitness_vals.count(minimum)
+
+            # Guardar historia
             best_history.append(best)
             avg_history.append(avg)
+            min_history.append(minimum)
+            cnt_max_history.append(cnt_max)
+            cnt_avg_history.append(cnt_avg)
+            cnt_min_history.append(cnt_min)
 
             # Callback para GUI
             if progress_callback:
-                progress_callback(gen, best, avg)
+                progress_callback(gen, best, avg, minimum, cnt_max, cnt_avg, cnt_min)
 
-        return best_history, avg_history
+        return (
+            best_history,
+            avg_history,
+            min_history,
+            cnt_max_history,
+            cnt_avg_history,
+            cnt_min_history,
+        )
