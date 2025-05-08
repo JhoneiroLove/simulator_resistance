@@ -12,10 +12,10 @@ def insert_test_data():
     genes = [
         Gen(
             nombre="blaVIM",
-            peso_resistencia=2.5,
+            peso_resistencia=0.6,
             descripcion="Carbapenemasa de tipo VIM",
         ),
-        Gen(nombre="mexAB-oprM", peso_resistencia=1.8, descripcion="Bomba de eflujo"),
+        Gen(nombre="mexAB-oprM", peso_resistencia=0.4, descripcion="Bomba de eflujo"),
     ]
 
     # Antibióticos de prueba

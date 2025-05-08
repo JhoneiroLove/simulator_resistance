@@ -34,8 +34,9 @@ class DetailedResults(QWidget):
         recomendaciones = {
             "Meropenem": (
                 "Recomendación Clínica:\n"
-                "• Evitar carbapenémicos.\n"
-                "• Considerar terapia combinada con Ceftazidima/Avibactam."
+                "• Considerar alternativas no carbapenémicas:\n"
+                "  - Ceftazidima/Avibactam\n"
+                "  - Colistina + Fosfomicina"
             ),
             "Ciprofloxacino": (
                 "Recomendación Clínica:\n"

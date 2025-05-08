@@ -53,6 +53,9 @@ class InputForm(QWidget):
             id for id, cb in self.gene_checkboxes.items() if cb.isChecked()
         ]
         antibiotico_id = self.antibiotico_combo.currentData()
+        
+        if self.antibiotico_combo.currentText() == "Meropenem" and any(gen == "blaVIM" for gen in selected_genes):
+            QMessageBox.warning(self, "Alerta", "blaVIM confiere resistencia alta a carbapenémicos.")
 
         if not selected_genes:
             QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
