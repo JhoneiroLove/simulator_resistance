@@ -14,16 +14,37 @@ class Antibiotico(Base):
     __tablename__ = "antibioticos"
     id = Column(Integer, primary_key=True)
     nombre = Column(String(100), unique=True)
-    concentracion_minima = Column(Float)
-    concentracion_maxima = Column(Float)
+
+    # Concentraciones usadas en la simulación
+    concentracion_minima = Column(Float, nullable=False)
+    concentracion_maxima = Column(Float, nullable=False)
     tipo = Column(String(50))
+
+    # —— Nuevos campos para validación y métricas ——
+    # CIM verdadera (para calcular EPCIM)
+    cim_verdadera = Column(
+        Float,
+        nullable=False,
+        comment="Concentración Inhibitoria Mínima real (de referencia)",
+    )
+    # CPM verdadera (para calcular PCCPM)
+    cpm_verdadera = Column(
+        Float,
+        nullable=False,
+        comment="Concentración Preventiva de Mutantes real (de referencia)",
+    )
+    # Fenotipo real MDR/XDR (para calcular ECMDR)
+    # Puede ser 'S' (sensible), 'MDR' o 'XDR'
+    phenotype_real = Column(
+        String(4), nullable=False, comment="Etiqueta real: 'S', 'MDR' o 'XDR'"
+    )
 
 class Simulacion(Base):
     __tablename__ = "simulaciones"
     id = Column(Integer, primary_key=True)
-    antibiotico_id = Column(Integer, ForeignKey("antibioticos.id"))
-    concentracion = Column(Float)
-    resistencia_predicha = Column(Float)
+    antibiotico_id = Column(Integer, ForeignKey("antibioticos.id"), nullable=False)
+    concentracion = Column(Float, nullable=False)
+    resistencia_predicha = Column(Float, nullable=False)
     fecha = Column(DateTime, server_default=func.now())
     genes = relationship("Gen", secondary="simulacion_genes", lazy="joined")
 

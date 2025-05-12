@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 from PyQt5.QtWidgets import (
     QMainWindow,
     QTabWidget,
@@ -10,14 +11,16 @@ from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
+
 from src.core.genetic_algorithm import GeneticAlgorithm
+from src.core.metrics import exponential_growth
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Simulacion, SimulacionGen
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Simulador de Resistencia Bacteriana")
+        self.setWindowTitle("Simulador Evolutivo por Tratamientos")
         self.setGeometry(100, 100, 1280, 720)
 
         # Pestañas
@@ -35,65 +38,62 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 
-        # Señal desde el formulario
+        # Conectar señal
         self.input_tab.simulation_triggered.connect(self.handle_simulation)
 
-    def handle_simulation(self, antibiotico_id, selected_genes):
+    def handle_simulation(
+        self,
+        selected_genes: list,
+        schedule: list,
+        time_unit: str,
+        mut_rate: float,
+        death_rate: float,
+    ):
+        """
+        schedule: lista de (t, ab_id, conc)
+        """
         session = get_session()
         try:
-            # Cargar genes y antibiótico
+            # 1) Cargo genes y construyo el schedule con objetos Antibiotico
             genes = session.query(Gen).all()
-            antibiotico = session.query(Antibiotico).get(antibiotico_id)
-            if not genes or not antibiotico:
-                raise ValueError("Antibiótico o lista de genes vacía")
+            sched_objs = []
+            for t, ab_id, conc in schedule:
+                ab = session.query(Antibiotico).get(ab_id)
+                if not ab:
+                    raise ValueError(f"Antibiótico con id={ab_id} no existe")
+                sched_objs.append((t, ab, conc))
 
-            # Ejecutar GA
+            # 2) Instancio el GA pasándole la secuencia completa
             ga = GeneticAlgorithm(
-                genes, mutation_rate=0.1, generations=100, pop_size=100
+                genes=genes,
+                antibiotic_schedule=sched_objs,
+                mutation_rate=mut_rate,
+                generations=self.input_tab.time_horizon_sb.value(),
+                pop_size=200,
+                reproduction_func=exponential_growth,
+                death_rate=death_rate,
             )
-            result = ga.run(selected_genes)
 
-            # Desempaquetar según numero de salidas
-            if len(result) == 6:
-                (
-                    best_hist,
-                    avg_hist,
-                    min_hist,
-                    cnt_max_hist,
-                    cnt_avg_hist,
-                    cnt_min_hist,
-                ) = result
-            else:
-                best_hist, avg_hist = result
-                min_hist = cnt_max_hist = cnt_avg_hist = cnt_min_hist = None
+            # 3) Ejecuto la simulación (ya no paso concentration ni time_unit)
+            best_hist, avg_hist, kill_hist, mut_hist = ga.run(
+                selected_gene_ids=selected_genes,
+                time_horizon=self.input_tab.time_horizon_sb.value(),
+            )
 
-            # Altura del eje X
-            gens = list(range(len(best_hist)))
+            # 4) Pinto las 4 curvas en “Evolución en Tiempo Real”
+            times = np.linspace(
+                0, self.input_tab.time_horizon_sb.value(), len(best_hist)
+            )
+            self.results_tab.update_plot(
+                times, best_hist, avg_hist, kill_hist, mut_hist, schedule=sched_objs
+            )
 
-            # Actualizar gráfica
-            if min_hist is not None:
-                self.results_tab.update_plot(
-                    gens,
-                    best_hist,
-                    avg_hist,
-                    min_hist,
-                    cnt_max_hist,
-                    cnt_avg_hist,
-                    cnt_min_hist,
-                )
-            else:
-                self.results_tab.update_plot(gens, best_hist, avg_hist)
-
-            # Mostrar pestaña de resultados
-            self.tabs.setCurrentWidget(self.results_tab)
-
-            # Métricas finales
-            best_final = best_hist[-1]
-            avg_final = avg_hist[-1]
-
-            # Guardar simulación en BD
+            # 5) Guardo en BD la simulación final (último antibiótico)
+            last_t, last_ab_id, last_conc = schedule[-1]
             sim = Simulacion(
-                antibiotico_id=antibiotico.id, resistencia_predicha=best_final
+                antibiotico_id=last_ab_id,
+                concentracion=last_conc,
+                resistencia_predicha=best_hist[-1],
             )
             session.add(sim)
             session.commit()
@@ -101,41 +101,24 @@ class MainWindow(QMainWindow):
                 session.add(SimulacionGen(simulacion_id=sim.id, gen_id=gid))
             session.commit()
 
-            # Construir antibiograma
-            antibiogram = []
-            for ab in session.query(Antibiotico).all():
-                ultima = (
-                    session.query(Simulacion)
-                    .filter_by(antibiotico_id=ab.id)
-                    .order_by(Simulacion.fecha.desc())
-                    .first()
-                )
-                if ultima:
-                    val = ultima.resistencia_predicha
-                    interp = "R" if val >= 0.5 else "S"
-                else:
-                    val, interp = 0.0, "N/A"
-                antibiogram.append((ab.nombre, val, interp))
-
-            # Actualizar resultados detallados
-            self.detail_tab.update_results(
-                avg_final, best_final, antibiotico.nombre, antibiogram
-            )
-
-            # Mostrar mensaje en la barra de estado
+            # 6) Solo mostramos mensaje de éxito
             self.statusBar().showMessage(
-                f"Simulación completada: Promedio {avg_final:.1%} | Máxima {best_final:.1%}",
+                f"Simulación completada — Resistencia final: {best_hist[-1] * 100:.1f}%",
                 5000,
             )
 
+            # Opcional: podrías actualizar aquí la pestaña de detalles
+            # según el nuevo diseño que quieras para “Resultados Detallados”.
+
         except Exception as e:
             session.rollback()
-            QMessageBox.critical(self, "Error", f"Error durante la simulación:\n{e}")
+            QMessageBox.critical(self, "Error durante simulación", str(e))
         finally:
             session.close()
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
+    w = MainWindow()
+    w.show()
     sys.exit(app.exec_())
