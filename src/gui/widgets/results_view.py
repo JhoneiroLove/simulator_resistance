@@ -69,7 +69,7 @@ class ResultsView(QWidget):
         self.curve_avg = self.plot.plot(pen=pg.mkPen('#3498DB', width=2), name="Avg")
         self.curve_mort = self.plot.plot(pen=pg.mkPen('#9B59B6', width=2), name="Mort")
         self.curve_mut = self.plot.plot(pen=pg.mkPen('#F1C40F', width=2), name="Mut")
-        self.curve_div = self.plot.plot(pen=pg.mkPen("#2ECC71", width=2), symbol="Div")
+        self.curve_div = self.plot.plot(pen=pg.mkPen("#2ECC71", width=2), name="Div")
 
         # Datos
         self.times = np.array([])

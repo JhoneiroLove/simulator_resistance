@@ -35,3 +35,4 @@ build/
 *.pytest_cache
 *.coverage
 *.cover
+resistencia.db

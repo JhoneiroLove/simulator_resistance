@@ -1,5 +1,3 @@
-# src/gui/main_window.py
-
 import sys
 import numpy as np
 from PyQt5.QtWidgets import (
@@ -10,6 +8,7 @@ from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
+from src.gui.widgets.diversity_window import DiversityWindow
 
 from src.core.genetic_algorithm import GeneticAlgorithm
 from src.data.database import get_session
@@ -77,7 +76,6 @@ class MainWindow(QMainWindow):
 
             # 2) Instancio el GA con los nombres de parámetros correctos
             #    y usando el time_horizon que el usuario puso en el SpinBox
-            time_horizon = self.input_tab.time_horizon_sb.value()
             
             ga = GeneticAlgorithm(
                 genes=genes,
@@ -107,6 +105,11 @@ class MainWindow(QMainWindow):
                 schedule=sched_objs,
                 interval_ms=100,
             )
+            
+            # Abrir ventana exclusiva de diversidad genética
+            # Guardamos en self para que no se recoja el GC
+            self.div_win = DiversityWindow(times, np.array(diversity_hist), self)
+            self.div_win.show()
 
             # Guardar resultado
             last_t, last_ab_id, last_conc = schedule[-1]
