@@ -1,11 +1,10 @@
+# src/gui/main_window.py
+
 import sys
 import numpy as np
 from PyQt5.QtWidgets import (
-    QMainWindow,
-    QTabWidget,
-    QStatusBar,
-    QMessageBox,
-    QApplication,
+    QMainWindow, QTabWidget, QStatusBar,
+    QMessageBox, QApplication,
 )
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
@@ -25,35 +24,49 @@ class MainWindow(QMainWindow):
         # Pestañas
         self.tabs = QTabWidget()
         self.input_tab = InputForm()
-        self.results_tab = ResultsView()
+
+        # Carga de antibióticos para la pestaña de resultados
+        session = get_session()
+        abs_q = session.query(
+            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
+        ).all()
+        session.close()
+        antibiotics = [
+            {"id": a[0], "nombre": a[1], "conc_min": a[2]}
+            for a in abs_q
+        ]
+
+        self.results_tab = ResultsView(antibiotics)
+        self.results_tab.simulate_requested.connect(self.handle_simulation)
+
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
 
-        self.tabs.addTab(self.input_tab, "Nueva Simulación")
-        self.tabs.addTab(self.results_tab, "Evolución en Tiempo Real")
-        self.tabs.addTab(self.csv_tab, "Validación CSV")
-        self.tabs.addTab(self.detail_tab, "Resultados Detallados")
+        self.tabs.addTab(self.input_tab,   "1. Selección y Parámetros")
+        self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
+        self.tabs.addTab(self.csv_tab,     "Validación CSV")
+        self.tabs.addTab(self.detail_tab,  "Resultados Detallados")
 
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 
-        # Conectar señal
-        self.input_tab.simulation_triggered.connect(self.handle_simulation)
+    def handle_simulation(self, schedule):
+        # Leer genes
+        selected_genes = [
+            gid for gid, cb in self.input_tab.checks.items() if cb.isChecked()
+        ]
+        if not selected_genes:
+            QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
+            self.tabs.setCurrentWidget(self.input_tab)
+            return
 
-    def handle_simulation(
-        self,
-        selected_genes: list,
-        schedule: list,
-        time_unit: str,
-        mut_rate: float,
-        death_rate: float,
-    ):
-        """
-        schedule: lista de (t, ab_id, conc)
-        """
+        # Parámetros
+        mut_rate     = self.input_tab.mut_rate_sb.value()
+        death_rate   = self.input_tab.death_rate_sb.value()
+        time_horizon = self.input_tab.time_horizon_sb.value()
+
         session = get_session()
         try:
-            # 1) Cargo genes y construyo el schedule con objetos Antibiotico
             genes = session.query(Gen).all()
             sched_objs = []
             for t, ab_id, conc in schedule:
@@ -71,24 +84,30 @@ class MainWindow(QMainWindow):
                 antibiotic_schedule=sched_objs,
                 mutation_rate=mut_rate,
                 generations=time_horizon,
+                pop_size=200,
                 death_rate=death_rate,
             )
 
             # 3) Ejecuto la simulación (ya no paso concentration ni time_unit)
             best_hist, avg_hist, kill_hist, mut_hist, diversity_hist = ga.run(
                 selected_gene_ids=selected_genes,
-                time_horizon=self.input_tab.time_horizon_sb.value(),
+                time_horizon=time_horizon,
             )
 
-            # 4) Pinto las 4 curvas en “Evolución en Tiempo Real”
-            times = np.linspace(
-                0, self.input_tab.time_horizon_sb.value(), len(best_hist)
-            )
+            # Plot dinámico
+            times = np.linspace(0, time_horizon, len(best_hist))
+            self.tabs.setCurrentWidget(self.results_tab)
             self.results_tab.update_plot(
-                times, best_hist, avg_hist, kill_hist, mut_hist, schedule=sched_objs
+                times,
+                best_hist,
+                avg_hist,
+                mort_vals=kill_hist,
+                mut_vals=mut_hist,
+                schedule=sched_objs,
+                interval_ms=100,
             )
 
-            # 5) Guardo en BD la simulación final (último antibiótico)
+            # Guardar resultado
             last_t, last_ab_id, last_conc = schedule[-1]
             sim = Simulacion(
                 antibiotico_id=last_ab_id,
@@ -101,21 +120,15 @@ class MainWindow(QMainWindow):
                 session.add(SimulacionGen(simulacion_id=sim.id, gen_id=gid))
             session.commit()
 
-            # 6) Solo mostramos mensaje de éxito
             self.statusBar().showMessage(
-                f"Simulación completada — Resistencia final: {best_hist[-1] * 100:.1f}%",
-                5000,
+                f"Simulación completada — Resistencia final: {best_hist[-1]*100:.1f}%", 5000
             )
-
-            # Opcional: podrías actualizar aquí la pestaña de detalles
-            # según el nuevo diseño que quieras para “Resultados Detallados”.
 
         except Exception as e:
             session.rollback()
-            QMessageBox.critical(self, "Error durante simulación", str(e))
+            QMessageBox.critical(self, "Error", str(e))
         finally:
             session.close()
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
