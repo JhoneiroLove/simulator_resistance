@@ -130,13 +130,14 @@ class ResultsView(QWidget):
         self.simulate_requested.emit(sched)
 
     def update_plot(self, times, max_vals, avg_vals,
-                    mort_vals=None, mut_vals=None,
+                    mort_vals=None, mut_vals=None, div_vals=None,
                     schedule=None, interval_ms=100):
         self.times = np.array(times)
         self.max_vals = np.array(max_vals)
         self.avg_vals = np.array(avg_vals)
         self.mort_vals = np.array(mort_vals) if mort_vals is not None else np.zeros_like(self.times)
         self.mut_vals = np.array(mut_vals) if mut_vals is not None else np.zeros_like(self.times)
+        self.div_vals = (np.array(div_vals) if div_vals is not None else np.zeros_like(self.times))
         self.schedule = [(t, f"{ab.nombre}\n{conc}") for t, ab, conc in (schedule or [])]
         self._idx = 0
         self.plot.setXRange(self.times[0], self.times[-1])
@@ -162,6 +163,7 @@ class ResultsView(QWidget):
             self.curve_avg.setData(x, self.avg_vals)
             self.curve_mort.setData(x, self.mort_vals)
             self.curve_mut.setData(x, self.mut_vals)
+            self.curve_div.setData(x, self.div_vals)
             for t_evt, label in self.schedule:
                 line = pg.InfiniteLine(pos=t_evt, angle=90,
                 pen=pg.mkPen('#888', style=Qt.DashLine))
@@ -177,4 +179,5 @@ class ResultsView(QWidget):
         self.curve_avg.setData(x, self.avg_vals[:self._idx + 1])
         self.curve_mort.setData(x, self.mort_vals[:self._idx + 1])
         self.curve_mut.setData(x, self.mut_vals[:self._idx + 1])
+        self.curve_div.setData(x, self.div_vals[: self._idx + 1])
         self._idx += 1

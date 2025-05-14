@@ -103,6 +103,7 @@ class MainWindow(QMainWindow):
                 avg_hist,
                 mort_vals=kill_hist,
                 mut_vals=mut_hist,
+                div_vals=diversity_hist,
                 schedule=sched_objs,
                 interval_ms=100,
             )
