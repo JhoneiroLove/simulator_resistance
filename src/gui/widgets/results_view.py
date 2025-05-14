@@ -1,10 +1,24 @@
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLabel, QTableWidget, QPushButton, QComboBox, QDoubleSpinBox, QHeaderView
-)
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QTableWidget, QPushButton, QComboBox, QDoubleSpinBox, QHeaderView
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from PyQt5.QtGui import QFont, QBrush, QColor, QPainterPath
 import pyqtgraph as pg
 import numpy as np
+
+class CustomTooltip(pg.TextItem):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fill = QBrush(QColor(255, 255, 255, 230))
+        self.border = pg.mkPen(color="#888", width=1)
+        self.setZValue(1000)
+
+    def paint(self, p, *args):
+        p.setBrush(self.fill)
+        p.setPen(self.border)
+        path = QPainterPath()
+        path.addRoundedRect(self.boundingRect(), 5, 5)
+        p.drawPath(path)
+        p.setPen(QColor("#333"))
+        super().paint(p, *args)
 
 class ResultsView(QWidget):
     simulate_requested = pyqtSignal(list)
@@ -13,21 +27,18 @@ class ResultsView(QWidget):
         super().__init__(parent)
         self.antibiotics = antibiotics
 
+        # Layout principal
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(12)
 
-        # Grupo: Secuencia de Tratamientos
+        # Grupo Secuencia de Tratamientos
         grp_schedule = QGroupBox("Secuencia de Tratamientos")
         schedule_layout = QVBoxLayout(grp_schedule)
-        # Ahora 3 columnas: Antibiótico, Concentración, Acciones
         self.schedule_table = QTableWidget(0, 3)
-        self.schedule_table.setHorizontalHeaderLabels(
-            ["Antibiótico", "Concentración", "Acciones"]
-        )
+        self.schedule_table.setHorizontalHeaderLabels(["Antibiótico", "Concentración", "Acciones"])
         self.schedule_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         schedule_layout.addWidget(self.schedule_table)
-
         btn_hbox = QHBoxLayout()
         btn_add = QPushButton("Agregar")
         btn_del = QPushButton("Eliminar")
@@ -65,54 +76,44 @@ class ResultsView(QWidget):
         main_layout.addWidget(grp_plot)
 
         # Curvas
-        self.curve_max = self.plot.plot(pen=pg.mkPen('#E74C3C', width=2), name="Máx")
-        self.curve_avg = self.plot.plot(pen=pg.mkPen('#3498DB', width=2), name="Avg")
+        self.curve_max  = self.plot.plot(pen=pg.mkPen('#E74C3C', width=2), name="Máx")
+        self.curve_avg  = self.plot.plot(pen=pg.mkPen('#3498DB', width=2), name="Avg")
         self.curve_mort = self.plot.plot(pen=pg.mkPen('#9B59B6', width=2), name="Mort")
-        self.curve_mut = self.plot.plot(pen=pg.mkPen('#F1C40F', width=2), name="Mut")
-        self.curve_div = self.plot.plot(pen=pg.mkPen("#2ECC71", width=2), name="Div")
+        self.curve_mut  = self.plot.plot(pen=pg.mkPen('#F1C40F', width=2), name="Mut")
+        self.curve_div  = self.plot.plot(pen=pg.mkPen('#2ECC71', width=2), name="Div")
 
-        # Datos
-        self.times = np.array([])
-        self.max_vals = np.array([])
-        self.avg_vals = np.array([])
-        self.mort_vals = np.array([])
-        self.mut_vals = np.array([])
-        self.schedule = []
-        self._idx = 0
+        # Inicializar colecciones internas
         self._event_items = []
+        self.schedule     = []           # <-- evitar AttributeError
+        self.times        = np.array([])
+        self.max_vals     = np.array([])
+        self.avg_vals     = np.array([])
+        self.mort_vals    = np.array([])
+        self.mut_vals     = np.array([])
+        self.div_vals     = np.array([])
 
-        # Temporizador animación
+        # Temporizador
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_frame)
 
     def _add_schedule_row(self):
         row = self.schedule_table.rowCount()
         self.schedule_table.insertRow(row)
-
-        # Combo antibiótico
-        ab_cb = QComboBox()
+        ab_cb   = QComboBox()
         for a in self.antibiotics:
             ab_cb.addItem(a['nombre'], a['id'])
-        self.schedule_table.setCellWidget(row, 0, ab_cb)
-
-        # Spin concentración
         conc_sb = QDoubleSpinBox()
         conc_sb.setRange(0, 1e6)
         conc_sb.setValue(self.antibiotics[0].get('conc_min', 0))
-        self.schedule_table.setCellWidget(row, 1, conc_sb)
-
-        # Botón de acción en la nueva columna
         action_btn = QPushButton("Añadir")
-        action_btn.setFixedWidth(80)
-        # wrapper para centrar
-        wrapper = QWidget()
-        lay = QHBoxLayout(wrapper)
+        wrapper    = QWidget()
+        lay        = QHBoxLayout(wrapper)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addStretch()
         lay.addWidget(action_btn)
         lay.addStretch()
-        # Aquí puedes conectar action_btn.clicked a la función que desees
-        # action_btn.clicked.connect(lambda _, r=row: self._your_custom_handler(r))
+        self.schedule_table.setCellWidget(row, 0, ab_cb)
+        self.schedule_table.setCellWidget(row, 1, conc_sb)
         self.schedule_table.setCellWidget(row, 2, wrapper)
 
     def _del_schedule_row(self):
@@ -123,32 +124,34 @@ class ResultsView(QWidget):
     def _emit_simulation(self):
         sched = []
         for r in range(self.schedule_table.rowCount()):
-            t = r
             ab_id = self.schedule_table.cellWidget(r, 0).currentData()
-            conc = self.schedule_table.cellWidget(r, 1).value()
-            sched.append((t, ab_id, conc))
+            conc  = self.schedule_table.cellWidget(r, 1).value()
+            sched.append((r, ab_id, conc))
         self.simulate_requested.emit(sched)
 
-    def update_plot(self, times, max_vals, avg_vals,
-                    mort_vals=None, mut_vals=None, div_vals=None,
-                    schedule=None, interval_ms=100):
-        self.times = np.array(times)
-        self.max_vals = np.array(max_vals)
-        self.avg_vals = np.array(avg_vals)
-        self.mort_vals = np.array(mort_vals) if mort_vals is not None else np.zeros_like(self.times)
-        self.mut_vals = np.array(mut_vals) if mut_vals is not None else np.zeros_like(self.times)
-        self.div_vals = (np.array(div_vals) if div_vals is not None else np.zeros_like(self.times))
-        self.schedule = [(t, f"{ab.nombre}\n{conc}") for t, ab, conc in (schedule or [])]
-        self._idx = 0
-        self.plot.setXRange(self.times[0], self.times[-1])
-        y_min = min(self.mort_vals.min(), self.mut_vals.min(),
-                    self.avg_vals.min(), self.max_vals.min())
-        y_max = max(self.mort_vals.max(), self.mut_vals.max(),
-                    self.avg_vals.max(), self.max_vals.max())
-        self.plot.setYRange(y_min, y_max)
+    def clear_plot(self):
+        for curve in (self.curve_max, self.curve_avg, self.curve_mort, self.curve_mut, self.curve_div):
+            curve.setData([], [])
         for it in self._event_items:
             self.plot.removeItem(it)
-        self._event_items = []
+        self._event_items.clear()
+
+    def update_plot(self, times, max_vals, avg_vals, mort_vals=None, mut_vals=None, div_vals=None, schedule=None, interval_ms=100):
+        self.times     = np.array(times)
+        self.max_vals  = np.array(max_vals)
+        self.avg_vals  = np.array(avg_vals)
+        self.mort_vals = np.array(mort_vals) if mort_vals is not None else np.zeros_like(self.times)
+        self.mut_vals  = np.array(mut_vals)  if mut_vals  is not None else np.zeros_like(self.times)
+        self.div_vals  = np.array(div_vals)  if div_vals  is not None else np.zeros_like(self.times)
+
+        # Reset eventos
+        for it in self._event_items:
+            self.plot.removeItem(it)
+        self._event_items.clear()
+
+        # Animación
+        self._idx     = 0
+        self.schedule = [(t, f"{ab.nombre}\n{conc}") for t, ab, conc in (schedule or [])]
         self.timer.start(interval_ms)
 
     def skip_animation(self):
@@ -165,8 +168,7 @@ class ResultsView(QWidget):
             self.curve_mut.setData(x, self.mut_vals)
             self.curve_div.setData(x, self.div_vals)
             for t_evt, label in self.schedule:
-                line = pg.InfiniteLine(pos=t_evt, angle=90,
-                pen=pg.mkPen('#888', style=Qt.DashLine))
+                line = pg.InfiniteLine(pos=t_evt, angle=90, pen=pg.mkPen('#888', style=Qt.DashLine))
                 text = pg.TextItem(label, anchor=(0, 1))
                 text.setPos(t_evt, self.plot.viewRange()[1][1])
                 self.plot.addItem(line)
@@ -179,5 +181,5 @@ class ResultsView(QWidget):
         self.curve_avg.setData(x, self.avg_vals[:self._idx + 1])
         self.curve_mort.setData(x, self.mort_vals[:self._idx + 1])
         self.curve_mut.setData(x, self.mut_vals[:self._idx + 1])
-        self.curve_div.setData(x, self.div_vals[: self._idx + 1])
+        self.curve_div.setData(x, self.div_vals[:self._idx + 1])
         self._idx += 1

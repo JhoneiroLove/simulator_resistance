@@ -1,5 +1,5 @@
-import random, copy
-from typing import Callable, List, Tuple
+import random
+import copy
 import numpy as np
 from deap import base, creator, tools
 
@@ -11,31 +11,28 @@ class GeneticAlgorithm:
     def __init__(
         self,
         genes,
-        antibiotic_schedule: List[Tuple[float, object, float]] = None,
+        antibiotic_schedule=None,
         mutation_rate: float = 0.05,
-        generations: float = 50,
+        generations: int = 50,
         pop_size: int = 100,
-        reproduction_func: Callable = None,
         death_rate: float = 0.05,
     ):
         """
         :param genes: lista de objetos con .id y .peso_resistencia
         :param antibiotic_schedule: lista de tuplas (t_event, antibiotic_obj, concentration)
         :param mutation_rate: probabilidad de mutar cada bit
-        :param generations: número de pasos de simulación
+        :param generations: número de pasos (generaciones)
         :param pop_size: tamaño de la población
-        :param reproduction_func: función (N0, r, t)→N(t) normalizada [0,1]
-        :param death_rate: tasa de muerte natural por paso
+        :param death_rate: tasa de muerte natural
         """
         self.genes = genes
         self.schedule = sorted(antibiotic_schedule or [], key=lambda e: e[0])
         self.mutation_rate = mutation_rate
         self.generations = generations
         self.pop_size = pop_size
-        self.reproduction_func = reproduction_func
         self.death_rate = death_rate
 
-        # normalización de la resistencia genética → [0,1]
+        # Normalización de resistencia genética → [0,1]
         self.total_weight = sum(g.peso_resistencia for g in genes) or 1e-8
 
         # DEAP toolbox
@@ -50,17 +47,24 @@ class GeneticAlgorithm:
         self.toolbox.register("mutate", tools.mutFlipBit, indpb=self.mutation_rate)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
 
-        # para uso interno durante evaluate
-        self.current_time = 0.0
-        self.current_ab = None
-        self.current_conc = 0.0
+        # estado interno para dinámico
+        self.pop = None
+        self.times = None
+        self.current_step = 0
+
+        # historiales
+        self.best_hist = []
+        self.avg_hist = []
+        self.kill_hist = []
+        self.mut_hist = []
+        self.div_hist = []
 
     def init_individual(self):
         """Cada individuo es una lista de bits (0/1)."""
         return creator.Individual([random.randint(0, 1) for _ in self.genes])
 
     def _update_antibiotic(self, t: float):
-        """Selecciona el antibiótico y concentración activos en el tiempo t."""
+        """Selecciona antibiótico y concentración activos en el tiempo t."""
         self.current_ab = None
         self.current_conc = 0.0
         for t_evt, ab, conc in self.schedule:
@@ -73,25 +77,23 @@ class GeneticAlgorithm:
     def evaluate(self, individual):
         """
         Calcula fitness normalizado [0,1]:
-            1) resistencia genética normalizada,
-            2) crecimiento (reproduction_func),
-            3) kill by antibiotic,
-            4) muerte natural,
-        devuelve (fitness,)
+            1) resistencia genética
+            2) crecimiento logístico/exponencial opcional
+            3) kill por antibiótico
+            4) muerte natural
         """
         # 1) raw → N0 en [0,1]
         raw = sum(g.peso_resistencia * bit for g, bit in zip(self.genes, individual))
         N = raw / self.total_weight
 
-        # 2) crecimiento
-        if self.reproduction_func:
-            N = self.reproduction_func(N, self.mutation_rate, self.current_time)
-            N = min(1.0, max(0.0, N))
+        # 2) (si tuvieras reproduction_func se aplicaría aquí)
 
-        # 3) kill by antibiotic (si hay uno activo)
+        # 3) kill por antibiótico
         if self.current_ab:
-            lo = self.current_ab.concentracion_minima
-            hi = self.current_ab.concentracion_maxima
+            lo, hi = (
+                self.current_ab.concentracion_minima,
+                self.current_ab.concentracion_maxima,
+            )
             if hi > lo:
                 surv = max(0.0, min(1.0, 1 - (self.current_conc - lo) / (hi - lo)))
                 N *= surv
@@ -101,86 +103,104 @@ class GeneticAlgorithm:
 
         return (max(0.0, N),)
 
-    def run(
-        self,
-        selected_gene_ids: List[int],
-        time_horizon: float = 24.0,
-        progress_callback=None,
-    ) -> Tuple[List[float], List[float], List[float], List[float], List[float]]:
+    def initialize(self, selected_gene_ids: list):
         """
-        Ejecuta la simulación desde t=0 hasta t=time_horizon:
-            - selected_gene_ids: always-on genes
-            - devuelve 5 historias: best, avg, kill, mut, diversity
+        Prepara todo para una ejecución dinámica:
+        - crea población
+        - fuerza los genes seleccionados a 1
+        - inicializa times y contadores
         """
-        # 0) Población inicial
+        # población inicial
         pop = self.toolbox.population(n=self.pop_size)
         forced = {i for i, g in enumerate(self.genes) if g.id in selected_gene_ids}
         for ind in pop:
             for idx in forced:
                 ind[idx] = 1
+        self.pop = pop
 
-        best_hist, avg_hist, kill_hist, mut_hist, diversity_hist = [], [], [], [], []
-        times = np.linspace(0, time_horizon, int(self.generations))
+        # discretizar tiempo en 'generations' pasos
+        self.times = np.linspace(0, self.generations, self.generations)
+        self.current_step = 0
 
-        for t in times:
-            self.current_time = t
-            self._update_antibiotic(t)
+        # limpiar historiales
+        self.best_hist.clear()
+        self.avg_hist.clear()
+        self.kill_hist.clear()
+        self.mut_hist.clear()
+        self.div_hist.clear()
 
-            # — Selección —
-            offspring = self.toolbox.select(pop, len(pop))
-            offspring = list(map(self.toolbox.clone, offspring))
+    def step(self) -> bool:
+        """
+        Ejecuta UNA generación. Devuelve False si ya no hay más pasos.
+        """
+        if self.current_step >= len(self.times):
+            return False
 
-            # — Cruce —
-            for c1, c2 in zip(offspring[::2], offspring[1::2]):
-                self.toolbox.mate(c1, c2)
-                del c1.fitness.values, c2.fitness.values
+        t = self.times[self.current_step]
+        self.current_time = t
 
-            # — Mutación —
-            for m in offspring:
-                self.toolbox.mutate(m)
-                del m.fitness.values
+        # actualizar antibiótico según schedule dinámica
+        self._update_antibiotic(t)
 
-            # — Evaluación —
-            invalid = [ind for ind in offspring if not ind.fitness.valid]
-            fits = map(self.toolbox.evaluate, invalid)
-            for ind, fit in zip(invalid, fits):
-                ind.fitness.values = fit
+        # 1) selección
+        offspring = self.toolbox.select(self.pop, len(self.pop))
+        offspring = list(map(self.toolbox.clone, offspring))
 
-            # — Reemplazo —
-            pop[:] = offspring
+        # 2) cruce
+        for c1, c2 in zip(offspring[::2], offspring[1::2]):
+            self.toolbox.mate(c1, c2)
+            del c1.fitness.values, c2.fitness.values
 
-            # — Cálculo de métricas básicas —
-            vals = [ind.fitness.values[0] for ind in pop]
-            best, avg = max(vals), sum(vals) / len(vals)
-            if self.current_ab:
-                lo, hi = (
-                    self.current_ab.concentracion_minima,
-                    self.current_ab.concentracion_maxima,
-                )
-                kill = (
-                    0.0
-                    if hi <= lo
-                    else max(0.0, min(1.0, (self.current_conc - lo) / (hi - lo)))
-                )
-            else:
-                kill = 0.0
+        # 3) mutación
+        for m in offspring:
+            self.toolbox.mutate(m)
+            del m.fitness.values
 
-            # Acumular
-            best_hist.append(best)
-            avg_hist.append(avg)
-            kill_hist.append(kill)
-            mut_hist.append(self.mutation_rate)
+        # 4) evaluación
+        invalid = [ind for ind in offspring if not ind.fitness.valid]
+        fits = map(self.toolbox.evaluate, invalid)
+        for ind, fit in zip(invalid, fits):
+            ind.fitness.values = fit
 
-            # — Entropía de Shannon como diversidad —
-            mat = np.array(pop, dtype=int)  # pop_size × n_genes
-            p = mat.mean(axis=0)  # freq. de 1’s por gen
-            mask = (p > 0) & (p < 1)
-            H = -np.sum(
-                p[mask] * np.log2(p[mask]) + (1 - p[mask]) * np.log2(1 - p[mask])
+        # reemplazo
+        self.pop[:] = offspring
+
+        # 5) métricas
+        vals = [ind.fitness.values[0] for ind in self.pop]
+        best = max(vals)
+        avg = sum(vals) / len(vals)
+
+        # kill rate
+        if self.current_ab:
+            lo, hi = (
+                self.current_ab.concentracion_minima,
+                self.current_ab.concentracion_maxima,
             )
-            diversity_hist.append(H)
+            kill = (
+                0.0
+                if hi <= lo
+                else max(0.0, min(1.0, (self.current_conc - lo) / (hi - lo)))
+            )
+        else:
+            kill = 0.0
 
-            if progress_callback:
-                progress_callback(t, best, avg)
+        # mutación (constante)
+        mut = self.mutation_rate
 
-        return best_hist, avg_hist, kill_hist, mut_hist, diversity_hist
+        # diversidad (Shannon)
+        N = len(self.pop)
+        H = 0.0
+        for j in range(len(self.genes)):
+            p_j = sum(ind[j] for ind in self.pop) / N
+            if 0 < p_j < 1:
+                H += -p_j * np.log2(p_j) - (1 - p_j) * np.log2(1 - p_j)
+
+        # guardar
+        self.best_hist.append(best)
+        self.avg_hist.append(avg)
+        self.kill_hist.append(kill)
+        self.mut_hist.append(mut)
+        self.div_hist.append(H)
+
+        self.current_step += 1
+        return True
