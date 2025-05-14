@@ -20,25 +20,6 @@ class Antibiotico(Base):
     concentracion_maxima = Column(Float, nullable=False)
     tipo = Column(String(50))
 
-    # —— Nuevos campos para validación y métricas ——
-    # CIM verdadera (para calcular EPCIM)
-    cim_verdadera = Column(
-        Float,
-        nullable=False,
-        comment="Concentración Inhibitoria Mínima real (de referencia)",
-    )
-    # CPM verdadera (para calcular PCCPM)
-    cpm_verdadera = Column(
-        Float,
-        nullable=False,
-        comment="Concentración Preventiva de Mutantes real (de referencia)",
-    )
-    # Fenotipo real MDR/XDR (para calcular ECMDR)
-    # Puede ser 'S' (sensible), 'MDR' o 'XDR'
-    phenotype_real = Column(
-        String(4), nullable=False, comment="Etiqueta real: 'S', 'MDR' o 'XDR'"
-    )
-
 class Simulacion(Base):
     __tablename__ = "simulaciones"
     id = Column(Integer, primary_key=True)

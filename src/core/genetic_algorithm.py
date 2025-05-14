@@ -1,4 +1,4 @@
-import random, copy, math
+import random, copy
 from typing import Callable, List, Tuple
 import numpy as np
 from deap import base, creator, tools
@@ -13,7 +13,7 @@ class GeneticAlgorithm:
         genes,
         antibiotic_schedule: List[Tuple[float, object, float]] = None,
         mutation_rate: float = 0.05,
-        generations: int = 50,
+        generations: float = 50,
         pop_size: int = 100,
         reproduction_func: Callable = None,
         death_rate: float = 0.05,
@@ -77,7 +77,7 @@ class GeneticAlgorithm:
             2) crecimiento (reproduction_func),
             3) kill by antibiotic,
             4) muerte natural,
-            devuelve (fitness,)
+        devuelve (fitness,)
         """
         # 1) raw → N0 en [0,1]
         raw = sum(g.peso_resistencia * bit for g, bit in zip(self.genes, individual))
@@ -93,7 +93,6 @@ class GeneticAlgorithm:
             lo = self.current_ab.concentracion_minima
             hi = self.current_ab.concentracion_maxima
             if hi > lo:
-                # supervivencia lineal de 1.0→0.0
                 surv = max(0.0, min(1.0, 1 - (self.current_conc - lo) / (hi - lo)))
                 N *= surv
 
@@ -107,54 +106,52 @@ class GeneticAlgorithm:
         selected_gene_ids: List[int],
         time_horizon: float = 24.0,
         progress_callback=None,
-    ) -> Tuple[List[float], List[float], List[float], List[float]]:
+    ) -> Tuple[List[float], List[float], List[float], List[float], List[float]]:
         """
         Ejecuta la simulación desde t=0 hasta t=time_horizon:
             - selected_gene_ids: always-on genes
-            - devuelve 4 historias: best, avg, kill, mut
+            - devuelve 5 historias: best, avg, kill, mut, diversity
         """
-        # inicializa población
+        # 0) Población inicial
         pop = self.toolbox.population(n=self.pop_size)
         forced = {i for i, g in enumerate(self.genes) if g.id in selected_gene_ids}
         for ind in pop:
             for idx in forced:
                 ind[idx] = 1
 
-        best_hist, avg_hist, kill_hist, mut_hist = [], [], [], []
-        times = np.linspace(0, time_horizon, self.generations)
+        best_hist, avg_hist, kill_hist, mut_hist, diversity_hist = [], [], [], [], []
+        times = np.linspace(0, time_horizon, int(self.generations))
 
         for t in times:
             self.current_time = t
             self._update_antibiotic(t)
 
-            # selección
+            # — Selección —
             offspring = self.toolbox.select(pop, len(pop))
             offspring = list(map(self.toolbox.clone, offspring))
 
-            # cruce
+            # — Cruce —
             for c1, c2 in zip(offspring[::2], offspring[1::2]):
                 self.toolbox.mate(c1, c2)
                 del c1.fitness.values, c2.fitness.values
 
-            # mutación
+            # — Mutación —
             for m in offspring:
                 self.toolbox.mutate(m)
                 del m.fitness.values
 
-            # evaluación
+            # — Evaluación —
             invalid = [ind for ind in offspring if not ind.fitness.valid]
             fits = map(self.toolbox.evaluate, invalid)
             for ind, fit in zip(invalid, fits):
                 ind.fitness.values = fit
 
-            # reemplazo
+            # — Reemplazo —
             pop[:] = offspring
 
-            # métricas
+            # — Cálculo de métricas básicas —
             vals = [ind.fitness.values[0] for ind in pop]
             best, avg = max(vals), sum(vals) / len(vals)
-
-            # kill rate = (1 - surv) si hay antibiótico, else 0
             if self.current_ab:
                 lo, hi = (
                     self.current_ab.concentracion_minima,
@@ -168,12 +165,22 @@ class GeneticAlgorithm:
             else:
                 kill = 0.0
 
+            # Acumular
             best_hist.append(best)
             avg_hist.append(avg)
             kill_hist.append(kill)
             mut_hist.append(self.mutation_rate)
 
+            # — Entropía de Shannon como diversidad —
+            mat = np.array(pop, dtype=int)  # pop_size × n_genes
+            p = mat.mean(axis=0)  # freq. de 1’s por gen
+            mask = (p > 0) & (p < 1)
+            H = -np.sum(
+                p[mask] * np.log2(p[mask]) + (1 - p[mask]) * np.log2(1 - p[mask])
+            )
+            diversity_hist.append(H)
+
             if progress_callback:
                 progress_callback(t, best, avg)
 
-        return best_hist, avg_hist, kill_hist, mut_hist
+        return best_hist, avg_hist, kill_hist, mut_hist, diversity_hist

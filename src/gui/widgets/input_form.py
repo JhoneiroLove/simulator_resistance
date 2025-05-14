@@ -23,7 +23,6 @@ from types import SimpleNamespace
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico
 
-
 class InputForm(QWidget):
     # Ahora emitimos: selected_genes_ids, schedule (tuplas de id), unidad, mut_rate, death_rate
     simulation_triggered = pyqtSignal(list, list, str, float, float)

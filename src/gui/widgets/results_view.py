@@ -42,6 +42,7 @@ class ResultsView(QWidget):
             ("■", "#3498DB", "Resistencia Promedio"),
             ("▲", "#9B59B6", "Mortalidad"),
             ("▼", "#F1C40F", "Mutación"),
+            ("◆", "#2ECC71", "Diversidad"),
         ]:
             lbl = QLabel(f"<span style='color:{col}'>{sym}</span> {txt}")
             lbl.setFont(QFont("Segoe UI", 9))
@@ -69,6 +70,9 @@ class ResultsView(QWidget):
         self.mut_curve = self.plot.plot(
             pen=pg.mkPen(color="#F1C40F", width=2), symbol="d"
         )
+        self.div_curve = self.plot.plot(
+            pen=pg.mkPen(color="#2ECC71", width=2), symbol="h"
+        )
 
         # Tooltip
         self.ttip = CustomTooltip(anchor=(0.5, 1.5))
@@ -90,8 +94,9 @@ class ResultsView(QWidget):
         self.avg = []
         self.mort = []
         self.mut = []
+        self.div = []
 
-    def update_plot(self, times, best, avg, mort=None, mut=None, schedule=None):
+    def update_plot(self, times, best, avg, mort=None, mut=None, div=None, schedule=None):
         """
         Actualiza las curvas y anota los eventos de antibiótico.
         :param times: lista o np.ndarray de tiempos
@@ -99,6 +104,9 @@ class ResultsView(QWidget):
         :param avg: lista de valores de resistencia promedio
         :param mort: lista de tasas de mortalidad
         :param mut: lista de tasas de mutación
+        :param mort: lista de tasas de mortalidad
+        :param mut: lista de tasas de mutación
+        :param div: lista de entropía (diversidad genética)
         :param schedule: lista de tuplas (t_evento, antibiótico_obj, concentración)
         """
         # Guardar series
@@ -107,12 +115,14 @@ class ResultsView(QWidget):
         self.avg = avg
         self.mort = mort or [0] * len(times)
         self.mut = mut or [0] * len(times)
+        self.div = div or [0] * len(times)
 
         # Dibujar curvas
         self.max_curve.setData(times, best)
         self.avg_curve.setData(times, avg)
         self.mort_curve.setData(times, self.mort)
         self.mut_curve.setData(times, self.mut)
+        self.div_curve.setData(times, self.div)
 
         # Limpiar anotaciones anteriores
         for item in self._event_lines + self._event_labels:
@@ -160,6 +170,7 @@ class ResultsView(QWidget):
                 f"Res avg: {self.avg[idx]:.3f}\n"
                 f"Mortalidad: {self.mort[idx]:.3f}\n"
                 f"Mutación: {self.mut[idx]:.3f}"
+                f"Diversidad: {self.div[idx]:.3f}"
             )
             self.ttip.setText(txt)
             self.ttip.setPos(self.times[idx], self.best[idx])

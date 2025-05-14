@@ -13,7 +13,6 @@ from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 
 from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.metrics import exponential_growth
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Simulacion, SimulacionGen
 
@@ -63,19 +62,20 @@ class MainWindow(QMainWindow):
                     raise ValueError(f"Antibiótico con id={ab_id} no existe")
                 sched_objs.append((t, ab, conc))
 
-            # 2) Instancio el GA pasándole la secuencia completa
+            # 2) Instancio el GA con los nombres de parámetros correctos
+            #    y usando el time_horizon que el usuario puso en el SpinBox
+            time_horizon = self.input_tab.time_horizon_sb.value()
+            
             ga = GeneticAlgorithm(
                 genes=genes,
                 antibiotic_schedule=sched_objs,
                 mutation_rate=mut_rate,
-                generations=self.input_tab.time_horizon_sb.value(),
-                pop_size=200,
-                reproduction_func=exponential_growth,
+                generations=time_horizon,
                 death_rate=death_rate,
             )
 
             # 3) Ejecuto la simulación (ya no paso concentration ni time_unit)
-            best_hist, avg_hist, kill_hist, mut_hist = ga.run(
+            best_hist, avg_hist, kill_hist, mut_hist, diversity_hist = ga.run(
                 selected_gene_ids=selected_genes,
                 time_horizon=self.input_tab.time_horizon_sb.value(),
             )

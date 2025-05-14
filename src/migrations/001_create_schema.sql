@@ -13,10 +13,7 @@ CREATE TABLE IF NOT EXISTS antibioticos (
     nombre TEXT NOT NULL UNIQUE,
     concentracion_minima REAL NOT NULL,
     concentracion_maxima REAL NOT NULL,
-    tipo TEXT NOT NULL,
-    cim_verdadera REAL NOT NULL,
-    cpm_verdadera REAL NOT NULL,
-    phenotype_real TEXT NOT NULL  -- 'S','MDR' o 'XDR'
+    tipo TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS simulaciones (
