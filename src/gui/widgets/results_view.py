@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLabel, QTableWidget, QPushButton, QComboBox, QDoubleSpinBox
+    QLabel, QTableWidget, QPushButton, QComboBox, QDoubleSpinBox, QHeaderView
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
 import pyqtgraph as pg
@@ -20,9 +20,12 @@ class ResultsView(QWidget):
         # Grupo: Secuencia de Tratamientos
         grp_schedule = QGroupBox("Secuencia de Tratamientos")
         schedule_layout = QVBoxLayout(grp_schedule)
-        self.schedule_table = QTableWidget(0, 2)
-        self.schedule_table.setHorizontalHeaderLabels(["Antibiótico", "Concentración"])
-        self.schedule_table.horizontalHeader().setStretchLastSection(True)
+        # Ahora 3 columnas: Antibiótico, Concentración, Acciones
+        self.schedule_table = QTableWidget(0, 3)
+        self.schedule_table.setHorizontalHeaderLabels(
+            ["Antibiótico", "Concentración", "Acciones"]
+        )
+        self.schedule_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         schedule_layout.addWidget(self.schedule_table)
 
         btn_hbox = QHBoxLayout()
@@ -84,16 +87,32 @@ class ResultsView(QWidget):
     def _add_schedule_row(self):
         row = self.schedule_table.rowCount()
         self.schedule_table.insertRow(row)
+
         # Combo antibiótico
         ab_cb = QComboBox()
         for a in self.antibiotics:
             ab_cb.addItem(a['nombre'], a['id'])
+        self.schedule_table.setCellWidget(row, 0, ab_cb)
+
         # Spin concentración
         conc_sb = QDoubleSpinBox()
         conc_sb.setRange(0, 1e6)
-        conc_sb.setValue(self.antibiotics[0]['conc_min'])
-        self.schedule_table.setCellWidget(row, 0, ab_cb)
+        conc_sb.setValue(self.antibiotics[0].get('conc_min', 0))
         self.schedule_table.setCellWidget(row, 1, conc_sb)
+
+        # Botón de acción en la nueva columna
+        action_btn = QPushButton("Añadir")
+        action_btn.setFixedWidth(80)
+        # wrapper para centrar
+        wrapper = QWidget()
+        lay = QHBoxLayout(wrapper)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addStretch()
+        lay.addWidget(action_btn)
+        lay.addStretch()
+        # Aquí puedes conectar action_btn.clicked a la función que desees
+        # action_btn.clicked.connect(lambda _, r=row: self._your_custom_handler(r))
+        self.schedule_table.setCellWidget(row, 2, wrapper)
 
     def _del_schedule_row(self):
         row = self.schedule_table.currentRow()
@@ -104,9 +123,9 @@ class ResultsView(QWidget):
         sched = []
         for r in range(self.schedule_table.rowCount()):
             t = r
-            ab_id = self.schedule_table.cellWidget(r,0).currentData()
-            conc = self.schedule_table.cellWidget(r,1).value()
-            sched.append((t,ab_id,conc))
+            ab_id = self.schedule_table.cellWidget(r, 0).currentData()
+            conc = self.schedule_table.cellWidget(r, 1).value()
+            sched.append((t, ab_id, conc))
         self.simulate_requested.emit(sched)
 
     def update_plot(self, times, max_vals, avg_vals,
@@ -117,40 +136,44 @@ class ResultsView(QWidget):
         self.avg_vals = np.array(avg_vals)
         self.mort_vals = np.array(mort_vals) if mort_vals is not None else np.zeros_like(self.times)
         self.mut_vals = np.array(mut_vals) if mut_vals is not None else np.zeros_like(self.times)
-        self.schedule = [(t,f"{ab.nombre}\n{conc}") for t,ab,conc in (schedule or [])]
+        self.schedule = [(t, f"{ab.nombre}\n{conc}") for t, ab, conc in (schedule or [])]
         self._idx = 0
-        self.plot.setXRange(self.times[0],self.times[-1])
-        y_min = min(self.mort_vals.min(),self.mut_vals.min(),self.avg_vals.min(),self.max_vals.min())
-        y_max = max(self.mort_vals.max(),self.mut_vals.max(),self.avg_vals.max(),self.max_vals.max())
-        self.plot.setYRange(y_min,y_max)
+        self.plot.setXRange(self.times[0], self.times[-1])
+        y_min = min(self.mort_vals.min(), self.mut_vals.min(),
+                    self.avg_vals.min(), self.max_vals.min())
+        y_max = max(self.mort_vals.max(), self.mut_vals.max(),
+                    self.avg_vals.max(), self.max_vals.max())
+        self.plot.setYRange(y_min, y_max)
         for it in self._event_items:
             self.plot.removeItem(it)
-        self._event_items=[]
+        self._event_items = []
         self.timer.start(interval_ms)
 
     def skip_animation(self):
         self.timer.stop()
-        self._idx = len(self.times)-1 if len(self.times)>0 else 0
+        self._idx = len(self.times) - 1 if len(self.times) > 0 else 0
         self._update_frame()
 
     def _update_frame(self):
         if self._idx >= len(self.times):
-            x=self.times
-            self.curve_max.setData(x,self.max_vals)
-            self.curve_avg.setData(x,self.avg_vals)
-            self.curve_mort.setData(x,self.mort_vals)
-            self.curve_mut.setData(x,self.mut_vals)
-            for t_evt,label in self.schedule:
-                line=pg.InfiniteLine(pos=t_evt,angle=90,pen=pg.mkPen('#888',style=Qt.DashLine))
-                text=pg.TextItem(label,anchor=(0,1))
-                text.setPos(t_evt,self.plot.viewRange()[1][1])
+            x = self.times
+            self.curve_max.setData(x, self.max_vals)
+            self.curve_avg.setData(x, self.avg_vals)
+            self.curve_mort.setData(x, self.mort_vals)
+            self.curve_mut.setData(x, self.mut_vals)
+            for t_evt, label in self.schedule:
+                line = pg.InfiniteLine(pos=t_evt, angle=90,
+                                       pen=pg.mkPen('#888', style=Qt.DashLine))
+                text = pg.TextItem(label, anchor=(0, 1))
+                text.setPos(t_evt, self.plot.viewRange()[1][1])
                 self.plot.addItem(line)
                 self.plot.addItem(text)
-                self._event_items.extend([line,text])
+                self._event_items.extend([line, text])
             return
-        x=self.times[:self._idx+1]
-        self.curve_max.setData(x,self.max_vals[:self._idx+1])
-        self.curve_avg.setData(x,self.avg_vals[:self._idx+1])
-        self.curve_mort.setData(x,self.mort_vals[:self._idx+1])
-        self.curve_mut.setData(x,self.mut_vals[:self._idx+1])
-        self._idx+=1
+
+        x = self.times[:self._idx + 1]
+        self.curve_max.setData(x, self.max_vals[:self._idx + 1])
+        self.curve_avg.setData(x, self.avg_vals[:self._idx + 1])
+        self.curve_mort.setData(x, self.mort_vals[:self._idx + 1])
+        self.curve_mut.setData(x, self.mut_vals[:self._idx + 1])
+        self._idx += 1
