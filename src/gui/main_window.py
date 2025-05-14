@@ -22,11 +22,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Simulador Evolutivo por Tratamientos")
         self.setGeometry(100, 100, 1280, 720)
 
-        # ---- pestañas ----
+        # ---- Pestañas ----
         self.tabs = QTabWidget()
         self.input_tab = InputForm()
 
-        # datos de antibióticos para ResultsView
+        # Cargo antibióticos para ResultsView
         session = get_session()
         abs_q = session.query(
             Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
@@ -35,12 +35,9 @@ class MainWindow(QMainWindow):
         antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2]} for a in abs_q]
 
         self.results_tab = ResultsView(antibiotics)
-        # Conectar inicio de simulación
         self.results_tab.simulate_requested.connect(self.handle_simulation)
-        # Conectar detección de cambios en la tabla de schedule
-        self.results_tab.schedule_table.cellChanged.connect(
-            lambda *args: self._reload_schedule()
-        )
+        # para recargar en caliente si cambias la tabla durante la simulación
+        self.results_tab.schedule_table.cellChanged.connect(self._reload_schedule)
 
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
@@ -53,15 +50,15 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 
-        # temporizador para pasos de Simulación
+        # Timer para avanzar la simulación paso a paso
         self.sim_timer = QTimer(self)
         self.sim_timer.timeout.connect(self._on_sim_step)
 
     def handle_simulation(self, schedule):
         """
-        schedule: lista de (t, ab_id, conc). Lanzada al pulsar 'Iniciar Simulación'.
+        schedule: lista de (t, ab_id, conc) tal cual llega de ResultsView.
         """
-        # genes seleccionados
+        # 1) Validar genes seleccionados
         selected_genes = [
             gid for gid, cb in self.input_tab.checks.items() if cb.isChecked()
         ]
@@ -70,20 +67,23 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentWidget(self.input_tab)
             return
 
-        # parámetros
+        # 2) Leer parámetros mut/death/time
         mut_rate = self.input_tab.mut_rate_sb.value()
         death_rate = self.input_tab.death_rate_sb.value()
         time_horizon = self.input_tab.time_horizon_sb.value()
 
-        # cargar genes ORM
+        # 3) Traducir schedule de IDs → objetos ORM
         session = get_session()
-        genes = session.query(Gen).all()
+        sched_objs = []
+        for t, ab_id, conc in schedule:
+            ab = session.query(Antibiotico).get(ab_id)
+            sched_objs.append((t, ab, conc))
         session.close()
 
-        # instanciar GA (schedule vacío: lo inyectaremos dinámicamente)
+        # 4) Instanciar GA **con** schedule inicial
         self.ga = GeneticAlgorithm(
-            genes=genes,
-            antibiotic_schedule=[],
+            genes=session.query(Gen).all(),
+            antibiotic_schedule=sched_objs,  # <-- aquí inyectamos tus dosis
             mutation_rate=mut_rate,
             generations=time_horizon,
             pop_size=200,
@@ -91,26 +91,21 @@ class MainWindow(QMainWindow):
         )
         self.ga.initialize(selected_genes)
 
-        # limpiar gráfica anterior
+        # 5) Preparo la gráfica
         self.results_tab.clear_plot()
 
-        # arrancar el timer (100ms entre generaciones)
+        # 6) Arranco el timer
         self.sim_timer.start(100)
-
-        # cambiar a la pestaña de simulación
         self.tabs.setCurrentWidget(self.results_tab)
 
     def _reload_schedule(self):
         """
-        Cada vez que cambie ANY celda de la tabla de schedule,
-        volvemos a leerla y actualizamos self.ga.schedule.
+        Cada vez que cambias la tabla de dosis **durante** la simulación,
+        actualizamos self.ga.schedule para que el próximo step lo considere.
         """
         session = get_session()
         ui_sched = []
         for r in range(self.results_tab.schedule_table.rowCount()):
-            # tiempo → si tu tabla tiene columna explícita de tiempo la lees aquí;
-            # en este ejemplo usamos el índice de fila:
-            t = r
             ab_cb = self.results_tab.schedule_table.cellWidget(r, 0)
             conc_sb = self.results_tab.schedule_table.cellWidget(r, 1)
             if not ab_cb or not conc_sb:
@@ -118,28 +113,24 @@ class MainWindow(QMainWindow):
             ab_id = ab_cb.currentData()
             ab = session.query(Antibiotico).get(ab_id)
             conc = conc_sb.value()
-            ui_sched.append((t, ab, conc))
+            ui_sched.append((r, ab, conc))
         session.close()
         self.ga.schedule = sorted(ui_sched, key=lambda e: e[0])
 
     def _on_sim_step(self):
         """
-        Disparado por el QTimer: cada tick ejecuta un step de la GA,
-        actualiza la gráfica y, si terminó, detiene el timer.
+        Ejecuta un step de GA y actualiza la curva promedio (y diversidad).
         """
-        # si la simulación ha terminado
         if not self.ga.step():
             self.sim_timer.stop()
-            # aquí podrías guardar en BD el último valor, etc.
             return
 
-        # actualizar curvas en ResultsView
-        t = self.ga.times[: self.ga.current_step]
-        self.results_tab.curve_max.setData(t, self.ga.best_hist)
+        # Construyo el eje temporal
+        t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
+        # Actualizo solo la curva promedio en la pestaña principal
         self.results_tab.curve_avg.setData(t, self.ga.avg_hist)
-        self.results_tab.curve_mort.setData(t, self.ga.kill_hist)
-        self.results_tab.curve_mut.setData(t, self.ga.mut_hist)
-        self.results_tab.curve_div.setData(t, self.ga.div_hist)
+        # Y mantengo diversidad en su pestaña (si la necesitas)
+        self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
