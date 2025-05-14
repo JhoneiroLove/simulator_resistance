@@ -164,7 +164,7 @@ class ResultsView(QWidget):
             self.curve_mut.setData(x, self.mut_vals)
             for t_evt, label in self.schedule:
                 line = pg.InfiniteLine(pos=t_evt, angle=90,
-                                       pen=pg.mkPen('#888', style=Qt.DashLine))
+                pen=pg.mkPen('#888', style=Qt.DashLine))
                 text = pg.TextItem(label, anchor=(0, 1))
                 text.setPos(t_evt, self.plot.viewRange()[1][1])
                 self.plot.addItem(line)
