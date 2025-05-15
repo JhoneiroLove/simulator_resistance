@@ -6,15 +6,31 @@ from PyQt5.QtWidgets import (
     QStatusBar,
     QMessageBox,
     QApplication,
+    QPushButton,
 )
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
+
+import pyqtgraph as pg
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 from src.core.genetic_algorithm import GeneticAlgorithm
+from src.core.schedule_optimizer import ScheduleOptimizer
 from src.data.database import get_session
-from src.data.models import Gen, Antibiotico, Simulacion, SimulacionGen
+from src.data.models import Gen, Antibiotico
+
+# Mapa de colores por tipo de antibiótico
+ANTIBIOTIC_COLORS = {
+    "Carbapenémico": "#2980B9",
+    "Fluoroquinolona": "#F39C12",
+    "Polimixina": "#E74C3C",
+    "Aminoglucósido": "#27AE60",
+    "Penicilina": "#8E44AD",
+    "Glicilciclina": "#16A085",
+}
+DEFAULT_COLOR = "#7F8C8D"
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -36,7 +52,6 @@ class MainWindow(QMainWindow):
 
         self.results_tab = ResultsView(antibiotics)
         self.results_tab.simulate_requested.connect(self.handle_simulation)
-        # para recargar en caliente si cambias la tabla durante la simulación
         self.results_tab.schedule_table.cellChanged.connect(self._reload_schedule)
 
         self.csv_tab = CSVValidationWidget()
@@ -50,15 +65,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 
-        # Timer para avanzar la simulación paso a paso
+        # Botón de optimización
+        self.optimize_btn = QPushButton("Optimizar Tratamiento", self)
+        self.optimize_btn.move(1100, 10)
+        self.optimize_btn.clicked.connect(self.handle_optimization)
+
+        # Timer para simulación paso a paso
         self.sim_timer = QTimer(self)
         self.sim_timer.timeout.connect(self._on_sim_step)
 
     def handle_simulation(self, schedule):
-        """
-        schedule: lista de (t, ab_id, conc) tal cual llega de ResultsView.
-        """
-        # 1) Validar genes seleccionados
         selected_genes = [
             gid for gid, cb in self.input_tab.checks.items() if cb.isChecked()
         ]
@@ -67,42 +83,75 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentWidget(self.input_tab)
             return
 
-        # 2) Leer parámetros mut/death/time
         mut_rate = self.input_tab.mut_rate_sb.value()
         death_rate = self.input_tab.death_rate_sb.value()
         time_horizon = self.input_tab.time_horizon_sb.value()
 
-        # 3) Traducir schedule de IDs → objetos ORM
         session = get_session()
         sched_objs = []
         for t, ab_id, conc in schedule:
             ab = session.query(Antibiotico).get(ab_id)
             sched_objs.append((t, ab, conc))
-        session.close()
 
-        # 4) Instanciar GA **con** schedule inicial
         self.ga = GeneticAlgorithm(
             genes=session.query(Gen).all(),
-            antibiotic_schedule=sched_objs,  # <-- aquí inyectamos tus dosis
+            antibiotic_schedule=sched_objs,
             mutation_rate=mut_rate,
             generations=time_horizon,
             pop_size=200,
             death_rate=death_rate,
         )
         self.ga.initialize(selected_genes)
+        session.close()
 
-        # 5) Preparo la gráfica
         self.results_tab.clear_plot()
-
-        # 6) Arranco el timer
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
+    def handle_optimization(self):
+        session = get_session()
+        genes = session.query(Gen).all()
+        antibiotics = session.query(Antibiotico).all()
+        session.close()
+
+        # Configuración de parámetros
+        n_events = 3
+        generations = 10
+        pop_size = 6
+
+        optimizer = ScheduleOptimizer(
+            genes=genes,
+            antibiotics=antibiotics,
+            n_events=n_events,
+            generations=generations,
+            pop_size=pop_size,
+        )
+        best_schedule, score = optimizer.run()
+
+        # Mostrar ventana detallada
+        detail_lines = [
+            f"→ Resistencia final promedio: {score:.4f}",
+            f"→ Eventos óptimos encontrados: {len(best_schedule)}",
+            f"→ Parámetros del optimizador: eventos={n_events}, generaciones={generations}, población={pop_size}",
+            "",
+            "Detalle del tratamiento óptimo:",
+        ]
+        for i, (t, ab, conc) in enumerate(best_schedule, 1):
+            detail_lines.append(
+                f"  {i}. Tiempo: {t:.1f} - Antibiótico: {ab.nombre} - Concentración: {conc:.2f}"
+            )
+
+        QMessageBox.information(
+            self, "Optimización completada", "\n".join(detail_lines)
+        )
+
+        # Guardar el mejor schedule para anotación visual posterior
+        self._optimized_schedule = best_schedule
+
+        # Ejecutar simulación con el mejor plan
+        self.handle_simulation([(t, ab.id, conc) for (t, ab, conc) in best_schedule])
+
     def _reload_schedule(self):
-        """
-        Cada vez que cambias la tabla de dosis **durante** la simulación,
-        actualizamos self.ga.schedule para que el próximo step lo considere.
-        """
         session = get_session()
         ui_sched = []
         for r in range(self.results_tab.schedule_table.rowCount()):
@@ -118,19 +167,31 @@ class MainWindow(QMainWindow):
         self.ga.schedule = sorted(ui_sched, key=lambda e: e[0])
 
     def _on_sim_step(self):
-        """
-        Ejecuta un step de GA y actualiza la curva promedio (y diversidad).
-        """
         if not self.ga.step():
             self.sim_timer.stop()
+
+            # Anotar eventos si fueron generados por el optimizador
+            if hasattr(self, "_optimized_schedule"):
+                for t_evt, ab, conc in self._optimized_schedule:
+                    color = ANTIBIOTIC_COLORS.get(ab.tipo, DEFAULT_COLOR)
+                    line = pg.InfiniteLine(
+                        pos=t_evt, angle=90, pen=pg.mkPen(color, style=Qt.DashLine)
+                    )
+                    label = f"{ab.nombre}\n{conc:.2f}"
+                    text = pg.TextItem(label, anchor=(0, 1))
+                    text.setPos(t_evt, self.results_tab.plot_main.viewRange()[1][1])
+
+                    self.results_tab.plot_main.addItem(line)
+                    self.results_tab.plot_main.addItem(text)
+                    self.results_tab._event_items.extend([line, text])
+
+                del self._optimized_schedule
             return
 
-        # Construyo el eje temporal
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
-        # Actualizo solo la curva promedio en la pestaña principal
         self.results_tab.curve_avg.setData(t, self.ga.avg_hist)
-        # Y mantengo diversidad en su pestaña (si la necesitas)
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
