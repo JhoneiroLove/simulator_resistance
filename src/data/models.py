@@ -19,6 +19,8 @@ class Antibiotico(Base):
     concentracion_minima = Column(Float, nullable=False)
     concentracion_maxima = Column(Float, nullable=False)
     tipo = Column(String(50))
+    # relación 1–1 a Recomendacion
+    recomendacion = relationship("Recomendacion", back_populates="antibiotico", uselist=False)
 
 class Simulacion(Base):
     __tablename__ = "simulaciones"
@@ -33,3 +35,10 @@ class SimulacionGen(Base):
     __tablename__ = "simulacion_genes"
     simulacion_id = Column(Integer, ForeignKey("simulaciones.id"), primary_key=True)
     gen_id = Column(Integer, ForeignKey("genes.id"), primary_key=True)
+
+class Recomendacion(Base):
+    __tablename__ = "recomendaciones"
+    id = Column(Integer, primary_key=True)
+    antibiotico_id = Column(Integer, ForeignKey("antibioticos.id"), nullable=False)
+    texto = Column(String, nullable=False)
+    antibiotico = relationship("Antibiotico", back_populates="recomendacion")
