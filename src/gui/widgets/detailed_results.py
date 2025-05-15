@@ -30,13 +30,6 @@ class DetailedResults(QWidget):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
 
-        # Labels de resumen global
-        self.lbl_promedio = QLabel("Resistencia Promedio Final: ")
-        self.lbl_promedio.setFont(QFont("Arial", 14, QFont.Bold))
-
-        self.lbl_maxima = QLabel("Resistencia Máxima Final: ")
-        self.lbl_maxima.setFont(QFont("Arial", 14, QFont.Bold))
-
         # Labels de historial
         self.lbl_best_hist = QLabel("Mejor Fitness Histórico: -")
         self.lbl_avg_hist = QLabel("Resistencia Promedio Final (última gen): -")
@@ -72,8 +65,6 @@ class DetailedResults(QWidget):
 
         # Agregar widgets
         for w in (
-            self.lbl_promedio,
-            self.lbl_maxima,
             self.lbl_best_hist,
             self.lbl_avg_hist,
             self.lbl_div_hist,
@@ -105,8 +96,6 @@ class DetailedResults(QWidget):
         self.div_hist = div_hist
 
         # Actualizar labels
-        self.lbl_promedio.setText(f"Resistencia Promedio Final: {avg_resistencia:.4f}")
-        self.lbl_maxima.setText(f"Resistencia Máxima Final: {max_resistencia:.4f}")
         self.lbl_best_hist.setText(f"Mejor Fitness Histórico: {max(best_hist):.4f}")
         self.lbl_avg_hist.setText(
             f"Resistencia Promedio Última Generación: {avg_hist[-1]:.4f}"
