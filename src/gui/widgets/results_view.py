@@ -35,7 +35,7 @@ class ResultsView(QWidget):
         # Columnas: Antibiótico, Concentración, Tiempo
         self.schedule_table = QTableWidget(0, 3)
         self.schedule_table.setHorizontalHeaderLabels([
-            "Antibiótico", "Concentración", "Tiempo"
+            "Antibiótico", "Concentración (mg/l)", "Tiempo (Generacion)"
         ])
         self.schedule_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         schedule_layout.addWidget(self.schedule_table)
@@ -82,7 +82,7 @@ class ResultsView(QWidget):
         self.plot_main.setBackground("#fff")
         self.plot_main.showGrid(x=True, y=True, alpha=0.3)
         self.plot_main.setLabel("left", "Nivel de Resistencia")
-        self.plot_main.setLabel("bottom", "Tiempo")
+        self.plot_main.setLabel("bottom", "Tiempo (Generaciones)")
         lay_main.addWidget(self.plot_main)
         self.curve_avg = self.plot_main.plot(pen=pg.mkPen("#3498DB", width=2))
         self.plot_tabs.addTab(self.tab_main, "Principal")
@@ -94,7 +94,7 @@ class ResultsView(QWidget):
         self.plot_div.setBackground("#fff")
         self.plot_div.showGrid(x=True, y=True, alpha=0.3)
         self.plot_div.setLabel("left", "Diversidad")
-        self.plot_div.setLabel("bottom", "Tiempo")
+        self.plot_div.setLabel("bottom", "Tiempo (Generaciones)")
         lay_div.addWidget(self.plot_div)
         self.curve_div_tab = self.plot_div.plot(pen=pg.mkPen("#2ECC71", width=2))
         self.plot_tabs.addTab(self.tab_div, "Diversidad")
