@@ -22,8 +22,8 @@ from src.data.models import Gen
 
 
 class InputForm(QWidget):
-    # Señal que emite genes seleccionados y parámetros (unidad, mut_rate, death_rate)
-    params_submitted = pyqtSignal(list, str, float, float)
+    # Señal que emite genes seleccionados, unidad, tasa mutación, tasa mortalidad y duración total
+    params_submitted = pyqtSignal(list, str, float, float, int)
 
     def __init__(self):
         super().__init__()
@@ -120,7 +120,7 @@ class InputForm(QWidget):
         self.mut_rate_sb.setRange(0.0, 1.0)
         self.mut_rate_sb.setSingleStep(0.01)
         self.mut_rate_sb.setValue(0.05)
-        form.addRow("Tasa mutación:", self.mut_rate_sb)
+        form.addRow("Tasa mutación (max 1.00):", self.mut_rate_sb)
         tooltip_mut = (
             "Probabilidad de que ocurra una mutación genética en cada generación, "
             "impulsando la variabilidad genética."
@@ -137,7 +137,7 @@ class InputForm(QWidget):
         self.death_rate_sb.setRange(0.0, 1.0)
         self.death_rate_sb.setSingleStep(0.01)
         self.death_rate_sb.setValue(0.05)
-        form.addRow("Tasa mortalidad:", self.death_rate_sb)
+        form.addRow("Tasa mortalidad (max 1.00):", self.death_rate_sb)
         tooltip_death = (
             "Probabilidad de que un individuo muera en cada generación, "
             "reflejando la eficacia del tratamiento o condiciones adversas."
@@ -161,10 +161,13 @@ class InputForm(QWidget):
         unit = "Generaciones"
         mut = self.mut_rate_sb.value()
         death = self.death_rate_sb.value()
-        return selected, unit, mut, death
+        time_horizon = self.time_horizon_sb.value()
+        return selected, unit, mut, death, time_horizon
 
     def submit(self):
-        """Emite la señal con los parámetros seleccionados."""
+        """Emite la señal con los parámetros seleccionados y hace debug de los mismos."""
         params = self.collect_params()
         if params:
+            # Depuración: imprimir valores recolectados
+            print(f"DEBUG InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}")
             self.params_submitted.emit(*params)

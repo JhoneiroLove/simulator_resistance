@@ -6,11 +6,10 @@ from PyQt5.QtWidgets import (
     QStatusBar,
     QMessageBox,
     QApplication,
-    QPushButton,
 )
 from PyQt5.QtCore import QTimer, Qt
-
 import pyqtgraph as pg
+
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
@@ -31,40 +30,28 @@ ANTIBIOTIC_COLORS = {
 }
 DEFAULT_COLOR = "#7F8C8D"
 
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Simulador Evolutivo por Tratamientos")
         self.setGeometry(100, 100, 1280, 720)
 
-        # --- Crear widgets ---
+        # Widgets principales
         self.input_tab = InputForm()
-
-        # Cargo antibióticos para ResultsView
         session = get_session()
-        abs_q = session.query(
-            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
-        ).all()
+        abs_q = session.query(Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima).all()
         session.close()
-        antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2]} for a in abs_q]
-
+        antibiotics = [{"id":a[0], "nombre":a[1], "conc_min":a[2]} for a in abs_q]
         self.results_tab = ResultsView(antibiotics)
-        self.results_tab.simulate_requested.connect(self.handle_simulation)
-        self.results_tab.schedule_table.cellChanged.connect(self._reload_schedule)
-
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
 
-        # --- Conectar señales ---
-        # 1) Cuando guardas parámetros, muestro mensaje y voy a ResultsView
+        # Conectar señales
         self.input_tab.params_submitted.connect(self.on_params_saved)
-        # 2) Cuando haces click en "Iniciar Simulación" en ResultsView
         self.results_tab.simulate_requested.connect(self.handle_simulation)
-        # 3) Para poder recargar schedule en caliente durante ejecución
-        self.results_tab.schedule_table.cellChanged.connect(self._reload_schedule)
+        self.results_tab.optimize_requested.connect(self.handle_optimization)
 
-        # --- Organizar en pestañas ---
+        # Pestañas
         self.tabs = QTabWidget()
         self.tabs.addTab(self.input_tab, "1. Selección y Parámetros")
         self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
@@ -73,225 +60,102 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 
-        # Botón de optimización
-        self.optimize_btn = QPushButton("Optimizar Tratamiento", self)
-        self.optimize_btn.move(1100, 10)
-        self.optimize_btn.clicked.connect(self.handle_optimization)
-
         # Timer para simulación paso a paso
         self.sim_timer = QTimer(self)
         self.sim_timer.timeout.connect(self._on_sim_step)
 
-        # Variables para almacenar parámetros guardados
+        # Parámetros guardados
         self.saved_genes = []
-        self.saved_unit = None
-        self.saved_mut_rate = None
-        self.saved_death_rate = None
-        self.saved_time_horizon = None
+        self.saved_mut_rate = 0.05
+        self.saved_death_rate = 0.05
+        self.saved_time_horizon = 100
 
-    def _load_antibiotics(self):
-        """Lee Antibiotico.id, nombre y concentración mínima desde la BD."""
-        session = get_session()
-        abs_q = session.query(
-            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
-        ).all()
-        session.close()
-        return [
-            {"id": a[0], "nombre": a[1], "conc_min": a[2] or 0}
-            for a in abs_q
-        ]
-
-    def on_params_saved(self, genes, unit, mut_rate, death_rate):
-        """Slot que atiende input_tab.params_submitted."""
-        # 1) Guardar localmente
+    def on_params_saved(self, genes, unit, mut_rate, death_rate, time_horizon):
+        # Guardar parámetros
         self.saved_genes = genes
-        self.saved_unit = unit
         self.saved_mut_rate = mut_rate
         self.saved_death_rate = death_rate
-        self.saved_time_horizon = self.input_tab.time_horizon_sb.value()
-
-        # 2) Mostrar notificación de éxito
-        QMessageBox.information(
-            self,
-            "Éxito",
-            "Parámetros guardados satisfactoriamente",
-            QMessageBox.Ok
-        )
-
-        # 3) Redirigir a la pestaña de resultados
+        self.saved_time_horizon = time_horizon
+        QMessageBox.information(self, "Éxito", "Parámetros guardados satisfactoriamente", QMessageBox.Ok)
         self.tabs.setCurrentWidget(self.results_tab)
 
     def handle_simulation(self, schedule):
-        selected_genes = [
-            gid for gid, cb in self.input_tab.checks.items() if cb.isChecked()
-        ]
-        if not selected_genes:
+        # Configurar simulación manual
+        if not self.saved_genes:
             QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
             self.tabs.setCurrentWidget(self.input_tab)
             return
-
-        mut_rate = self.input_tab.mut_rate_sb.value()
-        death_rate = self.input_tab.death_rate_sb.value()
-        time_horizon = self.input_tab.time_horizon_sb.value()
+        mut = self.saved_mut_rate
+        death = self.saved_death_rate
+        duration = self.saved_time_horizon
 
         session = get_session()
+        genes = session.query(Gen).all()
         sched_objs = []
         for t, ab_id, conc in schedule:
             ab = session.query(Antibiotico).get(ab_id)
             sched_objs.append((t, ab, conc))
-
-        # 2) Instanciar y configurar el Algoritmo Genético
-        self.ga = GeneticAlgorithm(
-            genes=session.query(Gen).all(),
-            antibiotic_schedule=sched_objs,
-            mutation_rate=mut_rate,
-            generations=time_horizon,
-            pop_size=200,
-            death_rate=self.saved_death_rate,
-        )
-        self.ga.initialize(selected_genes)
         session.close()
 
-        # 3) Limpiar gráfica y arrancar timer
+        # Guardar para dibujo de líneas
+        self._manual_schedule = sched_objs
+        if hasattr(self, '_optimized_schedule'):
+            del self._optimized_schedule
+
+        # Inicializar GA
+        self.ga = GeneticAlgorithm(
+            genes=genes,
+            antibiotic_schedule=sched_objs,
+            mutation_rate=mut,
+            generations=duration,
+            pop_size=200,
+            death_rate=death
+        )
+        self.ga.initialize(self.saved_genes)
+
+        # Limpiar y comenzar
         self.results_tab.clear_plot()
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
     def handle_optimization(self):
+        # Configurar optimizador automático
         session = get_session()
         genes = session.query(Gen).all()
         antibiotics = session.query(Antibiotico).all()
         session.close()
-
-        # Configuración de parámetros
-        n_events = 3
-        generations = 10
-        pop_size = 6
-
-        optimizer = ScheduleOptimizer(
-            genes=genes,
-            antibiotics=antibiotics,
-            n_events=n_events,
-            generations=generations,
-            pop_size=pop_size,
-        )
+        optimizer = ScheduleOptimizer(genes=genes, antibiotics=antibiotics, n_events=3, generations=100, pop_size=6)
         best_schedule, score = optimizer.run()
-
-        # Mostrar ventana detallada
-        detail_lines = [
-            f"→ Resistencia final promedio: {score:.4f}",
-            f"→ Eventos óptimos encontrados: {len(best_schedule)}",
-            f"→ Parámetros del optimizador: eventos={n_events}, generaciones={generations}, población={pop_size}",
-            "",
-            "Detalle del tratamiento óptimo:",
-        ]
-        for i, (t, ab, conc) in enumerate(best_schedule, 1):
-            detail_lines.append(
-                f"  {i}. Tiempo: {t:.1f} - Antibiótico: {ab.nombre} - Concentración: {conc:.2f}"
-            )
-
-        QMessageBox.information(
-            self, "Optimización completada", "\n".join(detail_lines)
-        )
-
-        # Guardar el mejor schedule para anotación visual posterior
+        # Mostrar detalle
+        lines = [f"Resistencia final: {score:.4f}"]
+        for i,(t,ab,conc) in enumerate(best_schedule,1):
+            lines.append(f"{i}. Tiempo {t:.1f} - {ab.nombre} ({conc:.2f})")
+        QMessageBox.information(self, "Optimización completada", "\n".join(lines))
         self._optimized_schedule = best_schedule
-
-        # Ejecutar simulación con el mejor plan
-        self.handle_simulation([(t, ab.id, conc) for (t, ab, conc) in best_schedule])
-
-    def handle_optimization(self):
-        session = get_session()
-        genes = session.query(Gen).all()
-        antibiotics = session.query(Antibiotico).all()
-        session.close()
-
-        # Configuración de parámetros
-        n_events = 3
-        generations = 10
-        pop_size = 6
-
-        optimizer = ScheduleOptimizer(
-            genes=genes,
-            antibiotics=antibiotics,
-            n_events=n_events,
-            generations=generations,
-            pop_size=pop_size,
-        )
-        best_schedule, score = optimizer.run()
-
-        # Mostrar ventana detallada
-        detail_lines = [
-            f"→ Resistencia final promedio: {score:.4f}",
-            f"→ Eventos óptimos encontrados: {len(best_schedule)}",
-            f"→ Parámetros del optimizador: eventos={n_events}, generaciones={generations}, población={pop_size}",
-            "",
-            "Detalle del tratamiento óptimo:",
-        ]
-        for i, (t, ab, conc) in enumerate(best_schedule, 1):
-            detail_lines.append(
-                f"  {i}. Tiempo: {t:.1f} - Antibiótico: {ab.nombre} - Concentración: {conc:.2f}"
-            )
-
-        QMessageBox.information(
-            self, "Optimización completada", "\n".join(detail_lines)
-        )
-
-        # Guardar el mejor schedule para anotación visual posterior
-        self._optimized_schedule = best_schedule
-
-        # Ejecutar simulación con el mejor plan
-        self.handle_simulation([(t, ab.id, conc) for (t, ab, conc) in best_schedule])
-
-    def _reload_schedule(self):
-        """
-        Cada vez que cambias la tabla de dosis durante la simulación,
-        actualizamos self.ga.schedule para que el próximo step lo considere.
-        """
-        session = get_session()
-        ui_sched = []
-        for r in range(self.results_tab.schedule_table.rowCount()):
-            ab_cb = self.results_tab.schedule_table.cellWidget(r, 0)
-            conc_sb = self.results_tab.schedule_table.cellWidget(r, 1)
-            if ab_cb and conc_sb:
-                ab = session.query(Antibiotico).get(ab_cb.currentData())
-                ui_sched.append((r, ab, conc_sb.value()))
-        session.close()
-        self.ga.schedule = sorted(ui_sched, key=lambda e: e[0])
+        # Simular ese schedule
+        self.handle_simulation([(t, ab.id, conc) for (t,ab,conc) in best_schedule])
 
     def _on_sim_step(self):
-        """
-        Ejecuta un step de GA y actualiza las curvas en ResultsView.
-        """
         if not self.ga.step():
             self.sim_timer.stop()
-
-            # Anotar eventos si fueron generados por el optimizador
-            if hasattr(self, "_optimized_schedule"):
-                for t_evt, ab, conc in self._optimized_schedule:
-                    color = ANTIBIOTIC_COLORS.get(ab.tipo, DEFAULT_COLOR)
-                    line = pg.InfiniteLine(
-                        pos=t_evt, angle=90, pen=pg.mkPen(color, style=Qt.DashLine)
-                    )
-                    label = f"{ab.nombre}\n{conc:.2f}"
-                    text = pg.TextItem(label, anchor=(0, 1))
-                    text.setPos(t_evt, self.results_tab.plot_main.viewRange()[1][1])
-
-                    self.results_tab.plot_main.addItem(line)
-                    self.results_tab.plot_main.addItem(text)
-                    self.results_tab._event_items.extend([line, text])
-
-                del self._optimized_schedule
+            # Dibujar líneas verticales
+            schedule = getattr(self, '_optimized_schedule', None) or getattr(self, '_manual_schedule', [])
+            for t, ab, conc in schedule:
+                color = ANTIBIOTIC_COLORS.get(getattr(ab,'tipo',None), DEFAULT_COLOR)
+                line = pg.InfiniteLine(pos=t, angle=90, pen=pg.mkPen(color, width=2, style=Qt.DashLine))
+                label = pg.TextItem(f"{ab.nombre}\n{conc:.2f}", anchor=(0,1))
+                ymax = self.results_tab.plot_main.viewRange()[1][1]
+                label.setPos(t, ymax)
+                self.results_tab.plot_main.addItem(line)
+                self.results_tab.plot_main.addItem(label)
+                self.results_tab._event_items.extend([line, label])
             return
-
-        # Eje temporal
+        # Actualizar curvas
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
-        # Actualizar gráfica promedio y diversidad
         self.results_tab.curve_avg.setData(t, self.ga.avg_hist)
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
