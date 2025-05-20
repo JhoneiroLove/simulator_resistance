@@ -1,0 +1,104 @@
+/* style.qss: QSS stylesheet for Simulador Evolutivo */
+
+/* General window background */
+QWidget {
+    background-color: #F7F9FA;
+    color: #2C3E50;
+    font-family: 'Segoe UI';
+    font-size: 12px;
+}
+
+/* Group boxes */
+QGroupBox {
+    border: 1px solid #BDC3C7;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 8px;
+    background-color: #FFFFFF;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 8px;
+    color: #34495E;
+    font-weight: bold;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #3498DB;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 6px 14px;
+    min-width: 80px;
+}
+QPushButton:hover {
+    background-color: #5DADE2;
+}
+QPushButton:pressed {
+    background-color: #2E86C1;
+}
+
+/* Table headers */
+QHeaderView::section {
+    background-color: #EAECEE;
+    padding: 4px;
+    border: none;
+    font-weight: bold;
+    color: #2C3E50;
+}
+
+/* Table cells */
+QTableWidget {
+    background-color: #FFFFFF;
+    gridline-color: #D5D8DC;
+}
+QTableWidget::item:selected {
+    background-color: #AED6F1;
+    color: #1B4F72;
+}
+
+/* QTabWidget */
+QTabWidget::pane {
+    border: 1px solid #BDC3C7;
+    background: #FFFFFF;
+    border-radius: 8px;
+}
+QTabBar::tab {
+    background: #ECF0F1;
+    border: 1px solid #BDC3C7;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 6px 12px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    color: #2C3E50;
+    font-weight: bold;
+}
+
+/* Scroll area styling */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+/* Scrollbar styling */
+QScrollBar:vertical {
+    background: #ECF0F1;
+    width: 12px;
+    margin: 0px 0px 0px 0px;
+    border-radius: 6px;
+}
+QScrollBar::handle:vertical {
+    background: #95A5A6;
+    min-height: 20px;
+    border-radius: 6px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+    subcontrol-origin: margin;
+}
