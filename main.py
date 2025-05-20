@@ -1,7 +1,8 @@
 from src.data.database import init_db
 from src.gui.main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
-import sys, os
+import sys
+import os
 
 if __name__ == "__main__":
     # 1) Inicializa y seedea la BD
