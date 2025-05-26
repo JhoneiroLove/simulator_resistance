@@ -58,6 +58,16 @@ class GeneticAlgorithm:
         self.kill_hist = []
         self.mut_hist = []
         self.div_hist = []
+        
+        self.expansion_index_hist = []  # Historial del índice de expansión bacteriana
+
+        # variables para población bacteriana real 
+        self.population_total = None  # Población bacteriana real (N_t)
+        self.population_hist = []  # Historial de población bacteriana
+
+        # Parámetros del modelo logístico 
+        self.r_growth = 0.2  # Tasa de crecimiento (por defecto)
+        self.K_capacity = 1e6  # Capacidad máxima del entorno (por defecto)
 
     def init_individual(self):
         """Cada individuo es una lista de bits (0/1)."""
@@ -128,6 +138,14 @@ class GeneticAlgorithm:
         self.kill_hist.clear()
         self.mut_hist.clear()
         self.div_hist.clear()
+
+        # inicializar población bacteriana real
+        self.population_total = 1e4  # Población inicial
+        self.population_hist.clear()
+        self.population_hist.append(self.population_total)
+        
+        self.expansion_index_hist.clear()
+        self.expansion_index_hist.append(1.0)  # Primer valor es 1.0 por definición
 
     def step(self) -> bool:
         """
@@ -201,6 +219,29 @@ class GeneticAlgorithm:
         self.kill_hist.append(kill)
         self.mut_hist.append(mut)
         self.div_hist.append(H)
+
+        # Actualizar población bacteriana real 
+        N_t = self.population_total
+        r = self.r_growth
+        K = self.K_capacity
+        survival_factor = avg  # usa el fitness promedio como presión antibiótica
+
+        growth = r * N_t * (1 - N_t / K)
+        N_next = N_t + growth
+        N_next *= survival_factor
+
+        N_next = max(N_next, 0.0)  # evitar valores negativos
+        self.population_total = N_next
+        
+        prev_N = self.population_total
+        
+        # cálculo de N_next 
+        self.population_total = N_next
+        self.population_hist.append(self.population_total)
+        
+        # CÁLCULO DEL ÍNDICE DE EXPANSIÓN
+        idx_exp = N_next / prev_N if prev_N > 0 else 0.0
+        self.expansion_index_hist.append(idx_exp)
 
         self.current_step += 1
         return True

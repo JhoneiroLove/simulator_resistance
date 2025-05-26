@@ -9,8 +9,10 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QTableWidget,
     QHeaderView,
+    QLabel,
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from src.gui.widgets.population_window import PopulationWindow
 import pyqtgraph as pg
 import numpy as np
 
@@ -98,6 +100,24 @@ class ResultsView(QWidget):
         lay_div.addWidget(self.plot_div)
         self.curve_div_tab = self.plot_div.plot(pen=pg.mkPen("#2ECC71", width=2))
         self.plot_tabs.addTab(self.tab_div, "Diversidad")
+        
+        # • Tab Población Bacteriana
+        self.tab_population = PopulationWindow()
+        self.plot_tabs.addTab(self.tab_population, "Población")
+
+        # • Tab Expansión Bacteriana
+        self.tab_expansion = QWidget()
+        lay_exp = QVBoxLayout(self.tab_expansion)
+        self.plot_expansion = pg.PlotWidget()
+        self.plot_expansion.setBackground("#fff")
+        self.plot_expansion.showGrid(x=True, y=True, alpha=0.3)
+        self.plot_expansion.setLabel("left", "Índice de Expansión (Nₜ₊₁ / Nₜ)")
+        self.plot_expansion.setLabel("bottom", "Tiempo (Generaciones)")
+        lay_exp.addWidget(self.plot_expansion)
+        self.curve_expansion = self.plot_expansion.plot(
+            pen=pg.mkPen("#8E44AD", width=2)
+        )
+        self.plot_tabs.addTab(self.tab_expansion, "Expansión")
 
         main_layout.addWidget(self.plot_tabs)
 
@@ -180,6 +200,14 @@ class ResultsView(QWidget):
 
         self._idx = 0
         self.timer.start(interval_ms)
+    
+    def update_population_plot(self, times, population_hist):
+        self.tab_population.update_population(times, population_hist)
+    
+    def update_expansion_plot(self, times, expansion_hist):
+        n = min(len(times), len(expansion_hist))
+        self.curve_expansion.setData(times[:n], expansion_hist[:n])
+        self.plot_expansion.enableAutoRange()
 
     def _update_frame(self):
         end = hasattr(self, '_idx') and self._idx >= len(self.times)

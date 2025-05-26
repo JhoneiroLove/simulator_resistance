@@ -205,6 +205,8 @@ class MainWindow(QMainWindow):
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
         self.results_tab.curve_avg.setData(t, self.ga.avg_hist)
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
+        self.results_tab.update_population_plot(t, self.ga.population_hist)
+        self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
