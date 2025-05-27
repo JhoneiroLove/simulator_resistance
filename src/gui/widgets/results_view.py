@@ -10,11 +10,25 @@ from PyQt5.QtWidgets import (
     QTableWidget,
     QHeaderView,
     QLabel,
+    QMessageBox,
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
 from src.gui.widgets.population_window import PopulationWindow
 import pyqtgraph as pg
 import numpy as np
+
+def value_to_color_hex(value, thresholds, colors):
+    """
+    Convierte un valor numérico a color HEX basado en thresholds y colores.
+    thresholds: lista ordenada de umbrales (ejemplo: [0.4, 0.8])
+    colors: lista de tuplas RGB correspondiente a cada rango
+    """
+    for i, thresh in enumerate(thresholds):
+        if value < thresh:
+            r, g, b = colors[i]
+            return f"#{r:02x}{g:02x}{b:02x}"
+    r, g, b = colors[-1]
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 class ResultsView(QWidget):
     simulate_requested = pyqtSignal(list)
@@ -36,9 +50,9 @@ class ResultsView(QWidget):
 
         # Columnas: Antibiótico, Concentración, Tiempo
         self.schedule_table = QTableWidget(0, 3)
-        self.schedule_table.setHorizontalHeaderLabels([
-            "Antibiótico", "Concentración (mg/l)", "Tiempo (Generacion)"
-        ])
+        self.schedule_table.setHorizontalHeaderLabels(
+            ["Antibiótico", "Concentración (mg/l)", "Tiempo (Generacion)"]
+        )
         self.schedule_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         schedule_layout.addWidget(self.schedule_table)
 
@@ -100,7 +114,7 @@ class ResultsView(QWidget):
         lay_div.addWidget(self.plot_div)
         self.curve_div_tab = self.plot_div.plot(pen=pg.mkPen("#2ECC71", width=2))
         self.plot_tabs.addTab(self.tab_div, "Diversidad")
-        
+
         # • Tab Población Bacteriana
         self.tab_population = PopulationWindow()
         self.plot_tabs.addTab(self.tab_population, "Población")
@@ -119,6 +133,20 @@ class ResultsView(QWidget):
         )
         self.plot_tabs.addTab(self.tab_expansion, "Expansión")
 
+        # • Tab Degradación
+        self.tab_degradation = QWidget()
+        lay_deg = QVBoxLayout(self.tab_degradation)
+        self.plot_degradation = pg.PlotWidget()
+        self.plot_degradation.setBackground("#fff")
+        self.plot_degradation.showGrid(x=True, y=True, alpha=0.3)
+        self.plot_degradation.setLabel("left", "Índice de Degradación")
+        self.plot_degradation.setLabel("bottom", "Tiempo (Generaciones)")
+        lay_deg.addWidget(self.plot_degradation)
+        self.curve_degradation = self.plot_degradation.plot(
+            pen=pg.mkPen("#8E44AD", width=2)
+        )
+        self.plot_tabs.addTab(self.tab_degradation, "Degradación")
+
         main_layout.addWidget(self.plot_tabs)
 
         # Datos internos
@@ -129,6 +157,57 @@ class ResultsView(QWidget):
         # Timer para animación
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_frame)
+
+        # Thresholds para visualización
+        self.extinction_threshold = 100
+        self.resistance_threshold = 0.8
+
+        # Líneas horizontales para thresholds
+        self.extinction_line = pg.InfiniteLine(
+            pos=self.extinction_threshold,
+            angle=0,
+            pen=pg.mkPen("r", width=1, style=Qt.DashLine),
+            movable=False,
+        )
+        self.resistance_line = pg.InfiniteLine(
+            pos=self.resistance_threshold,
+            angle=0,
+            pen=pg.mkPen("r", width=1, style=Qt.DashLine),
+            movable=False,
+        )
+        
+        # Thresholds para visualización
+        self.extinction_threshold = 100
+        self.resistance_threshold = 0.8
+
+        # Definir colores para resistencia y degradación
+        self.resistance_thresholds = [0.4, 0.8]
+        self.resistance_colors = [
+            (0, 128, 0),
+            (255, 165, 0),
+            (255, 0, 0),
+        ]  # verde, naranja, rojo
+
+        self.degradation_thresholds = [0.2, 0.5]
+        self.degradation_colors = [
+            (0, 128, 0),
+            (255, 165, 0),
+            (255, 0, 0),
+        ]  # verde, naranja, rojo
+
+        # Líneas horizontales para thresholds
+        self.extinction_line = pg.InfiniteLine(
+            pos=self.extinction_threshold,
+            angle=0,
+            pen=pg.mkPen("r", width=1, style=Qt.DashLine),
+            movable=False,
+        )
+        self.resistance_line = pg.InfiniteLine(
+            pos=self.resistance_threshold,
+            angle=0,
+            pen=pg.mkPen("r", width=1, style=Qt.DashLine),
+            movable=False,
+        )
 
     def _add_schedule_row(self):
         row = self.schedule_table.rowCount()
@@ -170,7 +249,9 @@ class ResultsView(QWidget):
         # Registrar eventos para dibujo
         self._schedule_events = []
         for t_evt, ab_id, conc in sched:
-            name = next((a['nombre'] for a in self.antibiotics if a['id']==ab_id), str(ab_id))
+            name = next(
+                (a["nombre"] for a in self.antibiotics if a["id"] == ab_id), str(ab_id)
+            )
             self._schedule_events.append((t_evt, name, conc))
 
         print(f"DEBUG ResultsView._emit_simulation -> schedule={sched}")
@@ -183,43 +264,113 @@ class ResultsView(QWidget):
             self.plot_main.removeItem(it)
         self._event_items.clear()
 
-    def update_plot(self, times, avg_vals, div_vals=None, schedule=None, interval_ms=100):
+    def update_plot(
+        self, times, avg_vals, div_vals=None, schedule=None, interval_ms=100
+    ):
         self.times = np.array(times)
         self.avg_vals = np.array(avg_vals)
-        self.div_vals = np.array(div_vals) if div_vals is not None else np.zeros_like(self.times)
+        self.div_vals = (
+            np.array(div_vals) if div_vals is not None else np.zeros_like(self.times)
+        )
 
+        # Limpiar líneas anteriores
         for it in self._event_items:
             self.plot_main.removeItem(it)
         self._event_items.clear()
 
+        # Líneas de threshold a la gráfica principal (resistencia)
+        self.plot_main.addItem(self.resistance_line)
+        self._event_items.append(self.resistance_line)
+
+        # Actualizar color dinámico de curva de resistencia según último valor
+        if len(self.avg_vals) > 0:
+            current_val = self.avg_vals[min(self._idx, len(self.avg_vals)-1)]
+            if current_val < self.resistance_threshold * 0.8:
+                color = "green"
+            elif current_val < self.resistance_threshold:
+                color = "yellow"
+            else:
+                color = "red"
+            self.resistance_line.setPen(pg.mkPen(color, width=2, style=Qt.DashLine))
+
         if schedule:
             self._schedule_events = []
             for t_evt, ab, conc in schedule:
-                name = ab.nombre if hasattr(ab, 'nombre') else str(ab)
+                name = ab.nombre if hasattr(ab, "nombre") else str(ab)
                 self._schedule_events.append((t_evt, name, conc))
 
         self._idx = 0
         self.timer.start(interval_ms)
     
+    def update_degradation_plot(self, times, degradation_hist):
+        n = min(len(times), len(degradation_hist))
+        self.curve_degradation.setData(times[:n], degradation_hist[:n])
+        self.plot_degradation.enableAutoRange()
+
+        # Actualizar color dinámico de curva de degradación según último valor
+        if n > 0:
+            last_val = degradation_hist[n - 1]
+            color_hex = value_to_color_hex(
+                last_val, self.degradation_thresholds, self.degradation_colors
+            )
+            self.curve_degradation.setPen(pg.mkPen(color_hex, width=2))
+        else:
+            self.curve_degradation.setPen(
+                pg.mkPen("#8E44AD", width=2)
+            )  # morado default
+
     def update_population_plot(self, times, population_hist):
         self.tab_population.update_population(times, population_hist)
-    
+
+        # Cambiar color de línea de extinción según valor actual
+        if hasattr(self.tab_population, "plot") and len(population_hist) > 0:
+            current_pop = population_hist[-1]
+            if current_pop > self.extinction_threshold * 2:
+                color = "green"
+            elif current_pop > self.extinction_threshold:
+                color = "yellow"
+            else:
+                color = "red"
+
+            if hasattr(self, "extinction_line_pop"):
+                self.tab_population.plot.removeItem(self.extinction_line_pop)
+            self.extinction_line_pop = pg.InfiniteLine(
+                pos=self.extinction_threshold,
+                angle=0,
+                pen=pg.mkPen(color, width=1, style=Qt.DashLine),
+                movable=False,
+            )
+            self.tab_population.plot.addItem(self.extinction_line_pop)
+
     def update_expansion_plot(self, times, expansion_hist):
         n = min(len(times), len(expansion_hist))
         self.curve_expansion.setData(times[:n], expansion_hist[:n])
         self.plot_expansion.enableAutoRange()
 
     def _update_frame(self):
-        end = hasattr(self, '_idx') and self._idx >= len(self.times)
+        end = hasattr(self, "_idx") and self._idx >= len(self.times)
         idx = len(self.times) - 1 if end else self._idx
-        x = self.times[:idx+1]
+        x = self.times[: idx + 1]
 
-        self.curve_avg.setData(x, self.avg_vals[:idx+1])
-        self.curve_div_tab.setData(x, self.div_vals[:idx+1])
+        self.curve_avg.setData(x, self.avg_vals[: idx + 1])
+        self.curve_div_tab.setData(x, self.div_vals[: idx + 1])
+
+        # Cambiar color línea umbral de resistencia según valor actual
+        if len(self.avg_vals) > 0:
+            current_val = self.avg_vals[min(idx, len(self.avg_vals) - 1)]
+            if current_val < self.resistance_threshold * 0.8:
+                color = "green"
+            elif current_val < self.resistance_threshold:
+                color = "yellow"
+            else:
+                color = "red"
+            self.resistance_line.setPen(pg.mkPen(color, width=2, style=Qt.DashLine))
 
         if end:
             for t_evt, name, conc in self._schedule_events:
-                line = pg.InfiniteLine(pos=t_evt, angle=90, pen=pg.mkPen('#888', style=Qt.DashLine))
+                line = pg.InfiniteLine(
+                    pos=t_evt, angle=90, pen=pg.mkPen("#888", style=Qt.DashLine)
+                )
                 text = pg.TextItem(f"{name}\n{conc:.2f}", anchor=(0, 1))
                 text.setPos(t_evt, self.plot_main.viewRange()[1][1])
                 self.plot_main.addItem(line)
@@ -228,3 +379,6 @@ class ResultsView(QWidget):
             return
 
         self._idx += 1
+
+    def show_alert(self, title, message):
+        QMessageBox.warning(self, title, message, QMessageBox.Ok)

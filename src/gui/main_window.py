@@ -74,6 +74,10 @@ class MainWindow(QMainWindow):
         self.saved_death_rate = 0.05
         self.saved_time_horizon = 100
 
+        # Flags para mostrar alertas solo una vez
+        self.alert_shown_extinction = False
+        self.alert_shown_resistance = False
+
     def on_params_saved(self, genes, unit, mut_rate, death_rate, time_horizon):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
@@ -126,6 +130,10 @@ class MainWindow(QMainWindow):
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
+        # Resetear alertas
+        self.alert_shown_extinction = False
+        self.alert_shown_resistance = False
+
     def handle_optimization(self):
         """Ejecuta el ScheduleOptimizer y luego simula el mejor plan."""
         session = get_session()
@@ -157,6 +165,7 @@ class MainWindow(QMainWindow):
         """Avanza la simulación paso a paso y al final actualiza Resultados Detallados."""
         if not self.ga.step():
             self.sim_timer.stop()
+            self._show_threshold_alerts()
 
             # Dibujar líneas de eventos (manual u óptimo)
             schedule = self._optimized_schedule or self._manual_schedule or []
@@ -181,9 +190,7 @@ class MainWindow(QMainWindow):
                 valor = self.ga.avg_hist[idx]  # supervivencia/promedio en ese instante
                 # cargamos la recomendación de BD
                 reco = (
-                    session.query(Recomendacion)
-                    .filter_by(antibiotico_id=ab.id)
-                    .first()
+                    session.query(Recomendacion).filter_by(antibiotico_id=ab.id).first()
                 )
                 texto = reco.texto if reco else ""
                 antibioticos_results.append((ab.nombre, valor, texto))
@@ -207,6 +214,30 @@ class MainWindow(QMainWindow):
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
         self.results_tab.update_population_plot(t, self.ga.population_hist)
         self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
+        self.results_tab.update_degradation_plot(t, self.ga.degradation_hist)
+
+    def _show_threshold_alerts(self):
+        """Mostrar alertas al alcanzar umbrales críticos solo una vez."""
+        if (
+            not self.alert_shown_extinction
+            and self.ga.population_total <= self.ga.extinction_threshold
+        ):
+            self.alert_shown_extinction = True
+            QMessageBox.warning(
+                self,
+                "Alerta de Extinción",
+                f"La población bacteriana ha caído por debajo del umbral crítico de {self.ga.extinction_threshold}.",
+            )
+        if (
+            not self.alert_shown_resistance
+            and self.ga.avg_hist[-1] >= self.ga.resistance_threshold
+        ):
+            self.alert_shown_resistance = True
+            QMessageBox.warning(
+                self,
+                "Alerta de Resistencia Crítica",
+                f"La resistencia promedio ha superado el umbral crítico de {self.ga.resistance_threshold:.2f}.",
+            )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

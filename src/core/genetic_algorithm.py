@@ -16,6 +16,7 @@ class GeneticAlgorithm:
         generations: int = 50,
         pop_size: int = 100,
         death_rate: float = 0.05,
+        environmental_factors=None,
     ):
         """
         :param genes: lista de objetos con .id y .peso_resistencia
@@ -24,6 +25,7 @@ class GeneticAlgorithm:
         :param generations: número de pasos (generaciones)
         :param pop_size: tamaño de la población
         :param death_rate: tasa de muerte natural
+        :param environmental_factors: dict con factores ambientales como temperatura y pH
         """
         self.genes = genes
         self.schedule = sorted(antibiotic_schedule or [], key=lambda e: e[0])
@@ -31,6 +33,10 @@ class GeneticAlgorithm:
         self.generations = generations
         self.pop_size = pop_size
         self.death_rate = death_rate
+        self.environmental_factors = environmental_factors or {
+            "temperature": 37.0,  # °C temperatura óptima
+            "pH": 7.4,  # pH neutro fisiológico
+        }
 
         # Normalización de resistencia genética → [0,1]
         self.total_weight = sum(g.peso_resistencia for g in genes) or 1e-8
@@ -58,16 +64,22 @@ class GeneticAlgorithm:
         self.kill_hist = []
         self.mut_hist = []
         self.div_hist = []
-        
+
         self.expansion_index_hist = []  # Historial del índice de expansión bacteriana
 
-        # variables para población bacteriana real 
+        # variables para población bacteriana real
         self.population_total = None  # Población bacteriana real (N_t)
         self.population_hist = []  # Historial de población bacteriana
 
-        # Parámetros del modelo logístico 
+        self.degradation_hist = []  # Historial de degradación por generación
+
+        # Parámetros del modelo logístico
         self.r_growth = 0.2  # Tasa de crecimiento (por defecto)
         self.K_capacity = 1e6  # Capacidad máxima del entorno (por defecto)
+
+        # Parámetros de umbral
+        self.extinction_threshold = 100  # Menos de 100 bacterias = extinción
+        self.resistance_threshold = 0.8  # 80% resistencia = alarma
 
     def init_individual(self):
         """Cada individuo es una lista de bits (0/1)."""
@@ -84,21 +96,32 @@ class GeneticAlgorithm:
             else:
                 break
 
+    def growth_modifier(self):
+        temp = self.environmental_factors.get("temperature", 37.0)
+        if 35 <= temp <= 39:
+            return 1.0
+        else:
+            return max(0.0, 1 - abs(temp - 37) * 0.1)
+
+    def death_modifier(self):
+        pH = self.environmental_factors.get("pH", 7.4)
+        if 6.5 <= pH <= 7.5:
+            return 1.0
+        else:
+            return 1.2
+
     def evaluate(self, individual):
         """
         Calcula fitness normalizado [0,1]:
             1) resistencia genética
-            2) crecimiento logístico/exponencial opcional
-            3) kill por antibiótico
-            4) muerte natural
+            2) kill por antibiótico
+            3) muerte natural ajustada por ambiente
         """
         # 1) raw → N0 en [0,1]
         raw = sum(g.peso_resistencia * bit for g, bit in zip(self.genes, individual))
         N = raw / self.total_weight
 
-        # 2) (si tuvieras reproduction_func se aplicaría aquí)
-
-        # 3) kill por antibiótico
+        # 2) kill por antibiótico
         if self.current_ab:
             lo, hi = (
                 self.current_ab.concentracion_minima,
@@ -108,8 +131,9 @@ class GeneticAlgorithm:
                 surv = max(0.0, min(1.0, 1 - (self.current_conc - lo) / (hi - lo)))
                 N *= surv
 
-        # 4) muerte natural
-        N *= 1 - self.death_rate
+        # 3) muerte natural ajustada por pH (u otro factor)
+        death_rate_adj = self.death_rate * self.death_modifier()
+        N *= 1 - death_rate_adj
 
         return (max(0.0, N),)
 
@@ -143,9 +167,12 @@ class GeneticAlgorithm:
         self.population_total = 1e4  # Población inicial
         self.population_hist.clear()
         self.population_hist.append(self.population_total)
-        
+
         self.expansion_index_hist.clear()
         self.expansion_index_hist.append(1.0)  # Primer valor es 1.0 por definición
+
+        self.degradation_hist.clear()
+        self.degradation_hist.append(0.0)  # El primer valor es 0
 
     def step(self) -> bool:
         """
@@ -220,27 +247,42 @@ class GeneticAlgorithm:
         self.mut_hist.append(mut)
         self.div_hist.append(H)
 
-        # Actualizar población bacteriana real 
-        N_t = self.population_total
-        r = self.r_growth
-        K = self.K_capacity
-        survival_factor = avg  # usa el fitness promedio como presión antibiótica
+        prev_population = self.population_total
 
-        growth = r * N_t * (1 - N_t / K)
-        N_next = N_t + growth
-        N_next *= survival_factor
+        # Ajustes por factores ambientales
+        growth_mod = self.growth_modifier()
+        death_mod = self.death_modifier()
 
-        N_next = max(N_next, 0.0)  # evitar valores negativos
-        self.population_total = N_next
-        
-        prev_N = self.population_total
-        
-        # cálculo de N_next 
+        r = self.r_growth * growth_mod
+        death_rate = self.death_rate * death_mod
+
+        # Actualizar población bacteriana real
+        growth = r * prev_population * (1 - prev_population / self.K_capacity)
+        deaths = death_rate * prev_population
+        N_next = prev_population + growth - deaths
+        N_next *= avg  # fitness promedio como presión antibiótica
+
+        N_next = max(N_next, 0.0)  # evitar negativos
         self.population_total = N_next
         self.population_hist.append(self.population_total)
-        
-        # CÁLCULO DEL ÍNDICE DE EXPANSIÓN
-        idx_exp = N_next / prev_N if prev_N > 0 else 0.0
+
+        # Calcular degradación relativa
+        if prev_population > 0:
+            degradation = 1 - (self.population_total / prev_population)
+        else:
+            degradation = 0.0
+        self.degradation_hist.append(degradation)
+
+        # Detectar extinción
+        if self.population_total <= self.extinction_threshold:
+            self.extinction_reached = True
+
+        # Detectar resistencia crítica
+        if self.avg_hist[-1] >= self.resistance_threshold:
+            self.resistance_critical = True
+
+        # Cálculo índice de expansión
+        idx_exp = N_next / prev_population if prev_population > 0 else 0.0
         self.expansion_index_hist.append(idx_exp)
 
         self.current_step += 1
