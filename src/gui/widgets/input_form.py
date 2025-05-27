@@ -20,10 +20,8 @@ from types import SimpleNamespace
 from src.data.database import get_session
 from src.data.models import Gen
 
-
 class InputForm(QWidget):
-    # Señal que emite genes seleccionados, unidad, tasa mutación, tasa mortalidad y duración total
-    params_submitted = pyqtSignal(list, str, float, float, int)
+    params_submitted = pyqtSignal(list, str, float, float, int, dict)
 
     def __init__(self):
         super().__init__()
@@ -34,7 +32,7 @@ class InputForm(QWidget):
         self.main_layout.setContentsMargins(15, 15, 15, 15)
         self.main_layout.setSpacing(20)
 
-        # Stylesheet: incluye estilo para QToolTip
+        # estilos para QToolTip
         self.setStyleSheet("""
             QWidget { font-family: 'Segoe UI'; font-size:12px; }
             QGroupBox { 
@@ -57,6 +55,7 @@ class InputForm(QWidget):
         self.load_data()
         self.create_gene_selection()
         self.create_simulation_params()
+        self.create_environmental_params()
 
         # Botón Guardar parámetros
         self.save_button = QPushButton("Guardar parámetros")
@@ -152,8 +151,30 @@ class InputForm(QWidget):
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
+    def create_environmental_params(self):
+        grp = QGroupBox("3. Factores Ambientales")
+        form = QFormLayout(grp)
+        form.setContentsMargins(10, 10, 10, 10)
+        form.setHorizontalSpacing(15)
+        form.setVerticalSpacing(10)
+
+        self.temperature_sb = QDoubleSpinBox()
+        self.temperature_sb.setRange(25.0, 45.0)
+        self.temperature_sb.setSingleStep(0.1)
+        self.temperature_sb.setValue(37.0)
+        self.temperature_sb.setSuffix(" °C")
+        form.addRow("Temperatura (°C):", self.temperature_sb)
+
+        self.ph_sb = QDoubleSpinBox()
+        self.ph_sb.setRange(5.0, 9.0)
+        self.ph_sb.setSingleStep(0.1)
+        self.ph_sb.setValue(7.4)
+        form.addRow("pH:", self.ph_sb)
+
+        grp.setLayout(form)
+        self.main_layout.addWidget(grp)
+
     def collect_params(self):
-        """Recoge genes seleccionados y parámetros."""
         selected = [gid for gid, cb in self.checks.items() if cb.isChecked()]
         if not selected:
             QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
@@ -162,12 +183,16 @@ class InputForm(QWidget):
         mut = self.mut_rate_sb.value()
         death = self.death_rate_sb.value()
         time_horizon = self.time_horizon_sb.value()
-        return selected, unit, mut, death, time_horizon
+        environmental_factors = {
+            "temperature": self.temperature_sb.value(),
+            "pH": self.ph_sb.value(),
+        }
+        return selected, unit, mut, death, time_horizon, environmental_factors
 
     def submit(self):
-        """Emite la señal con los parámetros seleccionados y hace debug de los mismos."""
         params = self.collect_params()
         if params:
-            # Depuración: imprimir valores recolectados
-            print(f"DEBUG InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}")
+            print(
+                f"DEBUG InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}"
+            )
             self.params_submitted.emit(*params)

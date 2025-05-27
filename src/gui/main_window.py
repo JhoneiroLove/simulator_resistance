@@ -73,17 +73,21 @@ class MainWindow(QMainWindow):
         self.saved_mut_rate = 0.05
         self.saved_death_rate = 0.05
         self.saved_time_horizon = 100
+        self.saved_environmental_factors = {"temperature": 37.0, "pH": 7.4}
 
         # Flags para mostrar alertas solo una vez
         self.alert_shown_extinction = False
         self.alert_shown_resistance = False
 
-    def on_params_saved(self, genes, unit, mut_rate, death_rate, time_horizon):
+    def on_params_saved(
+        self, genes, unit, mut_rate, death_rate, time_horizon, environmental_factors
+    ):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
         self.saved_mut_rate = mut_rate
         self.saved_death_rate = death_rate
         self.saved_time_horizon = time_horizon
+        self.saved_environmental_factors = environmental_factors
         QMessageBox.information(
             self,
             "Éxito",
@@ -102,6 +106,7 @@ class MainWindow(QMainWindow):
         mut = self.saved_mut_rate
         death = self.saved_death_rate
         duration = self.saved_time_horizon
+        environmental_factors = self.saved_environmental_factors
 
         session = get_session()
         genes = session.query(Gen).all()
@@ -111,11 +116,11 @@ class MainWindow(QMainWindow):
             sched_objs.append((t, ab, conc))
         session.close()
 
-        # Guardamos el schedule para dibujar luego
+        # Guardar el schedule para dibujar luego
         self._manual_schedule = sched_objs
         self._optimized_schedule = None
 
-        # Creamos e inicializamos el GA
+        # Creacion e inicializacion del GA
         self.ga = GeneticAlgorithm(
             genes=genes,
             antibiotic_schedule=sched_objs,
@@ -123,6 +128,7 @@ class MainWindow(QMainWindow):
             generations=duration,
             pop_size=200,
             death_rate=death,
+            environmental_factors=environmental_factors,
         )
         self.ga.initialize(self.saved_genes)
 

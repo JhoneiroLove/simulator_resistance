@@ -34,8 +34,8 @@ class GeneticAlgorithm:
         self.pop_size = pop_size
         self.death_rate = death_rate
         self.environmental_factors = environmental_factors or {
-            "temperature": 37.0,  # °C temperatura óptima
-            "pH": 7.4,  # pH neutro fisiológico
+            "temperature": 37.0,
+            "pH": 7.4,
         }
 
         # Normalización de resistencia genética → [0,1]
@@ -109,6 +109,12 @@ class GeneticAlgorithm:
             return 1.0
         else:
             return 1.2
+
+    def set_environmental_factor(self, key: str, value: float):
+        self.environmental_factors[key] = value
+
+    def get_environmental_factor(self, key: str) -> float:
+        return self.environmental_factors.get(key)
 
     def evaluate(self, individual):
         """
