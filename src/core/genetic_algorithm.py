@@ -246,6 +246,19 @@ class GeneticAlgorithm:
             if 0 < p_j < 1:
                 H += -p_j * np.log2(p_j) - (1 - p_j) * np.log2(1 - p_j)
 
+        # Rescate evolutivo por diversidad baja
+        if H < 0.2:  # Diversidad muy baja
+            for ind in self.pop:
+                if random.random() < 0.02:  # 2% chance de mutación extra
+                    idx = random.randint(0, len(ind) - 1)
+                    ind[idx] = 1 - ind[idx]
+                    del ind.fitness.values
+            # Vuelve a evaluar después de las mutaciones extra
+            invalid = [ind for ind in self.pop if not ind.fitness.valid]
+            fits = map(self.toolbox.evaluate, invalid)
+            for ind, fit in zip(invalid, fits):
+                ind.fitness.values = fit
+
         # guardar
         self.best_hist.append(best)
         self.avg_hist.append(avg)
@@ -268,7 +281,7 @@ class GeneticAlgorithm:
         N_next = prev_population + growth - deaths
         N_next *= avg  # fitness promedio como presión antibiótica
 
-        N_next = max(N_next, 0.0)  # evitar negativos
+        N_next = max(N_next, 1.0)  # evitar negativos
         self.population_total = N_next
         self.population_hist.append(self.population_total)
 

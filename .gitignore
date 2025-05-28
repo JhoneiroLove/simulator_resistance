@@ -49,3 +49,5 @@ resistencia.db
 */__pycache__/
 
 SimuladorEvolutivo.spec
+
+Output/
