@@ -6,15 +6,12 @@ from .models import Base
 
 def get_paths():
     """
-    Devuelve dos rutas:
     - base_path: ruta donde PyInstaller extrae recursos (migrations).
     - user_data_dir: ruta persistente para base de datos (APPDATA).
     """
     if getattr(sys, "frozen", False):
-        # Ruta temporal donde PyInstaller extrae el bundle
         base_path = sys._MEIPASS
 
-        # Ruta persistente del usuario para datos que cambian (BD)
         user_data_dir = os.path.join(
             os.environ.get("APPDATA", ""), "SimuladorEvolutivo"
         )
@@ -22,15 +19,14 @@ def get_paths():
 
         return base_path, user_data_dir
     else:
-        # En modo desarrollo todo en proyecto
-        this_dir = os.path.dirname(os.path.abspath(__file__))
-        base_path = os.path.abspath(os.path.join(this_dir, ".."))
-        user_data_dir = base_path
-        return base_path, user_data_dir
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        base_path = os.path.join(project_root, "src")
+        data_dir = os.path.join(project_root, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return base_path, data_dir
 
 base_path, user_data_dir = get_paths()
 
-# Base de datos se almacena en carpeta persistente del usuario
 db_path = os.path.join(user_data_dir, "resistencia.db")
 DATABASE_URL = f"sqlite:///{db_path}"
 
@@ -38,6 +34,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 Session = scoped_session(sessionmaker(bind=engine))
 
 def init_db():
+    print(f"Creando BD en: {db_path}")
     # Crear tablas si no existen
     Base.metadata.create_all(engine)
 
@@ -57,6 +54,8 @@ def init_db():
             with open(path, "r", encoding="utf-8") as f:
                 cursor.executescript(f.read())
         raw_conn.commit()
+    except Exception as ex:
+        print(f"❌ Error ejecutando migraciones: {ex}")
     finally:
         raw_conn.close()
 

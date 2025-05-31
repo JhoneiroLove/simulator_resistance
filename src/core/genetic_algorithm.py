@@ -1,13 +1,15 @@
 import random
 import copy
 import numpy as np
+from src.data.database import get_session
+from src.data.models import SimulacionAtributos
 from deap import base, creator, tools
 
 # ——— DEAP setup ———
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", list, fitness=creator.FitnessMax)
 
-class GeneticAlgorithm:
+class GeneticAlgorithm: 
     def __init__(
         self,
         genes,
@@ -17,6 +19,7 @@ class GeneticAlgorithm:
         pop_size: int = 100,
         death_rate: float = 0.05,
         environmental_factors=None,
+        simulation_id=None,
     ):
         """
         :param genes: lista de objetos con .id y .peso_resistencia
@@ -37,9 +40,10 @@ class GeneticAlgorithm:
             "temperature": 37.0,
             "pH": 7.4,
         }
+        self.current_simulation_id = simulation_id
 
         # Normalización de resistencia genética → [0,1]
-        self.total_weight = sum(g.peso_resistencia for g in genes) or 1e-8
+        self.total_weight = sum(g["peso_resistencia"] for g in genes) or 1e-8
 
         # DEAP toolbox
         self.toolbox = base.Toolbox()
@@ -124,14 +128,14 @@ class GeneticAlgorithm:
             3) muerte natural ajustada por ambiente
         """
         # 1) raw → N0 en [0,1]
-        raw = sum(g.peso_resistencia * bit for g, bit in zip(self.genes, individual))
+        raw = sum(g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual))
         N = raw / self.total_weight
 
         # 2) kill por antibiótico
         if self.current_ab:
             lo, hi = (
-                self.current_ab.concentracion_minima,
-                self.current_ab.concentracion_maxima,
+                self.current_ab["concentracion_minima"],
+                self.current_ab["concentracion_maxima"],
             )
             if hi > lo:
                 surv = max(0.0, min(1.0, 1 - (self.current_conc - lo) / (hi - lo)))
@@ -152,7 +156,7 @@ class GeneticAlgorithm:
         """
         # población inicial
         pop = self.toolbox.population(n=self.pop_size)
-        forced = {i for i, g in enumerate(self.genes) if g.id in selected_gene_ids}
+        forced = {i for i, g in enumerate(self.genes) if g["id"] in selected_gene_ids}
         for ind in pop:
             for idx in forced:
                 ind[idx] = 1
@@ -224,8 +228,8 @@ class GeneticAlgorithm:
         # kill rate
         if self.current_ab:
             lo, hi = (
-                self.current_ab.concentracion_minima,
-                self.current_ab.concentracion_maxima,
+                self.current_ab["concentracion_minima"],
+                self.current_ab["concentracion_maxima"],
             )
             kill = (
                 0.0
@@ -304,5 +308,45 @@ class GeneticAlgorithm:
         idx_exp = N_next / prev_population if prev_population > 0 else 0.0
         self.expansion_index_hist.append(idx_exp)
 
+        # --- GUARDAR ATRIBUTOS SOLO AL FINAL ---
+
+        # Si tus individuos tienen más atributos (por ejemplo, recubrimiento, reproducción...):
+        # for atributo in ['recubrimiento', 'reproduccion', 'letalidad', 'permeabilidad', 'enzimas']:
+        #     valores = [getattr(ind, atributo) for ind in self.pop]
+        #     promedio = float(np.mean(valores)) if valores else 0.0
+        #     std = float(np.std(valores)) if valores else 0.0
+        #     sim_attr = SimulacionAtributos(
+        #         simulacion_id=self.current_simulation_id,
+        #         generacion=self.current_step,
+        #         antibiotico_id=antibiotico_id,
+        #         atributo=atributo,
+        #         valor_promedio=promedio,
+        #         desviacion_std=std
+        #     )
+        #     session.add(sim_attr)
+
         self.current_step += 1
         return True
+
+    def save_final_gene_attributes(self, selected_gene_ids):
+        """Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación."""
+        session = get_session()
+        antibiotico_id = self.current_ab["id"] if self.current_ab else None
+        generacion_final = self.current_step - 1  # Última generación
+        
+        for idx, gen in enumerate(self.genes):
+            if gen["id"] in selected_gene_ids:
+                valores = [ind[idx] for ind in self.pop]
+                promedio = float(np.mean(valores)) if valores else 0.0
+                std = float(np.std(valores)) if valores else 0.0
+                sim_attr = SimulacionAtributos(
+                    simulacion_id=self.current_simulation_id,
+                    generacion=generacion_final,
+                    antibiotico_id=antibiotico_id,
+                    atributo=f"gen_{gen['nombre']}",
+                    valor_promedio=promedio,
+                    desviacion_std=std,
+                )
+                session.add(sim_attr)
+        session.commit()
+        session.close()

@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QTableWidget,
     QHeaderView,
-    QLabel,
     QMessageBox,
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
