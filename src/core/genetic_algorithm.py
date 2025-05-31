@@ -5,9 +5,22 @@ from src.data.database import get_session
 from src.data.models import SimulacionAtributos
 from deap import base, creator, tools
 
+class BacteriaIndividual(list):
+    """Individuo: genes (bits) + atributos biológicos."""
+
+    def __init__(
+        self, genes_bits, recubrimiento, reproduccion, letalidad, permeabilidad, enzimas
+    ):
+        super().__init__(genes_bits)
+        self.recubrimiento = recubrimiento
+        self.reproduccion = reproduccion
+        self.letalidad = letalidad
+        self.permeabilidad = permeabilidad
+        self.enzimas = enzimas
+
 # ——— DEAP setup ———
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-creator.create("Individual", list, fitness=creator.FitnessMax)
+creator.create("Individual", BacteriaIndividual, fitness=creator.FitnessMax)
 
 class GeneticAlgorithm: 
     def __init__(
@@ -85,9 +98,21 @@ class GeneticAlgorithm:
         self.extinction_threshold = 100  # Menos de 100 bacterias = extinción
         self.resistance_threshold = 0.8  # 80% resistencia = alarma
 
+        # Almacenar la evolución de cada atributo biológico por generación
+        self.recubrimiento_vals = []
+        self.reproduccion_vals = []
+        self.letalidad_vals = []
+        self.permeabilidad_vals = []
+        self.enzimas_vals = []
+
     def init_individual(self):
-        """Cada individuo es una lista de bits (0/1)."""
-        return creator.Individual([random.randint(0, 1) for _ in self.genes])
+        genes_bits = [random.randint(0, 1) for _ in self.genes]
+        recubrimiento = random.uniform(0.5, 1.0)
+        reproduccion = random.uniform(0.5, 1.0)
+        letalidad = random.uniform(0.5, 1.0)
+        permeabilidad = random.uniform(0.5, 1.0)
+        enzimas = random.uniform(0.5, 1.0)
+        return creator.Individual(genes_bits, recubrimiento, reproduccion, letalidad, permeabilidad, enzimas)
 
     def _update_antibiotic(self, t: float):
         """Selecciona antibiótico y concentración activos en el tiempo t."""
@@ -210,6 +235,17 @@ class GeneticAlgorithm:
         for m in offspring:
             self.toolbox.mutate(m)
             del m.fitness.values
+            # Mutación de atributos biológicos
+            if random.random() < 0.02:  # 2% de mutar recubrimiento
+                m.recubrimiento = min(1.0, max(0.0, m.recubrimiento + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.reproduccion = min(1.0, max(0.0, m.reproduccion + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.letalidad = min(1.0, max(0.0, m.letalidad + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.permeabilidad = min(1.0, max(0.0, m.permeabilidad + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.enzimas = min(1.0, max(0.0, m.enzimas + random.uniform(-0.05, 0.05)))
 
         # 4) evaluación
         invalid = [ind for ind in offspring if not ind.fitness.valid]
@@ -308,23 +344,6 @@ class GeneticAlgorithm:
         idx_exp = N_next / prev_population if prev_population > 0 else 0.0
         self.expansion_index_hist.append(idx_exp)
 
-        # --- GUARDAR ATRIBUTOS SOLO AL FINAL ---
-
-        # Si tus individuos tienen más atributos (por ejemplo, recubrimiento, reproducción...):
-        # for atributo in ['recubrimiento', 'reproduccion', 'letalidad', 'permeabilidad', 'enzimas']:
-        #     valores = [getattr(ind, atributo) for ind in self.pop]
-        #     promedio = float(np.mean(valores)) if valores else 0.0
-        #     std = float(np.std(valores)) if valores else 0.0
-        #     sim_attr = SimulacionAtributos(
-        #         simulacion_id=self.current_simulation_id,
-        #         generacion=self.current_step,
-        #         antibiotico_id=antibiotico_id,
-        #         atributo=atributo,
-        #         valor_promedio=promedio,
-        #         desviacion_std=std
-        #     )
-        #     session.add(sim_attr)
-
         self.current_step += 1
         return True
 
@@ -348,5 +367,27 @@ class GeneticAlgorithm:
                     desviacion_std=std,
                 )
                 session.add(sim_attr)
+        
+        atributos = [
+            "recubrimiento",
+            "reproduccion",
+            "letalidad",
+            "permeabilidad",
+            "enzimas",
+        ]
+        
+        for atributo in atributos:
+            valores = [getattr(ind, atributo) for ind in self.pop]
+            promedio = float(np.mean(valores)) if valores else 0.0
+            std = float(np.std(valores)) if valores else 0.0
+            sim_attr = SimulacionAtributos(
+                simulacion_id=self.current_simulation_id,
+                generacion=generacion_final,
+                antibiotico_id=antibiotico_id,
+                atributo=atributo,
+                valor_promedio=promedio,
+                desviacion_std=std,
+            )
+            session.add(sim_attr)
         session.commit()
         session.close()
