@@ -11,6 +11,7 @@ from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtCore import QPointF
 import pyqtgraph as pg
 
+from src.gui.widgets.map_window import MapWindow
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
@@ -40,14 +41,14 @@ class MainWindow(QMainWindow):
 
         # ---- Widgets principales ----
         self.input_tab = InputForm()
-
+        
         session = get_session()
         abs_q = session.query(
             Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
         ).all()
         session.close()
         antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2]} for a in abs_q]
-
+        self.map_window = None
         self.results_tab = ResultsView(antibiotics)
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
@@ -111,7 +112,10 @@ class MainWindow(QMainWindow):
 
         session = get_session()
         genes_orm = session.query(Gen).all()
-        genes = [{"id": g.id, "nombre": g.nombre, "peso_resistencia": g.peso_resistencia} for g in genes_orm]
+        genes = [
+            {"id": g.id, "nombre": g.nombre, "peso_resistencia": g.peso_resistencia}
+            for g in genes_orm
+        ]
 
         sched_objs = []
         for t, ab_id, conc in schedule:
@@ -157,12 +161,22 @@ class MainWindow(QMainWindow):
         )
         self.ga.initialize(self.saved_genes)
 
+        # Crear y mostrar la ventana de mapa de expansión bacteriana si no existe:
+        if getattr(self, "map_window", None) is None:
+            self.map_window = MapWindow(self.ga)
+        else:
+            self.map_window.ga = self.ga
+            self.map_window.reset()
+
+        self.map_window.show()
+
         self.results_tab.clear_plot()
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
         self.alert_shown_extinction = False
         self.alert_shown_resistance = False
+
 
     def handle_optimization(self):
         """Ejecuta el ScheduleOptimizer y luego simula el mejor plan."""
@@ -196,7 +210,7 @@ class MainWindow(QMainWindow):
         if not self.ga.step():
             self.sim_timer.stop()
             self._show_threshold_alerts()
-            
+
             self.ga.save_final_gene_attributes(self.saved_genes)
 
             # Dibujar líneas de eventos (manual u óptimo)
@@ -216,18 +230,18 @@ class MainWindow(QMainWindow):
                 texto = f"{ab['nombre']}\n{conc:.2f}"
                 label = pg.TextItem(texto, color=color_line, anchor=(0, 1))
 
-                # 4) Colócalo un poco por encima de y_min (porcentaje del rango en Y):
+                # 4) Colócalo un poco por encima de y_min (porcentaje del rango en Y)
                 y_min, y_max = self.results_tab.plot_main.viewRange()[1]
                 rango_y = y_max - y_min
                 porcentaje = 0.08  # 8% por encima de y_min
                 y_pos = y_min + rango_y * porcentaje
                 label.setPos(t, y_pos)
 
-                # 5) añádelo sin que modifique el auto‐rango
+                # 5) Añádelo sin que modifique el auto‐rango
                 self.results_tab.plot_main.addItem(line)
                 self.results_tab.plot_main.addItem(label, ignoreBounds=True)
 
-                # 6) guarda referencias para luego poder limpiar
+                # 6) Guarda referencias para luego poder limpiar
                 self.results_tab._event_items.extend([line, label])
 
             # Construir lista de resultados por antibiótico
@@ -239,7 +253,9 @@ class MainWindow(QMainWindow):
                 valor = self.ga.avg_hist[idx]  # supervivencia/promedio en ese instante
                 # cargamos la recomendación de BD
                 reco = (
-                    session.query(Recomendacion).filter_by(antibiotico_id=ab["id"]).first()
+                    session.query(Recomendacion)
+                    .filter_by(antibiotico_id=ab["id"])
+                    .first()
                 )
                 texto = reco.texto if reco else ""
                 antibioticos_results.append((ab["nombre"], valor, texto))
@@ -262,23 +278,31 @@ class MainWindow(QMainWindow):
             self.results_tab.show_population_interpretation(final_pop)
             peak_deg = max(self.ga.degradation_hist) if self.ga.degradation_hist else 0.0
             self.results_tab.show_degradation_interpretation(peak_deg)
+
             return
 
+        # Si aún hay generaciónes por ejecutar, actualizar gráficas y mapa
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
         y = np.array(self.ga.avg_hist)
+
         self.results_tab.curve_avg.setData(t, y)
         ultimo_valor = y[-1]
-        if ultimo_valor < self.results_tab.resistance_thresholds[0]: 
-            curvas_color = "#0000FF"  
-        elif ultimo_valor < self.results_tab.resistance_thresholds[1]: 
-            curvas_color = "#FFA500"   
+        if ultimo_valor < self.results_tab.resistance_thresholds[0]:
+            curvas_color = "#0000FF"
+        elif ultimo_valor < self.results_tab.resistance_thresholds[1]:
+            curvas_color = "#FFA500"
         else:
-            curvas_color = "#FF0000"   
+            curvas_color = "#FF0000"
         self.results_tab.curve_avg.setPen(pg.mkPen(curvas_color, width=2))
+
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
         self.results_tab.update_population_plot(t, self.ga.population_hist)
         self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
         self.results_tab.update_degradation_plot(t, self.ga.degradation_hist)
+
+        # Actualizar también el mapa de expansión bacteriana
+        if getattr(self, "map_window", None) is not None:
+            self.map_window.update_map()
 
     def _show_threshold_alerts(self):
         """Mostrar alertas al alcanzar umbrales críticos solo una vez."""
