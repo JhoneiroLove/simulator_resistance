@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import QPointF
 import pyqtgraph as pg
 
 from src.gui.widgets.input_form import InputForm
@@ -201,15 +202,32 @@ class MainWindow(QMainWindow):
             # Dibujar líneas de eventos (manual u óptimo)
             schedule = self._optimized_schedule or self._manual_schedule or []
             for t, ab, conc in schedule:
-                color = ANTIBIOTIC_COLORS.get(ab["tipo"], DEFAULT_COLOR)
+                # 1) Obtén el color según el tipo de antibiótico
+                color_line = ANTIBIOTIC_COLORS.get(ab["tipo"], DEFAULT_COLOR)
+
+                # 2) Dibuja la línea vertical en t con ese color
                 line = pg.InfiniteLine(
-                    pos=t, angle=90, pen=pg.mkPen(color, width=2, style=Qt.DashLine)
+                    pos=t,
+                    angle=90,
+                    pen=pg.mkPen(color_line, width=2, style=Qt.DashLine)
                 )
-                label = pg.TextItem(f"{ab['nombre']}\n{conc:.2f}", anchor=(0, 1))
-                ymax = self.results_tab.plot_main.viewRange()[1][1]
-                label.setPos(t, ymax)
+
+                # 3) Prepara el texto (nombre + concentración) con el mismo color
+                texto = f"{ab['nombre']}\n{conc:.2f}"
+                label = pg.TextItem(texto, color=color_line, anchor=(0, 1))
+
+                # 4) Colócalo un poco por encima de y_min (porcentaje del rango en Y):
+                y_min, y_max = self.results_tab.plot_main.viewRange()[1]
+                rango_y = y_max - y_min
+                porcentaje = 0.08  # 8% por encima de y_min
+                y_pos = y_min + rango_y * porcentaje
+                label.setPos(t, y_pos)
+
+                # 5) añádelo sin que modifique el auto‐rango
                 self.results_tab.plot_main.addItem(line)
-                self.results_tab.plot_main.addItem(label)
+                self.results_tab.plot_main.addItem(label, ignoreBounds=True)
+
+                # 6) guarda referencias para luego poder limpiar
                 self.results_tab._event_items.extend([line, label])
 
             # Construir lista de resultados por antibiótico
@@ -237,11 +255,26 @@ class MainWindow(QMainWindow):
                 avg_hist=self.ga.avg_hist,
                 div_hist=self.ga.div_hist,
             )
+
+            final_res = self.ga.avg_hist[-1]
+            self.results_tab.show_interpretation(final_res)
+            final_pop = self.ga.population_hist[-1] if self.ga.population_hist else 0.0
+            self.results_tab.show_population_interpretation(final_pop)
+            peak_deg = max(self.ga.degradation_hist) if self.ga.degradation_hist else 0.0
+            self.results_tab.show_degradation_interpretation(peak_deg)
             return
 
-        # Mientras avanza la simulación, actualizamos las curvas
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
-        self.results_tab.curve_avg.setData(t, self.ga.avg_hist)
+        y = np.array(self.ga.avg_hist)
+        self.results_tab.curve_avg.setData(t, y)
+        ultimo_valor = y[-1]
+        if ultimo_valor < self.results_tab.resistance_thresholds[0]: 
+            curvas_color = "#0000FF"  
+        elif ultimo_valor < self.results_tab.resistance_thresholds[1]: 
+            curvas_color = "#FFA500"   
+        else:
+            curvas_color = "#FF0000"   
+        self.results_tab.curve_avg.setPen(pg.mkPen(curvas_color, width=2))
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
         self.results_tab.update_population_plot(t, self.ga.population_hist)
         self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)

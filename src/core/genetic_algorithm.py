@@ -319,14 +319,15 @@ class GeneticAlgorithm:
         growth = r * prev_population * (1 - prev_population / self.K_capacity)
         deaths = death_rate * prev_population
         N_next = prev_population + growth - deaths
-        N_next *= avg  # fitness promedio como presión antibiótica
-
+        # Si hay antibiótico activo, sí aplicamos presión selectiva
+        if self.current_ab:
+            N_next *= avg
         N_next = max(N_next, 1.0)  # evitar negativos
         self.population_total = N_next
         self.population_hist.append(self.population_total)
 
         # Calcular degradación relativa
-        if prev_population > 0:
+        if self.current_ab and self.current_conc > 0.0 and prev_population > 0:
             degradation = 1 - (self.population_total / prev_population)
         else:
             degradation = 0.0
