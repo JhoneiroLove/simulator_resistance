@@ -6,6 +6,8 @@ import pyqtgraph as pg
 import numpy as np
 from scipy.spatial import Voronoi
 from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter
+
 
 class FadeImageItem(pg.ImageItem):
     """
@@ -239,6 +241,13 @@ class MapWindow(QDialog):
         # Flag para saber si estamos en la primera llamada (no hay nada que fade‐out aún)
         self._primera = True
 
+        self.n_heat = 1000  # Cantidad de puntos para heatmap
+        self.n_regions = 100  # Cantidad de puntos para regiones
+
+        # Generar posiciones polares aleatorias con radio fijo para consistencia
+        self.heat_positions = self._generate_random_positions(self.n_heat, max_radius=50)
+        self.region_positions = self._generate_random_positions(self.n_regions, max_radius=50)
+
         # Mostrar el primer frame sin animación
         self.update_map(first_time=True)
     
@@ -354,21 +363,33 @@ class MapWindow(QDialog):
                 colors.append(color)
                 
         return polygons, colors
+    
+    def _generate_random_positions(self, n, max_radius=50):
+        import numpy as np
+        angs = np.random.uniform(0, 2*np.pi, n)
+        radios = np.random.uniform(0, max_radius, n)
+        xs = radios * np.cos(angs)
+        ys = radios * np.sin(angs)
+        return np.column_stack((xs, ys))
 
     def update_map(self, first_time=False, *args, **kwargs):
         """
         Actualiza el mapa mostrando regiones según la propiedad seleccionada
         en el dropdown (incluida la opción 'Propiedad más afectada').
+
+        Usa posiciones fijas para heatmap y regiones para evitar que cambien
+        al cambiar la propiedad.
         """
-        # 1) Índice de generación actual
+        # Índice de generación actual, ajustar si es negativo
         t_idx = self.ga.current_step - 1
         if t_idx < 0:
             t_idx = 0
 
-        # 2) Obtener población y atributos
+        # Obtener población actual
         poblacion_real = self.ga.population_hist[t_idx] if len(self.ga.population_hist) > 0 else 0
+
+        # Si no hay individuos, limpiar y salir
         if len(self.ga.pop) == 0:
-            # Si no hay individuos aún, limpiar y salir
             self.info_label.setText(f"Generación: {self.ga.current_step}    Población: 0")
             self.region_old.setData([], [])
             self.region_new.setData([], [])
@@ -376,15 +397,17 @@ class MapWindow(QDialog):
             self.heatmap_new.clear()
             return
 
-        # OBTENER EL VECTOR DE ATRIBUTOS SEGÚN SELECCIÓN 
+        # Extraer atributos biológicos de la población actual
         rec_vals = np.array([ind.recubrimiento for ind in self.ga.pop])
         rep_vals = np.array([ind.reproduccion  for ind in self.ga.pop])
         let_vals = np.array([ind.letalidad    for ind in self.ga.pop])
         per_vals = np.array([ind.permeabilidad for ind in self.ga.pop])
         enz_vals = np.array([ind.enzimas      for ind in self.ga.pop])
 
+        # Obtener atributo seleccionado en el dropdown
         attr = self._get_selected_attribute()
 
+        # Seleccionar vector de valores según atributo
         if attr == "recubrimiento":
             attr_vals = rec_vals
         elif attr == "reproduccion":
@@ -401,20 +424,14 @@ class MapWindow(QDialog):
         else:
             attr_vals = rec_vals  # fallback
 
-        # Actualizar la etiqueta con generación y población
+        # Actualizar texto con generación y población
         self.info_label.setText(
             f"Generación: {self.ga.current_step}    Población: {int(poblacion_real)}"
         )
 
-        # 3) Heatmap de densidad (usa la propiedad seleccionada para el radio)
-        rec_mean = float(np.mean(rec_vals)) if rec_vals.size > 0 else 0.0
-        radio_max = rec_mean * 50.0
-
-        n_heat = max(1000, int(poblacion_real))
-        angs_heat = np.random.uniform(0, 2*np.pi, n_heat)
-        radios_heat = np.random.uniform(0, radio_max, n_heat)
-        xs_heat = radios_heat * np.cos(angs_heat)
-        ys_heat = radios_heat * np.sin(angs_heat)
+        # --- Usar posiciones fijas para heatmap ---
+        xs_heat = self.heat_positions[:, 0]
+        ys_heat = self.heat_positions[:, 1]
 
         x_min, x_max = xs_heat.min() - self.margin, xs_heat.max() + self.margin
         y_min, y_max = ys_heat.min() - self.margin, ys_heat.max() + self.margin
@@ -428,30 +445,22 @@ class MapWindow(QDialog):
         H = np.flipud(H.T)
         H_norm = H / np.max(H) if H.max() > 0 else H
 
-        # Cargar el "nuevo" heatmap en heatmap_new
         self.heatmap_new.setImage(H_norm, levels=(0, 1))
         width = x_max - x_min
         height = y_max - y_min
         self.heatmap_new.setRect(x_min, y_min, width, height)
         self.heatmap_new.setLookupTable(self.color_map.getLookupTable())
 
-        # 4) Regiones basadas en el atributo seleccionado
-        poblacion_indiv = len(self.ga.pop)
-        n_regions = min(poblacion_indiv, 100)  # Usar menos puntos para las regiones
+        # --- Usar posiciones fijas para regiones ---
+        n_regions = min(len(self.ga.pop), self.n_regions)
+        region_positions = self.region_positions[:n_regions]
 
-        indices = np.random.choice(poblacion_indiv, n_regions, replace=False)
-
-        angs_reg = np.random.uniform(0, 2*np.pi, n_regions)
-        radios_reg = np.random.uniform(0, radio_max, n_regions)
-        xs_reg = radios_reg * np.cos(angs_reg)
-        ys_reg = radios_reg * np.sin(angs_reg)
-
-        # Usar el atributo seleccionado para colorear las regiones
-        attr_reg = attr_vals[indices]
+        # Atributos para las regiones (solo los primeros n_regions)
+        attr_reg = attr_vals[:n_regions]
 
         bounds = [x_min, x_max, y_min, y_max]
         polygons, colors = self._create_grid_regions(
-            np.column_stack((xs_reg, ys_reg)),
+            region_positions,
             attr_reg,
             bounds,
             grid_size=25
@@ -459,7 +468,7 @@ class MapWindow(QDialog):
 
         self.region_new.setData(polygons, colors)
 
-        # 5) Si es la primera vez, mostrar sin animación
+        # Mostrar sin animación si es la primera vez
         if first_time or getattr(self, "_primera", False):
             self.heatmap_new.setOpacityProp(0.5)
             self.region_new.setOpacityProp(0.85)
@@ -471,7 +480,7 @@ class MapWindow(QDialog):
             self.plot_item.setYRange(y_min - extra, y_max + extra, padding=0)
             return
 
-        # 6) Cross‐fade animación
+        # Animar transición cross-fade entre mapas y regiones
         old_heat_op = self.heatmap_old.getOpacity()
         old_region_op = self.region_old.getOpacity()
         duration = 300
@@ -479,14 +488,14 @@ class MapWindow(QDialog):
         self._crossfade(self.heatmap_old, self.heatmap_new, old_heat_op, 0.6, duration)
         self._crossfade(self.region_old, self.region_new, old_region_op, 0.7, duration)
 
-        # 7) Intercambiar referencias
+        # Intercambiar referencias para próximos updates
         self.heatmap_old, self.heatmap_new = self.heatmap_new, self.heatmap_old
         self.region_old, self.region_new = self.region_new, self.region_old
 
-        # 8) Ajuste de rangos de ejes
         extra = self.margin
         self.plot_item.setXRange(x_min - extra, x_max + extra, padding=0)
         self.plot_item.setYRange(y_min - extra, y_max + extra, padding=0)
+
 
     def reset(self):
         """
