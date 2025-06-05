@@ -35,6 +35,12 @@ class ResultsView(QWidget):
     simulate_requested = pyqtSignal(list)
     optimize_requested = pyqtSignal()
 
+    def _update_run_button_state(self):
+        """
+        Habilita el botón de simulación solo si hay al menos una fila en la tabla de tratamientos.
+        """
+        self.run_button.setEnabled(self.schedule_table.rowCount() > 0)
+
     def __init__(self, antibiotics, parent=None):
         super().__init__(parent)
         self.antibiotics = antibiotics  # list of dicts: {id, nombre, conc_min}
@@ -89,6 +95,10 @@ class ResultsView(QWidget):
         self.run_button = QPushButton("Iniciar Simulación")
         self.run_button.clicked.connect(self._emit_simulation)
         actions_hbox.addWidget(self.run_button)
+        # Ahora que el botón existe, conecta las señales y actualiza el estado
+        self.schedule_table.model().rowsInserted.connect(self._update_run_button_state)
+        self.schedule_table.model().rowsRemoved.connect(self._update_run_button_state)
+        self._update_run_button_state()
 
         # Botón optimizar
         self.optimize_button = QPushButton("Optimizar Tratamiento")
@@ -564,11 +574,16 @@ class ResultsView(QWidget):
         self.schedule_table.setCellWidget(row, 0, ab_cb)
         self.schedule_table.setCellWidget(row, 1, conc_sb)
         self.schedule_table.setCellWidget(row, 2, time_sb)
+        # El estado del botón se actualiza automáticamente por la señal rowsInserted
 
     def _del_schedule_row(self):
         row = self.schedule_table.currentRow()
-        if row != -1:
+        if row == -1:
+            # Si no hay fila seleccionada, elimina la última fila si existe
+            row = self.schedule_table.rowCount() - 1
+        if row >= 0:
             self.schedule_table.removeRow(row)
+        # El estado del botón se actualiza automáticamente por la señal rowsRemoved
 
     def _emit_simulation(self):
         sched = []
