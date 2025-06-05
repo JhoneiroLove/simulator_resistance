@@ -51,7 +51,7 @@ class ExpandWindow(QDialog):
 
     def __init__(self, genetic_algorithm, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Expand Window")
+        self.setWindowTitle("Mapa de Expansión Bacteriana")
         self.setGeometry(250, 120, 850, 650)
 
         self.ga = genetic_algorithm
