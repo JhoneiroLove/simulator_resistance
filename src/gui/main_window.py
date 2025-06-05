@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtCore import QPointF
 import pyqtgraph as pg
 
 from src.gui.widgets.map_window import MapWindow
@@ -16,6 +15,7 @@ from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
+from src.gui.widgets.expand_window import ExpandWindow
 from src.core.genetic_algorithm import GeneticAlgorithm
 from src.core.schedule_optimizer import ScheduleOptimizer
 from src.data.database import get_session
@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         session.close()
         antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2]} for a in abs_q]
         self.map_window = None
+        self.expand_window = None 
         self.results_tab = ResultsView(antibiotics)
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
@@ -105,19 +106,18 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentWidget(self.input_tab)
             return
 
-        mut = self.saved_mut_rate
-        death = self.saved_death_rate
-        duration = self.saved_time_horizon
-        environmental_factors = self.saved_environmental_factors
-
+        # Recuperar información de genes desde la base de datos
         session = get_session()
         genes_orm = session.query(Gen).all()
         genes = [
             {"id": g.id, "nombre": g.nombre, "peso_resistencia": g.peso_resistencia}
             for g in genes_orm
         ]
+        session.close()
 
+        # Construir la lista de tuplas (tiempo, antibiótico, concentración)
         sched_objs = []
+        session = get_session()
         for t, ab_id, conc in schedule:
             ab_orm = session.query(Antibiotico).get(ab_id)
             ab = {
@@ -128,7 +128,9 @@ class MainWindow(QMainWindow):
                 "concentracion_maxima": ab_orm.concentracion_maxima,
             }
             sched_objs.append((t, ab, conc))
+        session.close()
 
+        # Determinar el primer antibiótico y concentración (para guardar la simulación)
         if sched_objs:
             antibiotico_id = sched_objs[0][1]["id"]
             concentracion = sched_objs[0][2]
@@ -136,47 +138,59 @@ class MainWindow(QMainWindow):
             antibiotico_id = None
             concentracion = None
 
+        # Crear registro de Simulación en la base de datos
+        session = get_session()
         simulacion = Simulacion(
             antibiotico_id=antibiotico_id,
             concentracion=concentracion if concentracion is not None else 0.0,
-            resistencia_predicha=0.0
+            resistencia_predicha=0.0,
         )
         session.add(simulacion)
         session.commit()
         simulation_id = simulacion.id
         session.close()
 
+        # Guardar horarios manuales y despejar cualquier horario optimizado previo
         self._manual_schedule = sched_objs
         self._optimized_schedule = None
 
+        # Instanciar el algoritmo genético con los parámetros
         self.ga = GeneticAlgorithm(
             genes=genes,
             antibiotic_schedule=sched_objs,
-            mutation_rate=mut,
-            generations=duration,
+            mutation_rate=self.saved_mut_rate,
+            generations=self.saved_time_horizon,
             pop_size=200,
-            death_rate=death,
-            environmental_factors=environmental_factors,
-            simulation_id=simulation_id
+            death_rate=self.saved_death_rate,
+            environmental_factors=self.saved_environmental_factors,
+            simulation_id=simulation_id,
         )
         self.ga.initialize(self.saved_genes)
 
-        # Crear y mostrar la ventana de mapa de expansión bacteriana si no existe:
-        if getattr(self, "map_window", None) is None:
+        # Crear y mostrar MapWindow (ventana de mapa de expansión bacteriana)
+        if self.map_window is None:
             self.map_window = MapWindow(self.ga)
         else:
             self.map_window.ga = self.ga
             self.map_window.reset()
-
         self.map_window.show()
 
+        # Crear y mostrar ExpandWindow (ventana ampliada)
+        if self.expand_window is None:
+            self.expand_window = ExpandWindow(self.ga)
+        else:
+            self.expand_window.ga = self.ga
+            self.expand_window.reset()
+        self.expand_window.show()
+
+        # Limpiar gráfica en la pestaña de resultados y arrancar el timer
         self.results_tab.clear_plot()
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
+        # Reiniciar flags de alerta
         self.alert_shown_extinction = False
         self.alert_shown_resistance = False
-
 
     def handle_optimization(self):
         """Ejecuta el ScheduleOptimizer y luego simula el mejor plan."""
@@ -237,7 +251,7 @@ class MainWindow(QMainWindow):
                 y_pos = y_min + rango_y * porcentaje
                 label.setPos(t, y_pos)
 
-                # 5) Añádelo sin que modifique el auto‐rango
+                # 5) Añádelo sin que modifique el auto-rango
                 self.results_tab.plot_main.addItem(line)
                 self.results_tab.plot_main.addItem(label, ignoreBounds=True)
 
@@ -281,7 +295,7 @@ class MainWindow(QMainWindow):
 
             return
 
-        # Si aún hay generaciónes por ejecutar, actualizar gráficas y mapa
+        # Si aún hay generaciones por ejecutar, actualizar gráficas y ventanas
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
         y = np.array(self.ga.avg_hist)
 
@@ -303,6 +317,10 @@ class MainWindow(QMainWindow):
         # Actualizar también el mapa de expansión bacteriana
         if getattr(self, "map_window", None) is not None:
             self.map_window.update_map()
+
+        # Actualizar la ventana ExpandWindow (si existe)
+        if getattr(self, "expand_window", None) is not None:
+            self.expand_window.update_expand()
 
     def _show_threshold_alerts(self):
         """Mostrar alertas al alcanzar umbrales críticos solo una vez."""
