@@ -1,10 +1,7 @@
-# src/gui/widgets/expand_window.py
-
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel
 from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QObject, pyqtProperty
 import pyqtgraph as pg
 import numpy as np
-
 
 class FadeImageItem(pg.ImageItem):
     """
@@ -51,8 +48,10 @@ class ExpandWindow(QDialog):
 
     def __init__(self, genetic_algorithm, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Mapa de Expansión Bacteriana")
+        self.setWindowTitle("SRB - mapa de expansión bacteriana")
         self.setGeometry(250, 120, 850, 650)
+        from ..main_window import get_app_icon
+        self.setWindowIcon(get_app_icon())
 
         self.ga = genetic_algorithm
 
@@ -110,27 +109,29 @@ class ExpandWindow(QDialog):
         # 6) Colormap por defecto para el heatmap (inferno)
         self.heatmap_cmap = pg.colormap.get("inferno")
 
-        # 7) Colormap personalizado para scatter (verde → rojo)
+        # 7) Colormap personalizado para scatter (rojo → verde)
+        # Rojo = valor bajo, Verde = valor alto
         pos = np.array([0.0, 1.0])
         colors = [
-            (0, 255, 0, 255),  # Verde
-            (255, 0, 0, 255)   # Rojo
+            (255, 0, 0, 255),    # Rojo (bajo)
+            (255, 255, 0, 255),  # Amarillo (medio)
+            (0, 255, 0, 255)     # Verde (alto)
         ]
-        self.scatter_cmap = pg.ColorMap(pos, colors)
+        self.scatter_cmap = pg.ColorMap([0.0, 0.5, 1.0], colors)
+        # Se elimina la leyenda textual horizontal para evitar duplicidad visual
 
-        # 8) Barra de color a la derecha, vinculada al heatmap_new
+        # 8) Barra de color a la derecha, vinculada al scatter (verde→amarillo→rojo)
         self.bar = pg.ColorBarItem(
-            colorMap=self.heatmap_cmap,
+            colorMap=self.scatter_cmap,  # ¡Ahora usa el colormap de los puntos!
             width=15,
             interactive=False,
             orientation='vertical'
         )
-        self.bar.setImageItem(self.heatmap_new)
+        # No se vincula a un ImageItem, solo muestra el gradiente
 
-        # Etiquetas de ticks en 0.0, 0.2, …, 1.0
+        # Etiquetas de ticks en 0.0, 0.5, 1.0
         ticks = [
-            (0.0, "0.0"), (0.2, "0.2"), (0.4, "0.4"),
-            (0.6, "0.6"), (0.8, "0.8"), (1.0, "1.0")
+            (0.0, "Bajo"), (0.5, "Medio"), (1.0, "Alto")
         ]
         self.bar.setLevels((0.0, 1.0))
         self.bar.axis.setTicks([ticks])
@@ -248,7 +249,8 @@ class ExpandWindow(QDialog):
         else:
             rep_norm = (rep_sub - rep_sub.min()) / diff
 
-        # Para el scatter, mapeamos rep_norm [0,1] a la colormap verde→rojo
+        # Para el scatter, mapeamos rep_norm [0,1] a la colormap rojo→amarillo→verde
+        # Rojo = valor bajo, Amarillo = valor medio, Verde = valor alto
         brushes = [self.scatter_cmap.map(r, mode='qcolor') for r in rep_norm]
         spots_new = [
             {

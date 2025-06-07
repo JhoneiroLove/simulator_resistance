@@ -156,8 +156,10 @@ class MapWindow(QDialog):
     """
     def __init__(self, genetic_algorithm, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Mapa de Expansión Bacteriana (Regiones)")
+        self.setWindowTitle("SRB - mapa de calor de las propiedades biológicas")
         self.setGeometry(200, 100, 850, 650)
+        from ..main_window import get_app_icon
+        self.setWindowIcon(get_app_icon())
 
         self.ga = genetic_algorithm
 

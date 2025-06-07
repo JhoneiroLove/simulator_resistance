@@ -29,26 +29,8 @@ class InputForm(QWidget):
 
         # Layout principal con márgenes y espaciado
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(15, 15, 15, 15)
-        self.main_layout.setSpacing(20)
-
-        # estilos para QToolTip
-        self.setStyleSheet("""
-            QWidget { font-family: 'Segoe UI'; font-size:12px; }
-            QGroupBox { 
-                border:1px solid #ccc; 
-                border-radius:5px; 
-                margin-top:10px; 
-                padding:10px; 
-            }
-            QLabel { padding-right: 8px; }
-            QToolTip {
-                background-color: #ffffe0;
-                color: #000000;
-                border: 1px solid #000000;
-                padding: 4px;
-            }
-        """)
+        self.main_layout.setContentsMargins(32, 32, 32, 32)
+        self.main_layout.setSpacing(28)
         QToolTip.setFont(QFont("Segoe UI", 10))
 
         # Construcción de la UI
@@ -59,11 +41,12 @@ class InputForm(QWidget):
 
         # Botón Guardar parámetros
         self.save_button = QPushButton("Guardar parámetros")
-        self.save_button.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.save_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.save_button.setFixedHeight(38)
         self.save_button.clicked.connect(self.submit)
-        self.main_layout.addWidget(self.save_button, alignment=Qt.AlignCenter)
-
+        self.main_layout.addWidget(self.save_button, alignment=Qt.AlignHCenter)
         self.main_layout.addStretch()
+
 
     def load_data(self):
         """Carga genes como estructuras planas."""

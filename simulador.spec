@@ -1,7 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 
-project_root = r'C:\Tesis\SImulador evolutivo'  # ruta absoluta a tu proyecto
+project_root = os.path.abspath(os.path.dirname(sys.argv[0]))  # ruta relativa y portátil al root del proyecto
 
 a = Analysis(
     ['main.py'],
@@ -9,7 +10,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (os.path.join(project_root, 'style.qss'), '.'),
-        (os.path.join(project_root, 'resistencia.db'), '.'),
+        (os.path.join(project_root, 'src', 'resistencia.db'), '.'),
         (os.path.join(project_root, 'src', 'migrations'), 'migrations'),  # <--- incluye migraciones
     ],
     hiddenimports=[],

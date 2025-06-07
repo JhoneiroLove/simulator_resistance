@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from PyQt5.QtGui import QFont
 import pyqtgraph as pg
 import numpy as np
 
@@ -48,8 +49,8 @@ class ResultsView(QWidget):
         self._schedule_events = []
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(32, 32, 32, 32)
+        main_layout.setSpacing(24)
 
         # ——— Calendario de Tratamientos ———
         grp_schedule = QGroupBox("Secuencia de Tratamientos")
@@ -137,13 +138,13 @@ class ResultsView(QWidget):
         )
         self.plot_main.addItem(self.resistance_line)
         self.legend_main_widget = QWidget()
-        self.legend_main_widget.setFixedWidth(200)
+        self.legend_main_widget.setFixedWidth(220)
         legend_layout_main = QVBoxLayout(self.legend_main_widget)
-        legend_layout_main.setContentsMargins(5, 5, 5, 5)
-        legend_layout_main.setSpacing(6)
+        legend_layout_main.setContentsMargins(12, 12, 12, 12)
+        legend_layout_main.setSpacing(12)
         lbl_subtitulo = QLabel("Niveles de la curva")
         lbl_subtitulo.setAlignment(Qt.AlignCenter)
-        lbl_subtitulo.setStyleSheet("font-weight: bold;")
+        lbl_subtitulo.setStyleSheet("font-weight: bold; font-size: 13px;")
         legend_layout_main.addWidget(lbl_subtitulo)
         lbl_res_azul = QLabel()
         lbl_res_azul.setText(

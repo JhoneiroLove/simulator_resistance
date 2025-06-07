@@ -24,31 +24,42 @@ from reportlab.platypus import (
 from datetime import datetime
 import csv
 
-
 class DetailedResults(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        from ..main_window import get_app_icon
+        self.setWindowIcon(get_app_icon())
         self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(32, 32, 32, 32)
+        self.layout.setSpacing(20)
 
         # Labels de historial
         self.lbl_best_hist = QLabel("Mejor Fitness Histórico: -")
         self.lbl_avg_hist = QLabel("Resistencia Promedio Final (última gen): -")
         self.lbl_div_hist = QLabel("Diversidad Final (Shannon): -")
         for lbl in (self.lbl_best_hist, self.lbl_avg_hist, self.lbl_div_hist):
-            lbl.setFont(QFont("Arial", 11))
+            lbl.setFont(QFont("Segoe UI", 12, QFont.Bold))
 
         # Tabla de resultados por antibiótico
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(
-            ["Antibiótico", "% Resistencia", "Interpretación"]
+            [
+                "Antibiótico",
+                "% Resistencia",
+                "Interpretación",
+            ]
         )
+        self.table.setMinimumHeight(130)
+        self.table.setFont(QFont("Segoe UI", 11))
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        # Área de recomendaciones clínicas (texto libre)
+        # Campo de texto para recomendaciones
         self.txt_recomendacion = QTextEdit()
         self.txt_recomendacion.setReadOnly(True)
+        self.txt_recomendacion.setMinimumHeight(60)
+        self.txt_recomendacion.setFont(QFont("Segoe UI", 11))
         self.txt_recomendacion.setStyleSheet("""
             QTextEdit {
                 background-color: #F0F0F0;
@@ -59,8 +70,12 @@ class DetailedResults(QWidget):
 
         # Botones de exportación
         self.export_csv_btn = QPushButton("Exportar CSV de Resultados")
+        self.export_csv_btn.setFixedHeight(36)
+        self.export_csv_btn.setFont(QFont("Segoe UI", 11, QFont.Bold))
         self.export_csv_btn.clicked.connect(self.export_to_csv)
         self.export_pdf_btn = QPushButton("Exportar PDF de Resultados")
+        self.export_pdf_btn.setFixedHeight(36)
+        self.export_pdf_btn.setFont(QFont("Segoe UI", 11, QFont.Bold))
         self.export_pdf_btn.clicked.connect(self.export_to_pdf)
 
         # Agregar widgets

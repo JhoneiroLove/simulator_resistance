@@ -6,9 +6,12 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 import pyqtgraph as pg
 import numpy as np
 
+from ..main_window import get_app_icon
+
 class PopulationWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setWindowIcon(get_app_icon())
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)

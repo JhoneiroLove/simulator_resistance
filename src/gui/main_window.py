@@ -33,11 +33,22 @@ ANTIBIOTIC_COLORS = {
 }
 DEFAULT_COLOR = "#7F8C8D"
 
+from PyQt5.QtGui import QIcon
+import os
+
+# Utilidad para obtener el path del icono, compatible con PyInstaller
+
+def get_app_icon():
+    base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
+    icon_path = os.path.join(base_dir, '..', '..', 'simulador_evolutivo.ico')
+    return QIcon(icon_path)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Simulador Evolutivo por Tratamientos")
+        self.setWindowTitle("SRB")
         self.setGeometry(100, 100, 1280, 720)
+        self.setWindowIcon(get_app_icon())
 
         # ---- Widgets principales ----
         self.input_tab = InputForm()
