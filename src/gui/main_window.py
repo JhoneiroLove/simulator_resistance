@@ -1,5 +1,7 @@
 import sys
 import numpy as np
+import pyqtgraph as pg
+import sys, os
 from PyQt5.QtWidgets import (
     QMainWindow,
     QTabWidget,
@@ -8,8 +10,6 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import QTimer, Qt
-import pyqtgraph as pg
-
 from src.gui.widgets.map_window import MapWindow
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
@@ -21,6 +21,7 @@ from src.core.schedule_optimizer import ScheduleOptimizer
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Recomendacion
 from src.data.models import Simulacion
+from PyQt5.QtGui import QIcon
 
 # Mapa de colores por tipo de antibiótico
 ANTIBIOTIC_COLORS = {
@@ -33,14 +34,14 @@ ANTIBIOTIC_COLORS = {
 }
 DEFAULT_COLOR = "#7F8C8D"
 
-from PyQt5.QtGui import QIcon
-import os
-
-# Utilidad para obtener el path del icono, compatible con PyInstaller
-
 def get_app_icon():
-    base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
-    icon_path = os.path.join(base_dir, '..', '..', 'simulador_evolutivo.ico')
+    if hasattr(sys, '_MEIPASS'):
+        base_dir = sys._MEIPASS
+    else:
+        base_dir = os.path.abspath(os.path.dirname(__file__))
+    icon_path = os.path.join(base_dir, 'simulador_evolutivo.ico')
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join(base_dir, '..', '..', 'simulador_evolutivo.ico')
     return QIcon(icon_path)
 
 class MainWindow(QMainWindow):

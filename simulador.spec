@@ -9,6 +9,7 @@ a = Analysis(
     pathex=[project_root],
     binaries=[],
     datas=[
+        (os.path.join(project_root, 'simulador_evolutivo.ico'), '.'),
         (os.path.join(project_root, 'style.qss'), '.'),
         (os.path.join(project_root, 'src', 'resistencia.db'), '.'),
         (os.path.join(project_root, 'src', 'migrations'), 'migrations'),  # <--- incluye migraciones
