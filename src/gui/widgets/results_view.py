@@ -34,7 +34,7 @@ def value_to_color_hex(value, thresholds, colors):
 
 class ResultsView(QWidget):
     simulate_requested = pyqtSignal(list)
-    optimize_requested = pyqtSignal()
+
 
     def _update_run_button_state(self):
         """
@@ -101,11 +101,7 @@ class ResultsView(QWidget):
         self.schedule_table.model().rowsRemoved.connect(self._update_run_button_state)
         self._update_run_button_state()
 
-        # Botón optimizar
-        self.optimize_button = QPushButton("Optimizar Tratamiento")
-        self.optimize_button.setToolTip("Encuentra el plan óptimo")
-        self.optimize_button.clicked.connect(lambda: self.optimize_requested.emit())
-        actions_hbox.addWidget(self.optimize_button)
+
 
         main_layout.addLayout(actions_hbox)
 

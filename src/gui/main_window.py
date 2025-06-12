@@ -17,7 +17,7 @@ from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
 from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.schedule_optimizer import ScheduleOptimizer
+
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Recomendacion
 from src.data.models import Simulacion
@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         # ---- Conectar señales ----
         self.input_tab.params_submitted.connect(self.on_params_saved)
         self.results_tab.simulate_requested.connect(self.handle_simulation)
-        self.results_tab.optimize_requested.connect(self.handle_optimization)
+
 
         # ---- Pestañas ----
         self.tabs = QTabWidget()
@@ -203,33 +203,6 @@ class MainWindow(QMainWindow):
         # Reiniciar flags de alerta
         self.alert_shown_extinction = False
         self.alert_shown_resistance = False
-
-    def handle_optimization(self):
-        """Ejecuta el ScheduleOptimizer y luego simula el mejor plan."""
-        session = get_session()
-        genes = session.query(Gen).all()
-        antibiotics = session.query(Antibiotico).all()
-        session.close()
-
-        optimizer = ScheduleOptimizer(
-            genes=genes,
-            antibiotics=antibiotics,
-            n_events=3,
-            generations=self.saved_time_horizon,  # iteraciones del optimizador
-            pop_size=6,
-            sim_generations=self.saved_time_horizon,  # duración real de cada GA
-        )
-        best_schedule, score = optimizer.run()
-
-        # Informe rápido
-        lines = [f"Resistencia final promedio: {score:.4f}", ""]
-        for i, (t, ab, conc) in enumerate(best_schedule, 1):
-            lines.append(f"{i}. Tiempo {t:.1f} – {ab['nombre']} ({conc:.2f})")
-        QMessageBox.information(self, "Optimización completada", "\n".join(lines))
-
-        # Guardar plan óptimo y simularlo
-        self._optimized_schedule = best_schedule
-        self.handle_simulation([(t, ab["id"], conc) for t, ab, conc in best_schedule])
 
     def _on_sim_step(self):
         """Avanza la simulación paso a paso y al final actualiza Resultados Detallados."""
