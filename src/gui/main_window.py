@@ -56,10 +56,10 @@ class MainWindow(QMainWindow):
         
         session = get_session()
         abs_q = session.query(
-            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
+            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima, Antibiotico.concentracion_maxima
         ).all()
         session.close()
-        antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2]} for a in abs_q]
+        antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2], "conc_max": a[3]} for a in abs_q]
         self.map_window = None
         self.expand_window = None 
         self.results_tab = ResultsView(antibiotics)

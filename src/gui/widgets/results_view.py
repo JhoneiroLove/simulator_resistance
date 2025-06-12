@@ -12,7 +12,9 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QLabel,
     QFrame,
-    QSizePolicy
+    QSizePolicy,
+    QDialog,
+    QTableWidgetItem,
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -35,6 +37,43 @@ def value_to_color_hex(value, thresholds, colors):
 class ResultsView(QWidget):
     simulate_requested = pyqtSignal(list)
 
+    def show_dose_intervals_modal(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Intervalos de dosis por medicamento")
+        layout = QVBoxLayout(dialog)
+        label = QLabel("Intervalos de dosis aplicables por medicamento:")
+        layout.addWidget(label)
+        table = QTableWidget(dialog)
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["Medicamento", "Dosis mínima (mg/l)", "Dosis máxima (mg/l)"])
+        table.setRowCount(len(self.antibiotics))
+        for i, ab in enumerate(self.antibiotics):
+            item_nombre = QTableWidgetItem(str(ab.get("nombre", "")))
+            # Buscar clave correcta para min y max
+            min_val = ab.get("concentracion_minima")
+            if min_val is None:
+                min_val = ab.get("conc_min")
+            max_val = ab.get("concentracion_maxima")
+            if max_val is None:
+                max_val = ab.get("conc_max")
+            item_min = QTableWidgetItem(str(min_val if min_val is not None else "-"))
+            item_max = QTableWidgetItem(str(max_val if max_val is not None else "-"))
+            # Solo lectura
+            flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+            item_nombre.setFlags(flags)
+            item_min.setFlags(flags)
+            item_max.setFlags(flags)
+            table.setItem(i, 0, item_nombre)
+            table.setItem(i, 1, item_min)
+            table.setItem(i, 2, item_max)
+        table.resizeColumnsToContents()
+        layout.addWidget(table)
+        btn_close = QPushButton("Cerrar")
+        btn_close.clicked.connect(dialog.accept)
+        layout.addWidget(btn_close)
+        dialog.setLayout(layout)
+        dialog.resize(500, 350)
+        dialog.exec_()
 
     def _update_run_button_state(self):
         """
@@ -96,12 +135,15 @@ class ResultsView(QWidget):
         self.run_button = QPushButton("Iniciar Simulación")
         self.run_button.clicked.connect(self._emit_simulation)
         actions_hbox.addWidget(self.run_button)
+
+        # Botón ver intervalos de dosis
+        self.dose_intervals_button = QPushButton("Ver intervalos de dosis")
+        self.dose_intervals_button.clicked.connect(self.show_dose_intervals_modal)
+        actions_hbox.addWidget(self.dose_intervals_button)
         # Ahora que el botón existe, conecta las señales y actualiza el estado
         self.schedule_table.model().rowsInserted.connect(self._update_run_button_state)
         self.schedule_table.model().rowsRemoved.connect(self._update_run_button_state)
         self._update_run_button_state()
-
-
 
         main_layout.addLayout(actions_hbox)
 
