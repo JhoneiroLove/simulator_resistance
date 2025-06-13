@@ -10,3 +10,5 @@ seaborn>=0.11.0
 scikit-learn>=0.24.0
 joblib>=1.0.0
 reportlab>=3.6.0
+SQLAlchemy>=1.4.0
+pyinstaller>=5.0

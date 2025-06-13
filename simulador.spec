@@ -11,7 +11,7 @@ a = Analysis(
     datas=[
         (os.path.join(project_root, 'simulador_evolutivo.ico'), '.'),
         (os.path.join(project_root, 'style.qss'), '.'),
-        (os.path.join(project_root, 'src', 'resistencia.db'), '.'),
+        (os.path.join(project_root, 'data', 'resistencia.db'), 'data'),
         (os.path.join(project_root, 'src', 'migrations'), 'migrations'),  # <--- incluye migraciones
     ],
     hiddenimports=[],

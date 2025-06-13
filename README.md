@@ -28,19 +28,33 @@ SRB es una aplicación científica de escritorio desarrollada en Python con PyQt
 *En proceso*
 
 ## Instalación
-1. Clona este repositorio:
-   ```bash
-   git clone https://github.com/JhoneiroLove/simulator_resistance.git
-   cd simulator_resistance
-   ```
-2. Instala las dependencias:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Ejecuta la aplicación:
-   ```bash
-   python main.py
-   ```
+Para evitar conflictos y mantener las dependencias del proyecto aisladas, se recomienda encarecidamente utilizar un entorno virtual.
+
+1.  Clona este repositorio:
+    ```bash
+    git clone https://github.com/JhoneiroLove/simulator_resistance.git
+    cd simulator_resistance
+    ```
+2.  Crea y activa un entorno virtual:
+    ```bash
+    # Crea el entorno virtual (puedes llamarlo 'venv' o como prefieras)
+    python -m venv venv
+
+    # Activa el entorno en Windows
+    .\venv\Scripts\activate
+    
+    # En Linux o macOS, el comando es: source venv/bin/activate
+    ```
+    *Una vez activado, verás `(venv)` al principio de la línea de comandos.*
+
+3.  Instala las dependencias necesarias:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  Ejecuta la aplicación:
+    ```bash
+    python main.py
+    ```
 
 ## Uso
 - Al iniciar la aplicación, configura los parámetros de simulación y selecciona el tratamiento a analizar.
@@ -56,12 +70,26 @@ SRB es una aplicación científica de escritorio desarrollada en Python con PyQt
 - (Ver `requirements.txt` para la lista completa)
 
 ## Compilación y Distribución
-Para generar un ejecutable standalone:
-1. Ejecuta el script de build:
-   ```bash
-   ./build_simulador.bat
-   ```
-2. El instalador se generará en la carpeta `dist/`.
+El proceso para generar el ejecutable y el instalador se divide en dos pasos manuales para asegurar la máxima compatibilidad.
+
+### Paso 1: Generar el ejecutable con PyInstaller
+
+1.  **Asegúrate de tener un entorno virtual activado** con todas las dependencias del proyecto instaladas (ver sección de [Instalación](#instalación)).
+2.  Ejecuta el script de compilación:
+    ```bash
+    build_simulador.bat
+    ```
+3.  Este script utilizará **PyInstaller** para empaquetar la aplicación. Al finalizar, encontrarás todos los archivos del programa en la carpeta `dist\SimuladorEvolutivo`.
+
+### Paso 2: Crear el instalador con Inno Setup
+
+Una vez que los archivos del programa han sido creados en la carpeta `dist/`, puedes empaquetarlos en un instalador.
+
+1.  **Requisito:** Debes tener [Inno Setup](https://jrsoftware.org/isinfo.php) instalado en tu sistema.
+2.  Abre la aplicación **Inno Setup Compiler**.
+3.  Ve a `File > Open` y selecciona el archivo `setup.iss` que se encuentra en la raíz del proyecto.
+4.  Una vez abierto el script, ve al menú `Build > Compile` (o presiona `Ctrl+F9`).
+5.  Inno Setup tomará los archivos de la carpeta `dist\SimuladorEvolutivo`, los comprimirá y generará el instalador final (`SimuladorEvolutivo_Instalador.exe`) en una nueva carpeta llamada `Output`.
 
 ## Contribuir
 ¡Las contribuciones son bienvenidas! Por favor, abre un Issue o Pull Request para sugerir mejoras, reportar errores o proponer nuevas funcionalidades.

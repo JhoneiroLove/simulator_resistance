@@ -125,21 +125,15 @@ class GeneticAlgorithm:
             else:
                 break
 
-    def growth_modifier(self) -> float:
-        """Devuelve el modificador de crecimiento según la temperatura ambiental."""
-        temp = self._get_env_factor("temperature", 37.0)
+    def growth_modifier(self):
+        temp = self.environmental_factors.get("temperature", 37.0)
         if 35 <= temp <= 39:
             return 1.0
         else:
             return max(0.0, 1 - abs(temp - 37) * 0.1)
 
-    def _get_env_factor(self, key: str, default: float) -> float:
-        """Obtiene un factor ambiental con valor por defecto."""
-        return self.environmental_factors.get(key, default)
-
-    def death_modifier(self) -> float:
-        """Devuelve el modificador de tasa de muerte según el pH ambiental."""
-        pH = self._get_env_factor("pH", 7.4)
+    def death_modifier(self):
+        pH = self.environmental_factors.get("pH", 7.4)
         if 6.5 <= pH <= 7.5:
             return 1.0
         else:
@@ -178,7 +172,7 @@ class GeneticAlgorithm:
 
         return (max(0.0, N),)
 
-    def initialize(self, selected_gene_ids: list) -> None:
+    def initialize(self, selected_gene_ids: list):
         """
         Prepara todo para una ejecución dinámica:
         - crea población
@@ -197,22 +191,23 @@ class GeneticAlgorithm:
         self.times = np.linspace(0, self.generations, self.generations)
         self.current_step = 0
 
-        self._reset_histories()
-
-    def _reset_histories(self) -> None:
-        """Limpia y reinicia todos los historiales y contadores relevantes."""
+        # limpiar historiales
         self.best_hist.clear()
         self.avg_hist.clear()
         self.kill_hist.clear()
         self.mut_hist.clear()
         self.div_hist.clear()
+
+        # inicializar población bacteriana real
         self.population_total = 1e4  # Población inicial
         self.population_hist.clear()
         self.population_hist.append(self.population_total)
+
         self.expansion_index_hist.clear()
-        self.expansion_index_hist.append(1.0)
+        self.expansion_index_hist.append(1.0)  # Primer valor es 1.0 por definición
+
         self.degradation_hist.clear()
-        self.degradation_hist.append(0.0)
+        self.degradation_hist.append(0.0)  # El primer valor es 0
 
     def step(self) -> bool:
         """
@@ -240,7 +235,17 @@ class GeneticAlgorithm:
         for m in offspring:
             self.toolbox.mutate(m)
             del m.fitness.values
-            self._mutate_biological_attributes(m)
+            # Mutación de atributos biológicos
+            if random.random() < 0.02:  # 2% de mutar recubrimiento
+                m.recubrimiento = min(1.0, max(0.0, m.recubrimiento + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.reproduccion = min(1.0, max(0.0, m.reproduccion + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.letalidad = min(1.0, max(0.0, m.letalidad + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.permeabilidad = min(1.0, max(0.0, m.permeabilidad + random.uniform(-0.05, 0.05)))
+            if random.random() < 0.02:
+                m.enzimas = min(1.0, max(0.0, m.enzimas + random.uniform(-0.05, 0.05)))
 
         # 4) evaluación
         invalid = [ind for ind in offspring if not ind.fitness.valid]
@@ -274,7 +279,12 @@ class GeneticAlgorithm:
         mut = self.mutation_rate
 
         # diversidad (Shannon)
-        H = self._shannon_diversity()
+        N = len(self.pop)
+        H = 0.0
+        for j in range(len(self.genes)):
+            p_j = sum(ind[j] for ind in self.pop) / N
+            if 0 < p_j < 1:
+                H += -p_j * np.log2(p_j) - (1 - p_j) * np.log2(1 - p_j)
 
         # Rescate evolutivo por diversidad baja
         if H < 0.2:  # Diversidad muy baja
@@ -338,41 +348,17 @@ class GeneticAlgorithm:
         self.current_step += 1
         return True
 
-    def _mutate_biological_attributes(self, individual) -> None:
-        """Aplicar mutaciones aleatorias a los atributos biológicos del individuo."""
-        if random.random() < 0.02:
-            individual.recubrimiento = min(1.0, max(0.0, individual.recubrimiento + random.uniform(-0.05, 0.05)))
-        if random.random() < 0.02:
-            individual.reproduccion = min(1.0, max(0.0, individual.reproduccion + random.uniform(-0.05, 0.05)))
-        if random.random() < 0.02:
-            individual.letalidad = min(1.0, max(0.0, individual.letalidad + random.uniform(-0.05, 0.05)))
-        if random.random() < 0.02:
-            individual.permeabilidad = min(1.0, max(0.0, individual.permeabilidad + random.uniform(-0.05, 0.05)))
-        if random.random() < 0.02:
-            individual.enzimas = min(1.0, max(0.0, individual.enzimas + random.uniform(-0.05, 0.05)))
-
-    def _shannon_diversity(self) -> float:
-        """Calcular el índice de diversidad de Shannon para la población actual."""
-        N = len(self.pop)
-        H = 0.0
-        for j in range(len(self.genes)):
-            p_j = sum(ind[j] for ind in self.pop) / N
-            if 0 < p_j < 1:
-                H += -p_j * np.log2(p_j) - (1 - p_j) * np.log2(1 - p_j)
-        return H
-
-    def save_final_gene_attributes(self, selected_gene_ids: list) -> None:
-        """
-        Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación.
-        """
+    def save_final_gene_attributes(self, selected_gene_ids):
+        """Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación."""
         session = get_session()
         antibiotico_id = self.current_ab["id"] if self.current_ab else None
         generacion_final = self.current_step - 1  # Última generación
-
+        
         for idx, gen in enumerate(self.genes):
             if gen["id"] in selected_gene_ids:
                 valores = [ind[idx] for ind in self.pop]
-                promedio, std = self._mean_and_std(valores)
+                promedio = float(np.mean(valores)) if valores else 0.0
+                std = float(np.std(valores)) if valores else 0.0
                 sim_attr = SimulacionAtributos(
                     simulacion_id=self.current_simulation_id,
                     generacion=generacion_final,
@@ -382,10 +368,19 @@ class GeneticAlgorithm:
                     desviacion_std=std,
                 )
                 session.add(sim_attr)
-
-        for atributo in ["recubrimiento", "reproduccion", "letalidad", "permeabilidad", "enzimas"]:
+        
+        atributos = [
+            "recubrimiento",
+            "reproduccion",
+            "letalidad",
+            "permeabilidad",
+            "enzimas",
+        ]
+        
+        for atributo in atributos:
             valores = [getattr(ind, atributo) for ind in self.pop]
-            promedio, std = self._mean_and_std(valores)
+            promedio = float(np.mean(valores)) if valores else 0.0
+            std = float(np.std(valores)) if valores else 0.0
             sim_attr = SimulacionAtributos(
                 simulacion_id=self.current_simulation_id,
                 generacion=generacion_final,
@@ -397,9 +392,3 @@ class GeneticAlgorithm:
             session.add(sim_attr)
         session.commit()
         session.close()
-
-    def _mean_and_std(self, valores: list) -> tuple[float, float]:
-        """Devuelve el promedio y desviación estándar de una lista."""
-        if not valores:
-            return 0.0, 0.0
-        return float(np.mean(valores)), float(np.std(valores))
