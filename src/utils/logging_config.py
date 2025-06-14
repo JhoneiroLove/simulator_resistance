@@ -3,9 +3,18 @@ import os
 from logging.handlers import RotatingFileHandler
 
 def setup_logging():
-    log_dir = "logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # Determinar el directorio adecuado para los registros en función del sistema operativo.
+    app_name = "SrbSimulator"  # Nombre de la carpeta específica de la aplicación
+    if os.name == 'nt':  # Windows
+        base_path = os.getenv('APPDATA')
+        if not base_path:  # Recurso alternativo si APPDATA no está configurado 
+            base_path = os.path.expanduser('~')
+        log_dir = os.path.join(base_path, app_name, "logs")
+    else:  # macOS, Linux (utilizando una carpeta oculta en el directorio de inicio del usuario)
+        log_dir = os.path.join(os.path.expanduser('~'), f".{app_name.lower()}_logs")
+
+    # Crear el directorio de logs si no existe; maneja también los directorios padre
+    os.makedirs(log_dir, exist_ok=True)
 
     log_file = os.path.join(log_dir, "app.log")
 
