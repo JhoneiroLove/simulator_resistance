@@ -104,12 +104,13 @@ def test_evaluate_no_antibiotic(ga_instance):
     fitness = ga_instance.evaluate(individual)
 
     # El fitness se calcula manualmente para la validación.
-    # raw_resistance = 0.5, adaptive_cost = 0.1
-    # N = (0.5 / 1.0) * (1 - 0.1) = 0.45
+    # raw_resistance = 0.5 (del genA)
+    # adaptive_cost = (recubrimiento + enzimas) / 2 = (0.5 + 0.5) / 2 = 0.5
+    # N = (0.5 / 1.0) * (1 - 0.5) = 0.25
     # Supervivencia al antibiótico = 1 (no hay)
     # Tasa de muerte = 0.05
-    # Fitness final = 0.45 * 1 * (1 - 0.05) = 0.4275
-    assert np.isclose(fitness[0], 0.4275)
+    # Fitness final = 0.25 * 1 * (1 - 0.05) = 0.2375
+    assert np.isclose(fitness[0], 0.2375)
 
 def test_evaluate_with_antibiotic(ga_instance):
     """Comprueba el cálculo de fitness de un individuo bajo la presión de un antibiótico."""
@@ -126,13 +127,14 @@ def test_evaluate_with_antibiotic(ga_instance):
     fitness = ga_instance.evaluate(individual)
 
     # El fitness se calcula manualmente para la validación.
-    # raw_resistance = 0.5, adaptive_cost = 0.1
-    # N = (0.5 / 1.0) * (1 - 0.1) = 0.45
+    # raw_resistance = 0.5 (del genA)
+    # adaptive_cost = (recubrimiento + enzimas) / 2 = (0.5 + 0.5) / 2 = 0.5
+    # N = (0.5 / 1.0) * (1 - 0.5) = 0.25
     # Supervivencia al antibiótico = 1 - (5-2)/(8-2) = 0.5
-    # N = 0.45 * 0.5 = 0.225
+    # N = 0.25 * 0.5 = 0.125
     # Tasa de muerte = 0.05
-    # Fitness final = 0.225 * (1 - 0.05) = 0.21375
-    assert np.isclose(fitness[0], 0.21375)
+    # Fitness final = 0.125 * (1 - 0.05) = 0.11875
+    assert np.isclose(fitness[0], 0.11875)
 
 def test_environmental_modifiers(ga_instance):
     """Verifica que los modificadores de crecimiento y muerte responden a cambios en los factores ambientales."""

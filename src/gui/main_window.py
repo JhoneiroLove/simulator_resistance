@@ -48,7 +48,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SRB")
-        self.setGeometry(100, 100, 1280, 720)
+        self.resize(1280, 720)
+        # Centrar la ventana en la pantalla
+        qr = self.frameGeometry()
+        cp = QApplication.primaryScreen().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
         self.setWindowIcon(get_app_icon())
 
         # ---- Widgets principales ----
@@ -179,20 +184,37 @@ class MainWindow(QMainWindow):
         )
         self.ga.initialize(self.saved_genes)
 
-        # Crear y mostrar MapWindow (ventana de mapa de expansión bacteriana)
+        # --- Posicionamiento de ventanas de gráficos ---
+        main_window_geom = self.geometry()
+        screen = QApplication.primaryScreen().geometry()
+        margin = 10
+
+        # Crear/actualizar y posicionar la ventana del mapa de calor a la izquierda
         if self.map_window is None:
             self.map_window = MapWindow(self.ga)
         else:
             self.map_window.ga = self.ga
             self.map_window.reset()
+        
+        map_geom = self.map_window.frameGeometry()
+        map_x = main_window_geom.x() - map_geom.width() - margin
+        map_x = max(0, map_x)  # Asegurarse de que no se salga de la pantalla
+        self.map_window.move(map_x, main_window_geom.y())
         self.map_window.show()
 
-        # Crear y mostrar ExpandWindow (ventana ampliada)
+        # Crear/actualizar y posicionar la ventana de expansión a la derecha
         if self.expand_window is None:
             self.expand_window = ExpandWindow(self.ga)
         else:
             self.expand_window.ga = self.ga
             self.expand_window.reset()
+
+        expand_geom = self.expand_window.frameGeometry()
+        expand_x = main_window_geom.x() + main_window_geom.width() + margin
+        # Asegurarse de que no se salga de la pantalla
+        if expand_x + expand_geom.width() > screen.width():
+            expand_x = screen.width() - expand_geom.width()
+        self.expand_window.move(expand_x, main_window_geom.y())
         self.expand_window.show()
 
         # Limpiar gráfica en la pestaña de resultados y arrancar el timer
@@ -329,6 +351,19 @@ class MainWindow(QMainWindow):
                 "Alerta de Resistencia Crítica",
                 f"La resistencia promedio ha superado el umbral crítico de {self.ga.resistance_threshold:.2f}.",
             )
+
+    def closeEvent(self, event):
+        """
+        Maneja el evento de cierre de la ventana principal para asegurar
+        que toda la aplicación se termine correctamente.
+        """
+        # Cierra las ventanas secundarias explícitamente si existen
+        if hasattr(self, 'map_window') and self.map_window:
+            self.map_window.close()
+        if hasattr(self, 'expand_window') and self.expand_window:
+            self.expand_window.close()
+            
+        event.accept()  # Acepta el evento de cierre para la ventana principal
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

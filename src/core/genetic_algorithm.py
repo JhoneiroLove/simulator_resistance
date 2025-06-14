@@ -165,9 +165,17 @@ class GeneticAlgorithm:
             2) kill por antibiótico
             3) muerte natural ajustada por ambiente
         """
-        # 1) raw → N0 en [0,1]
-        raw = sum(g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual))
-        N = raw / self.total_weight
+        # 1) Resistencia genética y costo adaptativo
+        # 1) Resistencia genética y costo adaptativo del individuo
+        raw_resistance = sum(
+            g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual)
+        )
+
+        # El costo adaptativo se basa en los atributos fenotípicos del individuo
+        adaptive_cost = (individual.recubrimiento + individual.enzimas) / 2.0
+
+        # Normalización de la resistencia y aplicación del costo adaptativo
+        N = (raw_resistance / self.total_weight) * (1 - adaptive_cost)
 
         # 2) kill por antibiótico
         if self.current_ab:
