@@ -34,6 +34,13 @@ class GeneticAlgorithm:
         death_rate: float = 0.05,
         environmental_factors=None,
         simulation_id=None,
+        phenotype_mutation_prob: float = 0.02,
+        phenotype_mutation_sigma: float = 0.05,
+        evo_rescue_threshold: float = 0.2,
+        evo_rescue_prob: float = 0.02,
+        r_growth: float = 0.2,
+        K_capacity: float = 1e6,
+        pressure_factor: float = 0.5,
     ):
         logging.info(f"Initializing Genetic Algorithm with simulation_id={simulation_id}")
         logging.debug(f"GA params: mutation_rate={mutation_rate}, generations={generations}, pop_size={pop_size}, death_rate={death_rate}")
@@ -63,14 +70,19 @@ class GeneticAlgorithm:
         )
         self.current_simulation_id = simulation_id
 
-        # Normalización de resistencia genética → [0,1]
+        self.phenotype_mutation_prob = phenotype_mutation_prob
+        self.phenotype_mutation_sigma = phenotype_mutation_sigma
+        self.evo_rescue_threshold = evo_rescue_threshold
+        self.evo_rescue_prob = evo_rescue_prob
+        self.r_growth = r_growth
+        self.K_capacity = K_capacity
+        self.pressure_factor = pressure_factor
+
         self.total_weight = sum(g["peso_resistencia"] for g in genes) or 1e-8
 
-        # Flags de estado
         self.extinction_reached = False
         self.resistance_critical = False
 
-        # DEAP toolbox
         self.toolbox = base.Toolbox()
         self.toolbox.register("clone", copy.deepcopy)
         self.toolbox.register("individual", self.init_individual)
@@ -79,38 +91,29 @@ class GeneticAlgorithm:
         )
         self.toolbox.register("evaluate", self.evaluate)
         self.toolbox.register("mate", tools.cxTwoPoint)
-        self.toolbox.register("mutate", tools.mutFlipBit, indpb=self.mutation_rate)
+        self.toolbox.register("mutate", self._mutate_individual)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
 
-        # estado interno para dinámico
         self.pop = None
         self.times = None
         self.current_step = 0
 
-        # historiales
         self.best_hist = []
         self.avg_hist = []
         self.kill_hist = []
         self.mut_hist = []
         self.div_hist = []
 
-        self.expansion_index_hist = []  # Historial del índice de expansión bacteriana
+        self.expansion_index_hist = []  
 
-        # variables para población bacteriana real
-        self.population_total = None  # Población bacteriana real (N_t)
-        self.population_hist = []  # Historial de población bacteriana
+        self.population_total = None  
+        self.population_hist = []  
 
-        self.degradation_hist = []  # Historial de degradación por generación
+        self.degradation_hist = []  
 
-        # Parámetros del modelo logístico
-        self.r_growth = 0.2  # Tasa de crecimiento (por defecto)
-        self.K_capacity = 1e6  # Capacidad máxima del entorno (por defecto)
+        self.extinction_threshold = 100  
+        self.resistance_threshold = 0.8  
 
-        # Parámetros de umbral
-        self.extinction_threshold = 100  # Menos de 100 bacterias = extinción
-        self.resistance_threshold = 0.8  # 80% resistencia = alarma
-
-        # Almacenar la evolución de cada atributo biológico por generación
         self.recubrimiento_vals = []
         self.reproduccion_vals = []
         self.letalidad_vals = []
@@ -126,8 +129,33 @@ class GeneticAlgorithm:
         enzimas = random.uniform(0.5, 1.0)
         return creator.Individual(genes_bits, recubrimiento, reproduccion, letalidad, permeabilidad, enzimas)
 
+    def _mutate_individual(self, individual):
+        tools.mutFlipBit(individual, indpb=self.mutation_rate)
+
+        bio_attrs = [
+            individual.recubrimiento,
+            individual.reproduccion,
+            individual.letalidad,
+            individual.permeabilidad,
+            individual.enzimas,
+        ]
+        
+        tools.mutGaussian(
+            bio_attrs,
+            mu=0.0,
+            sigma=self.phenotype_mutation_sigma,
+            indpb=self.phenotype_mutation_prob,
+        )
+
+        individual.recubrimiento = min(1.0, max(0.0, bio_attrs[0]))
+        individual.reproduccion = min(1.0, max(0.0, bio_attrs[1]))
+        individual.letalidad = min(1.0, max(0.0, bio_attrs[2]))
+        individual.permeabilidad = min(1.0, max(0.0, bio_attrs[3]))
+        individual.enzimas = min(1.0, max(0.0, bio_attrs[4]))
+
+        return (individual,)
+
     def _update_antibiotic(self, t: float):
-        """Selecciona antibiótico y concentración activos en el tiempo t."""
         self.current_ab = None
         self.current_conc = 0.0
         for t_evt, ab, conc in self.schedule:
@@ -158,26 +186,15 @@ class GeneticAlgorithm:
         return self.environmental_factors.get(key)
 
     def evaluate(self, individual):
-        logging.debug(f"Evaluating individual: {individual}")
-        """
-        Calcula fitness normalizado [0,1]:
-            1) resistencia genética
-            2) kill por antibiótico
-            3) muerte natural ajustada por ambiente
-        """
-        # 1) Resistencia genética y costo adaptativo
-        # 1) Resistencia genética y costo adaptativo del individuo
+        # logging.debug(f"Evaluating individual: {individual}")
         raw_resistance = sum(
             g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual)
         )
 
-        # El costo adaptativo se basa en los atributos fenotípicos del individuo
         adaptive_cost = (individual.recubrimiento + individual.enzimas) / 2.0
 
-        # Normalización de la resistencia y aplicación del costo adaptativo
         N = (raw_resistance / self.total_weight) * (1 - adaptive_cost)
 
-        # 2) kill por antibiótico
         if self.current_ab:
             lo, hi = (
                 self.current_ab["concentracion_minima"],
@@ -187,7 +204,6 @@ class GeneticAlgorithm:
                 surv = max(0.0, min(1.0, 1 - (self.current_conc - lo) / (hi - lo)))
                 N *= surv
 
-        # 3) muerte natural ajustada por pH (u otro factor)
         death_rate_adj = self.death_rate * self.death_modifier()
         N *= 1 - death_rate_adj
 
@@ -195,13 +211,6 @@ class GeneticAlgorithm:
 
     def initialize(self, selected_gene_ids: list):
         logging.info(f"Initializing population for genes: {selected_gene_ids}")
-        """
-        Prepara todo para una ejecución dinámica:
-        - crea población
-        - fuerza los genes seleccionados a 1
-        - inicializa times y contadores
-        """
-        # población inicial
         pop = self.toolbox.population(n=self.pop_size)
         forced = {i for i, g in enumerate(self.genes) if g["id"] in selected_gene_ids}
         for ind in pop:
@@ -209,81 +218,56 @@ class GeneticAlgorithm:
                 ind[idx] = 1
         self.pop = pop
 
-        # discretizar tiempo en 'generations' pasos
         self.times = np.linspace(0, self.generations, self.generations)
         self.current_step = 0
 
-        # limpiar historiales
         self.best_hist.clear()
         self.avg_hist.clear()
         self.kill_hist.clear()
         self.mut_hist.clear()
         self.div_hist.clear()
 
-        # inicializar población bacteriana real
-        self.population_total = 1e4  # Población inicial
+        self.population_total = 1e4  
         self.population_hist.clear()
         self.population_hist.append(self.population_total)
 
         self.expansion_index_hist.clear()
-        self.expansion_index_hist.append(1.0)  # Primer valor es 1.0 por definición
+        self.expansion_index_hist.append(1.0)  
 
         self.degradation_hist.clear()
-        self.degradation_hist.append(0.0)  # El primer valor es 0
+        self.degradation_hist.append(0.0)  
 
     def step(self) -> bool:
-        """
-        Ejecuta UNA generación. Devuelve False si ya no hay más pasos.
-        """
         if self.current_step >= len(self.times):
             return False
 
         t = self.times[self.current_step]
         self.current_time = t
 
-        # actualizar antibiótico según schedule dinámica
         self._update_antibiotic(t)
 
-        # 1) selección
         offspring = self.toolbox.select(self.pop, len(self.pop))
         offspring = list(map(self.toolbox.clone, offspring))
 
-        # 2) cruce
         for c1, c2 in zip(offspring[::2], offspring[1::2]):
             self.toolbox.mate(c1, c2)
             del c1.fitness.values, c2.fitness.values
 
-        # 3) mutación
         for m in offspring:
             self.toolbox.mutate(m)
             del m.fitness.values
-            # Mutación de atributos biológicos
-            if random.random() < 0.02:  # 2% de mutar recubrimiento
-                m.recubrimiento = min(1.0, max(0.0, m.recubrimiento + random.uniform(-0.05, 0.05)))
-            if random.random() < 0.02:
-                m.reproduccion = min(1.0, max(0.0, m.reproduccion + random.uniform(-0.05, 0.05)))
-            if random.random() < 0.02:
-                m.letalidad = min(1.0, max(0.0, m.letalidad + random.uniform(-0.05, 0.05)))
-            if random.random() < 0.02:
-                m.permeabilidad = min(1.0, max(0.0, m.permeabilidad + random.uniform(-0.05, 0.05)))
-            if random.random() < 0.02:
-                m.enzimas = min(1.0, max(0.0, m.enzimas + random.uniform(-0.05, 0.05)))
 
-        # 4) evaluación
         invalid = [ind for ind in offspring if not ind.fitness.valid]
         fits = map(self.toolbox.evaluate, invalid)
         for ind, fit in zip(invalid, fits):
             ind.fitness.values = fit
 
-        # reemplazo
         self.pop[:] = offspring
 
-        # 5) métricas
         vals = [ind.fitness.values[0] for ind in self.pop]
         best = max(vals)
         avg = sum(vals) / len(vals)
 
-        # kill rate
         if self.current_ab:
             lo, hi = (
                 self.current_ab["concentracion_minima"],
@@ -297,10 +281,8 @@ class GeneticAlgorithm:
         else:
             kill = 0.0
 
-        # mutación (constante)
         mut = self.mutation_rate
 
-        # diversidad (Shannon)
         N = len(self.pop)
         H = 0.0
         for j in range(len(self.genes)):
@@ -308,20 +290,17 @@ class GeneticAlgorithm:
             if 0 < p_j < 1:
                 H += -p_j * np.log2(p_j) - (1 - p_j) * np.log2(1 - p_j)
 
-        # Rescate evolutivo por diversidad baja
-        if H < 0.2:  # Diversidad muy baja
+        if H < self.evo_rescue_threshold:  
             for ind in self.pop:
-                if random.random() < 0.02:  # 2% chance de mutación extra
+                if random.random() < self.evo_rescue_prob:  
                     idx = random.randint(0, len(ind) - 1)
                     ind[idx] = 1 - ind[idx]
                     del ind.fitness.values
-            # Vuelve a evaluar después de las mutaciones extra
             invalid = [ind for ind in self.pop if not ind.fitness.valid]
             fits = map(self.toolbox.evaluate, invalid)
             for ind, fit in zip(invalid, fits):
                 ind.fitness.values = fit
 
-        # guardar
         self.best_hist.append(best)
         self.avg_hist.append(avg)
         self.kill_hist.append(kill)
@@ -330,25 +309,29 @@ class GeneticAlgorithm:
 
         prev_population = self.population_total
 
-        # Ajustes por factores ambientales
         growth_mod = self.growth_modifier()
         death_mod = self.death_modifier()
 
         r = self.r_growth * growth_mod
         death_rate = self.death_rate * death_mod
 
-        # Actualizar población bacteriana real
         growth = r * prev_population * (1 - prev_population / self.K_capacity)
         deaths = death_rate * prev_population
         N_next = prev_population + growth - deaths
-        # Si hay antibiótico activo, sí aplicamos presión selectiva
+
+        log_details = f"Pop dynamics: N_prev={prev_population:.2f}, growth={growth:.2f}, deaths={deaths:.2f}, N_after_growth/death={N_next:.2f}"
+
+        # Si hay antibiótico activo, aplicamos presión selectiva de forma más suave
         if self.current_ab:
-            N_next *= avg
+            pressure = (1 - avg) * self.pressure_factor
+            N_next *= (1 - pressure)
+            log_details += f", avg_fitness={avg:.4f}, pressure_applied={pressure:.4f}, N_after_pressure={N_next:.2f}"
+
         N_next = max(N_next, 1.0)  # evitar negativos
         self.population_total = N_next
         self.population_hist.append(self.population_total)
+        logging.debug(log_details)
 
-        # Calcular degradación relativa
         if self.current_ab and self.current_conc > 0.0 and prev_population > 0:
             degradation = 1 - (self.population_total / prev_population)
         else:

@@ -181,6 +181,7 @@ class MainWindow(QMainWindow):
             death_rate=self.saved_death_rate,
             environmental_factors=self.saved_environmental_factors,
             simulation_id=simulation_id,
+            pressure_factor=0.25,  # Reducir la presión para fomentar supervivencia
         )
         self.ga.initialize(self.saved_genes)
 
