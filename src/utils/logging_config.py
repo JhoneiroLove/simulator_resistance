@@ -19,7 +19,7 @@ def setup_logging():
     log_file = os.path.join(log_dir, "app.log")
 
     # Obtener el nivel de log desde una variable de entorno, con INFO como valor por defecto.
-    log_level_str = os.environ.get("LOG_LEVEL", "DEBUG").upper()
+    log_level_str = os.environ.get("LOG_LEVEL", "DEBUG").upper() # DEBUG, INFO, WARNING, ERROR, CRITICAL
     log_level = getattr(logging, log_level_str, logging.INFO)
 
     # Obtener el logger raíz y limpiarle los manejadores para evitar duplicados.

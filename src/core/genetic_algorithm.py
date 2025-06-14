@@ -185,6 +185,21 @@ class GeneticAlgorithm:
     def get_environmental_factor(self, key: str) -> float:
         return self.environmental_factors.get(key)
 
+    def _sigmoid_survival(self, concentration, lo, hi):
+        """Calcula la supervivencia con una función sigmoidal."""
+        if hi - lo <= 0:
+            return 1.0 if concentration < lo else 0.0
+
+        c50 = (lo + hi) / 2.0
+        # El factor k determina la pendiente de la curva.
+        # Un valor más alto de k hace la transición más abrupta.
+        # k=10 es un valor común para una transición estándar.
+        # Se ajusta k en función del rango (hi - lo) para mantener una pendiente consistente.
+        k = 10 / (hi - lo)
+
+        survival = 1.0 / (1.0 + np.exp(k * (concentration - c50)))
+        return survival
+
     def evaluate(self, individual):
         # logging.debug(f"Evaluating individual: {individual}")
         raw_resistance = sum(
@@ -200,9 +215,8 @@ class GeneticAlgorithm:
                 self.current_ab["concentracion_minima"],
                 self.current_ab["concentracion_maxima"],
             )
-            if hi > lo:
-                surv = max(0.0, min(1.0, 1 - (self.current_conc - lo) / (hi - lo)))
-                N *= surv
+            surv = self._sigmoid_survival(self.current_conc, lo, hi)
+            N *= surv
 
         death_rate_adj = self.death_rate * self.death_modifier()
         N *= 1 - death_rate_adj
