@@ -225,10 +225,9 @@ def test_step_evolutionary_rescue(ga_instance, mocker):
     mocker.patch.object(ga_instance.toolbox, 'mutate')
 
     # Se configura el mock de `random` para que la mutación de rescate se active solo una vez.
-    num_bio_mutations = ga_instance.pop_size * 5
+    # Como la mutación estándar está deshabilitada, solo necesitamos proveer los valores para el rescate.
     rescue_randoms = [0.01] + [1.0] * (ga_instance.pop_size - 1)
-    all_randoms = [1.0] * num_bio_mutations + rescue_randoms
-    mocker.patch('src.core.genetic_algorithm.random.random', side_effect=all_randoms)
+    mocker.patch('src.core.genetic_algorithm.random.random', side_effect=rescue_randoms)
     # Se configura `randint` para que la mutación afecte a un gen predecible.
     mocker.patch('src.core.genetic_algorithm.random.randint', return_value=0)
 
