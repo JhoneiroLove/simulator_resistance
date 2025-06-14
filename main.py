@@ -1,10 +1,12 @@
 from src.data.database import init_db
 from src.gui.main_window import MainWindow
+from src.utils.logging_config import setup_logging
 from PyQt5.QtWidgets import QApplication
 import sys
 import os
 
 if __name__ == "__main__":
+    setup_logging()
     # 1) Inicializa y seedea la BD
     init_db()
 

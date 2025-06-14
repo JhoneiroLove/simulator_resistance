@@ -1,3 +1,4 @@
+import logging
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -175,7 +176,7 @@ class InputForm(QWidget):
     def submit(self):
         params = self.collect_params()
         if params:
-            print(
-                f"DEBUG InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}"
-            )
+            logging.debug(
+            f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}"
+        )
             self.params_submitted.emit(*params)

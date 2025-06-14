@@ -1,3 +1,4 @@
+import logging
 import random
 import copy
 import numpy as np
@@ -34,6 +35,10 @@ class GeneticAlgorithm:
         environmental_factors=None,
         simulation_id=None,
     ):
+        logging.info(f"Initializing Genetic Algorithm with simulation_id={simulation_id}")
+        logging.debug(f"GA params: mutation_rate={mutation_rate}, generations={generations}, pop_size={pop_size}, death_rate={death_rate}")
+        logging.debug(f"Environmental factors: {environmental_factors}")
+        logging.debug(f"Antibiotic schedule: {antibiotic_schedule}")
         """
         :param genes: lista de objetos con .id y .peso_resistencia
         :param antibiotic_schedule: lista de tuplas (t_event, antibiotic_obj, concentration)
@@ -53,10 +58,17 @@ class GeneticAlgorithm:
             "temperature": 37.0,
             "pH": 7.4,
         }
+        self.resistance_threshold = self.environmental_factors.get(
+            "resistance_threshold", 0.9
+        )
         self.current_simulation_id = simulation_id
 
         # Normalización de resistencia genética → [0,1]
         self.total_weight = sum(g["peso_resistencia"] for g in genes) or 1e-8
+
+        # Flags de estado
+        self.extinction_reached = False
+        self.resistance_critical = False
 
         # DEAP toolbox
         self.toolbox = base.Toolbox()
@@ -146,20 +158,18 @@ class GeneticAlgorithm:
         return self.environmental_factors.get(key)
 
     def evaluate(self, individual):
+        logging.debug(f"Evaluating individual: {individual}")
         """
         Calcula fitness normalizado [0,1]:
             1) resistencia genética
             2) kill por antibiótico
             3) muerte natural ajustada por ambiente
         """
-        # 1) Resistencia y costo adaptativo
-        raw_resistance = sum(g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual))
-        adaptive_cost = sum(g["costo_adaptativo"] * bit for g, bit in zip(self.genes, individual))
+        # 1) raw → N0 en [0,1]
+        raw = sum(g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual))
+        N = raw / self.total_weight
 
-        # Normalizar resistencia y aplicar costo
-        N = (raw_resistance / self.total_weight) * (1 - adaptive_cost)
-
-        # 2) Muerte por antibiótico
+        # 2) kill por antibiótico
         if self.current_ab:
             lo, hi = (
                 self.current_ab["concentracion_minima"],
@@ -176,6 +186,7 @@ class GeneticAlgorithm:
         return (max(0.0, N),)
 
     def initialize(self, selected_gene_ids: list):
+        logging.info(f"Initializing population for genes: {selected_gene_ids}")
         """
         Prepara todo para una ejecución dinámica:
         - crea población
@@ -336,22 +347,33 @@ class GeneticAlgorithm:
             degradation = 0.0
         self.degradation_hist.append(degradation)
 
-        # Detectar extinción
+        # Detectar extinción y loguear solo la primera vez
         if self.population_total <= self.extinction_threshold:
+            if not self.extinction_reached:
+                logging.warning(f"Extinction threshold reached at step {self.current_step}.")
             self.extinction_reached = True
 
-        # Detectar resistencia crítica
+        # Detectar resistencia crítica y loguear solo la primera vez
         if self.avg_hist[-1] >= self.resistance_threshold:
+            if not self.resistance_critical:
+                logging.warning(
+                    f"Critical resistance threshold reached at step {self.current_step}."
+                )
             self.resistance_critical = True
 
         # Cálculo índice de expansión
         idx_exp = N_next / prev_population if prev_population > 0 else 0.0
         self.expansion_index_hist.append(idx_exp)
 
+        logging.debug(
+            f"Step {self.current_step}: best_fit={best:.4f}, avg_fit={avg:.4f}, pop_size={self.population_total:.2f}, kill_rate={kill:.4f}, diversity={H:.4f}"
+        )
+
         self.current_step += 1
         return True
 
     def save_final_gene_attributes(self, selected_gene_ids):
+        logging.info(f"Saving final gene attributes for simulation_id={self.current_simulation_id}")
         """Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación."""
         session = get_session()
         antibiotico_id = self.current_ab["id"] if self.current_ab else None

@@ -1,3 +1,4 @@
+import logging
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -640,7 +641,7 @@ class ResultsView(QWidget):
             )
             self._schedule_events.append((t_evt, name, conc))
 
-        print(f"DEBUG ResultsView._emit_simulation -> schedule={sched}")
+        logging.debug(f"ResultsView._emit_simulation -> schedule={sched}")
         self.simulate_requested.emit(sched)
 
     def clear_plot(self):
