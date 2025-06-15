@@ -56,3 +56,24 @@ class SimulacionAtributos(Base):
 
     simulacion = relationship("Simulacion", backref="atributos")
     antibiotico = relationship("Antibiotico", backref="atributos")
+
+class ReporteSimulacion(Base):
+    __tablename__ = "reportes_simulacion"
+    id = Column(Integer, primary_key=True)
+    simulacion_id = Column(Integer, ForeignKey("simulaciones.id"), nullable=False)
+    fecha_ejecucion = Column(DateTime, server_default=func.now())
+    generaciones_totales = Column(Integer, nullable=False)
+    parametros_input = Column(String, nullable=False)  # JSON almacenado como texto
+
+    simulacion = relationship("Simulacion")
+    metricas = relationship("MetricaReporte", back_populates="reporte", cascade="all, delete-orphan")
+
+class MetricaReporte(Base):
+    __tablename__ = "metricas_reporte"
+    id = Column(Integer, primary_key=True)
+    reporte_id = Column(Integer, ForeignKey("reportes_simulacion.id"), nullable=False)
+    nombre_indicador = Column(String, nullable=False)
+    valor_promedio = Column(Float, nullable=False)
+    desviacion_estandar = Column(Float, nullable=True)
+
+    reporte = relationship("ReporteSimulacion", back_populates="metricas")
