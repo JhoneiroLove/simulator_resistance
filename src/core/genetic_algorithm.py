@@ -1,6 +1,7 @@
 import logging
 import random
 import copy
+import time
 import numpy as np
 from src.data.database import get_session
 from src.data.models import SimulacionAtributos
@@ -119,6 +120,15 @@ class GeneticAlgorithm:
         self.letalidad_vals = []
         self.permeabilidad_vals = []
         self.enzimas_vals = []
+
+        # Parámetros para optimización adaptativa
+        self.target_time_per_generation = 0.5
+        self.min_pop_size = 50
+        self.max_pop_size = pop_size
+        self.base_mutation_rate = mutation_rate
+        self.diversity_threshold = 0.3
+
+        self.fitness_hist = []
 
     def init_individual(self):
         genes_bits = [random.randint(0, 1) for _ in self.genes]
@@ -260,6 +270,8 @@ class GeneticAlgorithm:
 
         self._update_antibiotic(t)
 
+        start_time = time.perf_counter()  # Inicio de medición
+
         offspring = self.toolbox.select(self.pop, len(self.pop))
         offspring = list(map(self.toolbox.clone, offspring))
 
@@ -281,6 +293,21 @@ class GeneticAlgorithm:
         vals = [ind.fitness.values[0] for ind in self.pop]
         best = max(vals)
         avg = sum(vals) / len(vals)
+
+        self.fitness_hist.append(avg)
+
+        convergence_rate = 0.0
+        if len(self.fitness_hist) > 10:
+            window = self.fitness_hist[-10:]
+            slope = np.polyfit(range(10), window, 1)[0]
+            convergence_rate = abs(slope)
+            logging.info(f"Tasa de convergencia: {convergence_rate:.6f}")
+            
+            # Adaptar mutación si convergencia es lenta
+            if convergence_rate < 0.001:
+                new_mutation_rate = min(0.5, self.mutation_rate * 1.2)
+                logging.warning(f"¡Convergencia lenta! Aumentando mutación a {new_mutation_rate}")
+                self.mutation_rate = new_mutation_rate
 
         if self.current_ab:
             lo, hi = (
@@ -369,6 +396,26 @@ class GeneticAlgorithm:
         # Cálculo índice de expansión
         idx_exp = N_next / prev_population if prev_population > 0 else 0.0
         self.expansion_index_hist.append(idx_exp)
+
+        generation_time = time.perf_counter() - start_time
+        
+        # 1. Adaptación de tamaño de población
+        if generation_time > self.target_time_per_generation:
+            reduction_factor = max(0.7, self.target_time_per_generation / generation_time)
+            new_pop_size = max(self.min_pop_size, int(len(self.pop) * reduction_factor))
+            if new_pop_size < len(self.pop):
+                logging.info(f"Adaptación: reduciendo población de {len(self.pop)} a {new_pop_size} por eficiencia")
+                self.pop = tools.selBest(self.pop, new_pop_size)
+        
+        # 2. Adaptación de tasa de mutación
+        if H < self.diversity_threshold:
+            increase_factor = min(2.0, 1.0 + (self.diversity_threshold - H))
+            new_mutation_rate = min(0.2, self.mutation_rate * increase_factor)
+            if new_mutation_rate > self.mutation_rate:
+                logging.info(f"Adaptación: aumentando mutación de {self.mutation_rate} a {new_mutation_rate} por baja diversidad")
+                self.mutation_rate = new_mutation_rate
+        elif self.mutation_rate > self.base_mutation_rate:
+            self.mutation_rate = max(self.base_mutation_rate, self.mutation_rate * 0.9)
 
         logging.debug(
             f"Step {self.current_step}: best_fit={best:.4f}, avg_fit={avg:.4f}, pop_size={self.population_total:.2f}, kill_rate={kill:.4f}, diversity={H:.4f}"
