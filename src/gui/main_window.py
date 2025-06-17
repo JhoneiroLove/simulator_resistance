@@ -1,7 +1,8 @@
 import sys
 import numpy as np
 import pyqtgraph as pg
-import sys, os
+import os
+import time
 from PyQt5.QtWidgets import (
     QMainWindow,
     QTabWidget,
@@ -17,6 +18,7 @@ from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
 from src.core.genetic_algorithm import GeneticAlgorithm
+from src.core.reporting import save_simulation_report
 
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Recomendacion
@@ -170,6 +172,7 @@ class MainWindow(QMainWindow):
         # Guardar horarios manuales y despejar cualquier horario optimizado previo
         self._manual_schedule = sched_objs
         self._optimized_schedule = None
+        self.sim_start_time = time.time()
 
         # Instanciar el algoritmo genético con los parámetros
         self.ga = GeneticAlgorithm(
@@ -234,6 +237,16 @@ class MainWindow(QMainWindow):
             self._show_threshold_alerts()
 
             self.ga.save_final_gene_attributes(self.saved_genes)
+            
+            # Guardar las métricas de la simulación en la base de datos
+            saved_params = {
+                "genes": self.saved_genes,
+                "mutation_rate": self.saved_mut_rate,
+                "death_rate": self.saved_death_rate,
+                "generations": self.saved_time_horizon,
+                "environmental_factors": self.saved_environmental_factors,
+            }
+            save_simulation_report(self.ga, saved_params, self.sim_start_time)
 
             # Dibujar líneas de eventos (manual u óptimo)
             schedule = self._optimized_schedule or self._manual_schedule or []

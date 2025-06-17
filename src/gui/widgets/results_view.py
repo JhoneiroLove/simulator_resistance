@@ -18,7 +18,6 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem,
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
-from PyQt5.QtGui import QFont
 import pyqtgraph as pg
 import numpy as np
 

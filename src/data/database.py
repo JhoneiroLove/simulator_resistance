@@ -28,7 +28,7 @@ def get_paths():
 base_path, user_data_dir = get_paths()
 
 db_path = os.path.join(user_data_dir, "resistencia.db")
-DATABASE_URL = f"sqlite:///{db_path}"
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 Session = scoped_session(sessionmaker(bind=engine))
