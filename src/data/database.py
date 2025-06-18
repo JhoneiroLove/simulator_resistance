@@ -33,6 +33,17 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 Session = scoped_session(sessionmaker(bind=engine))
 
+def force_recreate_db():
+    """Elimina la base de datos existente en AppData para forzar la recreación."""
+    if os.path.exists(db_path):
+        print(f"🗑️ Eliminando base de datos antigua en: {db_path}")
+        try:
+            os.remove(db_path)
+            print("✅ Base de datos antigua eliminada.")
+        except OSError as e:
+            print(f"❌ Error al eliminar la base de datos: {e}")
+
+
 def init_db():
     print(f"Creando BD en: {db_path}")
     # Crear tablas si no existen
