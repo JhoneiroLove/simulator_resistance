@@ -1,4 +1,4 @@
-from src.data.database import init_db, force_recreate_db
+from src.data.database import init_db
 from src.gui.main_window import MainWindow
 from src.utils.logging_config import setup_logging
 from PyQt5.QtWidgets import QApplication
@@ -7,9 +7,6 @@ import os
 
 if __name__ == "__main__":
     setup_logging()
-    # 0) Borra la BD vieja para asegurar datos frescos
-    force_recreate_db()
-
     # 1) Inicializa y seedea la BD
     init_db()
 

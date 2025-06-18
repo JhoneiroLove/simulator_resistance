@@ -1,7 +1,7 @@
 BEGIN TRANSACTION;
 
 ----------------- Genes --------------
-INSERT OR IGNORE INTO genes (nombre, peso_resistencia, descripcion) VALUES
+INSERT INTO genes (nombre, peso_resistencia, descripcion) VALUES
   ('blaVIM',       2.5, 'Metalobetalactamasa tipo VIM'),
   ('mexAB-oprM',   1.8, 'Bomba de eflujo MexAB-OprM'),
   ('ndm1',         2.2, 'Carbapenemasa NDM-1'),
@@ -11,10 +11,14 @@ INSERT OR IGNORE INTO genes (nombre, peso_resistencia, descripcion) VALUES
   ('mcr1',         2.0, 'Modificación de lípidos LPS'),
   ('aac6',         1.7, 'Acetiltransferasa de aminoglucósidos'),
   ('vanA',         1.6, 'Resistencia a vancomicina'),
-  ('ermB',         1.4, 'Metilasa de ARN 23S');
+  ('ermB',         1.4, 'Metilasa de ARN 23S')
+
+ON CONFLICT(nombre) DO UPDATE SET
+  peso_resistencia = excluded.peso_resistencia,
+  descripcion = excluded.descripcion;
 
 -------------- Antibióticos + Cita --------------
-INSERT OR IGNORE INTO antibioticos
+INSERT INTO antibioticos
   (nombre, concentracion_minima, concentracion_maxima, tipo)
 VALUES
   ('Meropenem',      0.03,   64.0,    'Carbapenémico'),
@@ -26,6 +30,11 @@ VALUES
   ('Gentamicina',    0.5,    512.0,    'Aminoglucósido'),
   ('Tobramicina',    0.25,   1024.0,    'Aminoglucósido'),
   ('Imipenem',       0.12,   128.0,    'Carbapenémico'),
-  ('Cefepime',       1.0,    32.0,    'Cefalosporina');
+  ('Cefepime',       1.0,    32.0,    'Cefalosporina')
+
+ON CONFLICT(nombre) DO UPDATE SET
+  concentracion_minima = excluded.concentracion_minima,
+  concentracion_maxima = excluded.concentracion_maxima,
+  tipo = excluded.tipo;
 
 COMMIT;

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -33,44 +34,63 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 Session = scoped_session(sessionmaker(bind=engine))
 
-def force_recreate_db():
-    """Elimina la base de datos existente en AppData para forzar la recreación."""
-    if os.path.exists(db_path):
-        print(f"🗑️ Eliminando base de datos antigua en: {db_path}")
-        try:
-            os.remove(db_path)
-            print("✅ Base de datos antigua eliminada.")
-        except OSError as e:
-            print(f"❌ Error al eliminar la base de datos: {e}")
-
-
 def init_db():
-    print(f"Creando BD en: {db_path}")
-    # Crear tablas si no existen
-    Base.metadata.create_all(engine)
-
-    # Carpeta migrations dentro del bundle (base_path)
+    """
+    Inicializa la base de datos y aplica las migraciones pendientes de forma inteligente.
+    """
     migrations_folder = os.path.join(base_path, "migrations")
     if not os.path.isdir(migrations_folder):
-        raise FileNotFoundError(f"No existe migrations en: {migrations_folder}")
+        print(f"⚠️  No se encontró la carpeta de migraciones: {migrations_folder}")
+        return
 
     raw_conn = engine.raw_connection()
+    cursor = raw_conn.cursor()
+
     try:
-        cursor = raw_conn.cursor()
-        for fname in sorted(os.listdir(migrations_folder)):
-            if not fname.lower().endswith(".sql"):
+        # 1. Obtener la versión actual de la BD
+        current_version = 0
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+            if cursor.fetchone():
+                cursor.execute("SELECT version_num FROM db_version WHERE id = 1")
+                version_row = cursor.fetchone()
+                if version_row:
+                    current_version = version_row[0]
+        except Exception:
+            current_version = 0
+        
+        print(f"ℹ️ Versión actual de la BD: {current_version}")
+
+        # 2. Aplicar migraciones pendientes
+        migration_files = sorted(os.listdir(migrations_folder))
+        for fname in migration_files:
+            match = re.match(r"(\d+)_.*\.sql", fname)
+            if not match:
                 continue
-            path = os.path.join(migrations_folder, fname)
-            print(f"🔄 Ejecutando {path} ...")
-            with open(path, "r", encoding="utf-8") as f:
-                cursor.executescript(f.read())
-        raw_conn.commit()
-    except Exception as ex:
-        print(f"❌ Error ejecutando migraciones: {ex}")
+
+            file_version = int(match.group(1))
+
+            if file_version > current_version:
+                path = os.path.join(migrations_folder, fname)
+                print(f"🆙 Aplicando migración v{file_version}: {fname}...")
+                
+                with open(path, "r", encoding="utf-8") as f:
+                    script_content = f.read()
+                    cursor.executescript(script_content)
+                
+                cursor.execute("UPDATE db_version SET version_num = ? WHERE id = 1", (file_version,))
+                raw_conn.commit()
+                print(f"✅ Migración v{file_version} aplicada exitosamente.")
+
+    except Exception as e:
+        print(f"❌ Error crítico durante la migración en '{fname}': {e}")
+        raw_conn.rollback()
+        raise
     finally:
+        cursor.close()
         raw_conn.close()
 
-    print("✅ Base de datos inicializada y poblada.")
+    print("✅ Proceso de migración de base de datos completado.")
 
 def get_session():
     return Session()
