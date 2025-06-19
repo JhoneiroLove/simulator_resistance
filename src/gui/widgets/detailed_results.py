@@ -1,28 +1,25 @@
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
+    QGridLayout,  
     QLabel,
-    QTextEdit,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
     QPushButton,
     QFileDialog,
     QMessageBox,
+    QGroupBox,  
+    QAbstractItemView,
 )
 from PyQt5.QtGui import QFont
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-)
-from datetime import datetime
-import csv
+from PyQt5.QtCore import Qt, QTimer
+import pyqtgraph as pg
+import pyqtgraph.exporters
+import numpy as np
+import tempfile
+import os
+from src.utils.pdf_generator import generate_pdf 
 
 class DetailedResults(QWidget):
     def __init__(self, parent=None):
@@ -30,197 +27,233 @@ class DetailedResults(QWidget):
         from ..main_window import get_app_icon
         self.setWindowIcon(get_app_icon())
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(32, 32, 32, 32)
-        self.layout.setSpacing(20)
+        self.layout.setContentsMargins(25, 25, 25, 25)
+        self.layout.setSpacing(15)
 
-        # Labels de historial
-        self.lbl_best_hist = QLabel("Mejor Fitness Histórico: -")
-        self.lbl_avg_hist = QLabel("Resistencia Promedio Final (última gen): -")
-        self.lbl_div_hist = QLabel("Diversidad Final (Shannon): -")
-        for lbl in (self.lbl_best_hist, self.lbl_avg_hist, self.lbl_div_hist):
-            lbl.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        # --- Métricas Clave (Grid Layout) ---
+        metrics_group = QGroupBox("Métricas Clave de la Simulación")
+        metrics_group.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        metrics_layout = QGridLayout(metrics_group)
+        self.lbl_best_hist = QLabel("Mejor Fitness Histórico: <b>-</b>")
+        self.lbl_avg_hist = QLabel("Resistencia Promedio Final: <b>-</b>")
+        self.lbl_div_hist = QLabel("Diversidad Final (Shannon): <b>-</b>")
+        for i, lbl in enumerate([self.lbl_best_hist, self.lbl_avg_hist, self.lbl_div_hist]):
+            lbl.setFont(QFont("Segoe UI", 10))
+            metrics_layout.addWidget(lbl, 0, i)
 
-        # Tabla de resultados por antibiótico
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(
-            [
-                "Antibiótico",
-                "% Resistencia",
-                "Interpretación",
-            ]
-        )
-        self.table.setMinimumHeight(130)
-        self.table.setFont(QFont("Segoe UI", 11))
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # --- Resumen Inteligente ---
+        summary_group = QGroupBox("Resumen de la Simulación")
+        summary_group.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        summary_layout = QVBoxLayout(summary_group)
+        self.summary_text = QLabel("Aún no se ha generado un resumen.")
+        self.summary_text.setFont(QFont("Segoe UI", 10))
+        self.summary_text.setWordWrap(True)
+        self.summary_text.setAlignment(Qt.AlignTop)
+        summary_layout.addWidget(self.summary_text)
+
+        # --- Tabla de Tratamientos ---
+        self.table = QTableWidget(0, 3) # Ampliado a 3 columnas
+        self.table.setHorizontalHeaderLabels(["Fase de Tratamiento", "Resistencia Final", "Interpretación Clínica"])
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+
+        # Usar un temporizador para debouncing del evento de redimensionamiento
+        self.resize_timer = QTimer(self)
+        self.resize_timer.setSingleShot(True)
+        self.resize_timer.setInterval(150)  # Retraso en ms
+        self.resize_timer.timeout.connect(self._adjust_row_heights)
+        header.sectionResized.connect(self.on_section_resized)
+
+
+
+
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setMinimumHeight(100)
 
-        # Campo de texto para recomendaciones
-        self.txt_recomendacion = QTextEdit()
-        self.txt_recomendacion.setReadOnly(True)
-        self.txt_recomendacion.setMinimumHeight(60)
-        self.txt_recomendacion.setFont(QFont("Segoe UI", 11))
-        self.txt_recomendacion.setStyleSheet("""
-            QTextEdit {
-                background-color: #F0F0F0;
-                border: 2px solid #CCCCCC;
-                padding: 10px;
-            }
-        """)
 
-        # Botones de exportación
-        self.export_csv_btn = QPushButton("Exportar CSV de Resultados")
-        self.export_csv_btn.setFixedHeight(36)
-        self.export_csv_btn.setFont(QFont("Segoe UI", 11, QFont.Bold))
-        self.export_csv_btn.clicked.connect(self.export_to_csv)
-        self.export_pdf_btn = QPushButton("Exportar PDF de Resultados")
-        self.export_pdf_btn.setFixedHeight(36)
+        # --- Gráfico de Atributos Biológicos ---
+        self.attributes_chart = pg.PlotWidget()
+        self.attributes_chart.setBackground('w')
+        self.attributes_chart.setTitle("Evolución de Atributos Biológicos", color="k", size="12pt")
+        self.attributes_chart.getAxis('left').setLabel('Valor Promedio', color='k')
+        self.attributes_chart.getAxis('bottom').setLabel('Atributo', color='k')
+        self.attributes_chart.showGrid(x=True, y=True, alpha=0.3)
+        self.attributes_chart.setMinimumHeight(250)
+
+        # --- Botones de Exportación ---
+        self.export_pdf_btn = QPushButton("Exportar Reporte a PDF")
+        self.export_pdf_btn.setFixedHeight(40)
         self.export_pdf_btn.setFont(QFont("Segoe UI", 11, QFont.Bold))
         self.export_pdf_btn.clicked.connect(self.export_to_pdf)
 
-        # Agregar widgets
-        for w in (
-            self.lbl_best_hist,
-            self.lbl_avg_hist,
-            self.lbl_div_hist,
-            self.table,
-            self.txt_recomendacion,
-            self.export_csv_btn,
-            self.export_pdf_btn,
-        ):
-            self.layout.addWidget(w)
+        # Agregar widgets al layout principal
+        self.layout.addWidget(metrics_group)
+        self.layout.addWidget(summary_group)
+        self.layout.addWidget(self.table)
+        self.layout.addWidget(self.attributes_chart)
+        self.layout.addWidget(self.export_pdf_btn)
 
-        # Almacén de historial para exportar
+        # Almacén de datos para el reporte
         self.best_hist = []
         self.avg_hist = []
         self.div_hist = []
+        self.antibioticos_results = []
+        self.initial_attributes = {}
+        self.final_attributes = {}
 
     def update_results(
         self,
-        avg_resistencia: float,
-        max_resistencia: float,
-        antibiotico: str,
         antibioticos_results: list,
         best_hist: list,
         avg_hist: list,
         div_hist: list,
+        initial_attributes: dict,
+        final_attributes: dict,
     ):
-        # Guardar historial
+        # Guardar datos
         self.best_hist = best_hist
         self.avg_hist = avg_hist
         self.div_hist = div_hist
+        self.antibioticos_results = antibioticos_results
+        self.initial_attributes = initial_attributes
+        self.final_attributes = final_attributes
 
         # Actualizar labels
-        self.lbl_best_hist.setText(f"Mejor Fitness Histórico: {max(best_hist):.4f}")
-        self.lbl_avg_hist.setText(
-            f"Resistencia Promedio Última Generación: {avg_hist[-1]:.4f}"
-        )
-        self.lbl_div_hist.setText(f"Diversidad Final (Shannon): {div_hist[-1]:.4f}")
+        self.lbl_best_hist.setText(f"Mejor Fitness Histórico: <b>{max(best_hist):.4f}</b>")
+        self.lbl_avg_hist.setText(f"Resistencia Promedio Final: <b>{avg_hist[-1]:.4f}</b>")
+        self.lbl_div_hist.setText(f"Diversidad Final (Shannon): <b>{div_hist[-1]:.4f}</b>")
 
-        # Llenar tabla por antibiótico
+        # Llenar tabla de tratamientos
         self.table.setRowCount(len(antibioticos_results))
         for row, (name, value, interp) in enumerate(antibioticos_results):
             self.table.setItem(row, 0, QTableWidgetItem(name))
-            self.table.setItem(row, 1, QTableWidgetItem(f"{value:.1%}"))
-            self.table.setItem(row, 2, QTableWidgetItem(interp))
+            self.table.setItem(row, 1, QTableWidgetItem(f"{value:.4f}"))
 
-        # Recomendaciones clínicas
-        all_texts = "\n\n".join(
-            f"• {name}: {interp}" for name, _, interp in antibioticos_results
-        )
-        self.txt_recomendacion.setText(all_texts)
+            # Usar un QLabel con word-wrap para la interpretación
+            # Reemplazar '\n' literal por saltos de línea HTML
+            interp_text = interp.replace('\\n', '<br>')
+            interp_label = QLabel(interp_text)
+            interp_label.setWordWrap(True)
+            interp_label.setAlignment(Qt.AlignTop)
+            self.table.setCellWidget(row, 2, interp_label)
+        # Ajustar las filas después de que el ciclo de eventos se procese
+        QTimer.singleShot(0, self._adjust_row_heights)
 
-    def export_to_csv(self):
-        if not self.best_hist:
+        # Generar contenido dinámico
+        self._generate_summary()
+        self._update_attributes_chart()
+
+    def _generate_summary(self):
+        res_final = self.avg_hist[-1]
+        div_final = self.div_hist[-1]
+
+        summary = f"La simulación concluyó con una <b>resistencia promedio de {res_final:.4f}</b>. "
+        if res_final > 0.8:
+            summary += "Este es un <b>nivel CRÍTICO</b>, indicando que la población es mayormente inmune a los tratamientos aplicados."
+        elif res_final > 0.5:
+            summary += "Este es un <b>nivel considerable</b> de resistencia, sugiriendo una adaptación significativa de la población."
+        else:
+            summary += "La población mantiene un <b>nivel bajo</b> de resistencia."
+        
+        summary += f"<br><br>La <b>diversidad final (Shannon) de {div_final:.4f}</b> indica "
+        if div_final > 3.0:
+            summary += "un <b>alto potencial evolutivo</b>. La colonia es heterogénea y podría adaptarse rápidamente a futuros antibióticos."
+        elif div_final > 1.5:
+            summary += "una <b>diversidad moderada</b>, manteniendo capacidad de adaptación."
+        else:
+            summary += "una <b>baja diversidad</b>, lo que la hace más homogénea y potencialmente vulnerable a nuevos tipos de estrés."
+        
+        self.summary_text.setText(summary)
+
+    def _update_attributes_chart(self):
+        self.attributes_chart.clear()
+        if not self.initial_attributes or not self.final_attributes:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Guardar CSV", "", "CSV (*.csv)")
-        if not path:
-            return
-        with open(path, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                ["Generación", "Best_Fitness", "Avg_Resistencia", "Diversidad_Shannon"]
-            )
-            for i, (b, a, d) in enumerate(
-                zip(self.best_hist, self.avg_hist, self.div_hist), start=1
-            ):
-                writer.writerow([i, f"{b:.4f}", f"{a:.4f}", f"{d:.4f}"])
+
+        attributes = list(self.initial_attributes.keys())
+        x_labels = [(i, name.capitalize()) for i, name in enumerate(attributes)]
+        
+        initial_values = list(self.initial_attributes.values())
+        final_values = list(self.final_attributes.values())
+
+        bar_width = 0.4
+        x = np.arange(len(attributes))
+
+        bar_initial = pg.BarGraphItem(x=x - bar_width/2, height=initial_values, width=bar_width, brush=(100, 100, 255, 150), name='Inicial')
+        bar_final = pg.BarGraphItem(x=x + bar_width/2, height=final_values, width=bar_width, brush=(255, 100, 100, 150), name='Final')
+        
+        self.attributes_chart.addItem(bar_initial)
+        self.attributes_chart.addItem(bar_final)
+        
+        ax = self.attributes_chart.getAxis('bottom')
+        ax.setTicks([x_labels])
+        self.attributes_chart.addLegend(offset=(-1,1))
+
+
+
+    def _adjust_row_heights(self):
+        """Ajusta manualmente la altura de cada fila para que se ajuste al contenido."""
+        for row in range(self.table.rowCount()):
+            widget = self.table.cellWidget(row, 2)
+            if widget:
+                height = widget.heightForWidth(self.table.columnWidth(2))
+                self.table.setRowHeight(row, height)
+
+    def on_section_resized(self, logicalIndex, oldSize, newSize):
+        """Inicia el temporizador para ajustar las filas después de un redimensionamiento de sección."""
+        # Solo nos interesa el cambio en la columna de interpretación para evitar ciclos.
+        if logicalIndex == 2:
+            self.resize_timer.start()
+
+
 
     def export_to_pdf(self):
-        if not self.best_hist:
+        """
+        Recolecta los datos, guarda el gráfico como imagen temporal y llama
+        al generador de PDF para crear el reporte.
+        """
+        if not hasattr(self, 'antibioticos_results') or not self.antibioticos_results:
+            QMessageBox.warning(self, "Sin Datos", "No hay datos de simulación para exportar.")
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Guardar PDF", "", "PDF (*.pdf)")
+
+        # 1. Abrir diálogo para guardar archivo
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Guardar Reporte PDF", "Reporte_Simulacion.pdf", "Archivos PDF (*.pdf)"
+        )
         if not path:
             return
 
-        doc = SimpleDocTemplate(path, pagesize=A4)
-        styles = getSampleStyleSheet()
-        elements = []
+        chart_image_path = None
+        try:
+            # 2. Recolectar datos
+            summary = self.summary_text.text()
+            
+            table_data = [["Fase de Tratamiento", "Resistencia Final", "Interpretación Clínica"]]
+            for i in range(self.table.rowCount()):
+                fase = self.table.item(i, 0).text()
+                resistencia = self.table.item(i, 1).text()
+                interpretacion_widget = self.table.cellWidget(i, 2)
+                interpretacion = interpretacion_widget.text() if interpretacion_widget else ""
+                table_data.append([fase, resistencia, interpretacion])
 
-        # Portada
-        title_style = styles["Title"]
-        elements.append(Paragraph("Informe de Simulación Evolutiva", title_style))
-        elements.append(Spacer(1, 12))
-        elements.append(
-            Paragraph(
-                f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                styles["Normal"],
-            )
-        )
-        elements.append(Spacer(1, 24))
+            # 3. Guardar el gráfico como una imagen temporal
+            exporter = pg.exporters.ImageExporter(self.attributes_chart.getPlotItem())
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+                chart_image_path = tmp_file.name
+            exporter.export(chart_image_path)
+            
+            # 4. Llamar al generador de PDF
+            generate_pdf(path, summary, table_data, chart_image_path)
 
-        # Métricas clave
-        hdr_style = ParagraphStyle(
-            "hdr", parent=styles["Heading2"], spaceAfter=6, textColor=colors.darkblue
-        )
-        elements.append(Paragraph("Métricas Clave", hdr_style))
-        metrics_data = [
-            ["Mejor Fitness Histórico", f"{max(self.best_hist):.4f}"],
-            ["Resistencia Promedio Final", f"{self.avg_hist[-1]:.4f}"],
-            ["Diversidad Final (Shannon)", f"{self.div_hist[-1]:.4f}"],
-        ]
-        tbl = Table(metrics_data, hAlign="LEFT", colWidths=[200, 100])
-        tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ]
-            )
-        )
-        elements.append(tbl)
-        elements.append(Spacer(1, 24))
+            QMessageBox.information(self, "Exportación Exitosa", f"El reporte ha sido guardado exitosamente en:\n{path}")
 
-        # Historial completo
-        elements.append(Paragraph("Historial por Generación", hdr_style))
-        hist_data = [["Gen", "Best_Fit", "Avg_Res", "Div_Shannon"]]
-        for i, (b, a, d) in enumerate(
-            zip(self.best_hist, self.avg_hist, self.div_hist), start=1
-        ):
-            hist_data.append([str(i), f"{b:.4f}", f"{a:.4f}", f"{d:.4f}"])
-        hist_tbl = Table(hist_data, hAlign="LEFT")
-        hist_tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
-                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ]
-            )
-        )
-        elements.append(hist_tbl)
-        elements.append(Spacer(1, 24))
-
-        # Recomendaciones clínicas
-        elements.append(Paragraph("Recomendaciones Clínicas", hdr_style))
-        text = self.txt_recomendacion.toPlainText().replace("\n", "<br/>")
-        elements.append(Paragraph(text, styles["BodyText"]))
-
-        # Generar PDF
-        doc.build(elements)
-        QMessageBox.information(
-            self, "Exportación PDF", f"Informe guardado en:\n{path}"
-        )
+        except Exception as e:
+            QMessageBox.critical(self, "Error de Exportación", f"Ocurrió un error al generar el PDF: {e}")
+        
+        finally:
+            # 5. Limpieza del archivo temporal
+            if chart_image_path and os.path.exists(chart_image_path):
+                os.remove(chart_image_path)

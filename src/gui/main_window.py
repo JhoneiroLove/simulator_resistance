@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
         self.saved_death_rate = 0.05
         self.saved_time_horizon = 100
         self.saved_environmental_factors = {"temperature": 37.0, "pH": 7.4}
+        self.initial_attributes = {}
 
         # Flags para mostrar alertas solo una vez
         self.alert_shown_extinction = False
@@ -187,6 +188,7 @@ class MainWindow(QMainWindow):
             pressure_factor=0.25,  # Reducir la presión para fomentar supervivencia
         )
         self.ga.initialize(self.saved_genes)
+        self.initial_attributes = self.ga.get_average_attributes()
 
         # --- Posicionamiento de ventanas de gráficos ---
         main_window_geom = self.geometry()
@@ -296,15 +298,15 @@ class MainWindow(QMainWindow):
                 antibioticos_results.append((ab["nombre"], valor, texto))
             session.close()
 
-            # Actualizar pestaña 4: Resultados Detallados
+            # Capturar atributos finales y actualizar pestaña 4
+            final_attributes = self.ga.get_average_attributes()
             self.detail_tab.update_results(
-                avg_resistencia=self.ga.avg_hist[-1],
-                max_resistencia=max(self.ga.best_hist),
-                antibiotico="Plan de Tratamiento",
                 antibioticos_results=antibioticos_results,
                 best_hist=self.ga.best_hist,
                 avg_hist=self.ga.avg_hist,
                 div_hist=self.ga.div_hist,
+                initial_attributes=self.initial_attributes,
+                final_attributes=final_attributes,
             )
 
             final_res = self.ga.avg_hist[-1]

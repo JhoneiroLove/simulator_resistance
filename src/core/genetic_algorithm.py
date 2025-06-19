@@ -424,6 +424,26 @@ class GeneticAlgorithm:
         self.current_step += 1
         return True
 
+    def get_average_attributes(self):
+        """Calcula el promedio de los atributos biológicos de la población actual."""
+        if not self.pop:
+            return {
+                "recubrimiento": 0,
+                "reproduccion": 0,
+                "letalidad": 0,
+                "permeabilidad": 0,
+                "enzimas": 0,
+            }
+
+        avg_attributes = {
+            "recubrimiento": float(np.mean([ind.recubrimiento for ind in self.pop])),
+            "reproduccion": float(np.mean([ind.reproduccion for ind in self.pop])),
+            "letalidad": float(np.mean([ind.letalidad for ind in self.pop])),
+            "permeabilidad": float(np.mean([ind.permeabilidad for ind in self.pop])),
+            "enzimas": float(np.mean([ind.enzimas for ind in self.pop])),
+        }
+        return avg_attributes
+
     def save_final_gene_attributes(self, selected_gene_ids):
         logging.info(f"Saving final gene attributes for simulation_id={self.current_simulation_id}")
         """Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación."""

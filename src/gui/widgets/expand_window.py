@@ -201,8 +201,8 @@ class ExpandWindow(QDialog):
         )
 
         # 1) Calcular heatmap radial a partir de 'recubrimiento'
-        rec_mean = float(np.mean(rec_vals)) if rec_vals.size > 0 else 0.0
-        radio_max = rec_mean * 50.0
+        # Usamos el índice de expansión como radio máximo para una visualización más representativa
+        radio_max = self.ga.expansion_index_hist[-1] * 50.0 if self.ga.expansion_index_hist else 50.0
 
         n_heat = max(1000, int(poblacion_real))
         angs_heat = np.random.uniform(0, 2 * np.pi, n_heat)
