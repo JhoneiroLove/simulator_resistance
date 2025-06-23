@@ -66,13 +66,9 @@ class DetailedResults(QWidget):
         self.resize_timer.timeout.connect(self._adjust_row_heights)
         header.sectionResized.connect(self.on_section_resized)
 
-
-
-
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setMinimumHeight(100)
-
 
         # --- Gráfico de Atributos Biológicos ---
         self.attributes_chart = pg.PlotWidget()
@@ -192,8 +188,6 @@ class DetailedResults(QWidget):
         ax.setTicks([x_labels])
         self.attributes_chart.addLegend(offset=(-1,1))
 
-
-
     def _adjust_row_heights(self):
         """Ajusta manualmente la altura de cada fila para que se ajuste al contenido."""
         for row in range(self.table.rowCount()):
@@ -207,8 +201,6 @@ class DetailedResults(QWidget):
         # Solo nos interesa el cambio en la columna de interpretación para evitar ciclos.
         if logicalIndex == 2:
             self.resize_timer.start()
-
-
 
     def export_to_pdf(self):
         """
