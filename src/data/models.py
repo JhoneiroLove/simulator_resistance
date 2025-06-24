@@ -66,14 +66,13 @@ class ReporteSimulacion(Base):
     parametros_input = Column(String, nullable=False)  # JSON almacenado como texto
 
     simulacion = relationship("Simulacion")
-    metricas = relationship("MetricaReporte", back_populates="reporte", cascade="all, delete-orphan")
 
-class MetricaReporte(Base):
-    __tablename__ = "metricas_reporte"
+class MetricaGeneracion(Base):
+    __tablename__ = "metricas_generacion"
     id = Column(Integer, primary_key=True)
-    reporte_id = Column(Integer, ForeignKey("reportes_simulacion.id"), nullable=False)
+    simulacion_id = Column(Integer, ForeignKey("simulaciones.id"), nullable=False)
+    generacion = Column(Integer, nullable=False)
     nombre_indicador = Column(String, nullable=False)
-    valor_promedio = Column(Float, nullable=False)
-    desviacion_estandar = Column(Float, nullable=True)
+    valor = Column(Float, nullable=False)
 
-    reporte = relationship("ReporteSimulacion", back_populates="metricas")
+    simulacion = relationship("Simulacion", backref="metricas_generacion")

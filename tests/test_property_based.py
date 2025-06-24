@@ -3,10 +3,9 @@ Pruebas de Propiedad (Property-Based Testing) usando Hypothesis
 Estas pruebas verifican propiedades fundamentales del algoritmo genético
 sobre un amplio rango de valores aleatorios.
 """
-
+import math
 from hypothesis import given, settings
 from hypothesis.strategies import integers, floats
-import math
 from src.core.genetic_algorithm import GeneticAlgorithm
 
 # 1. Probar que la población nunca sea negativa

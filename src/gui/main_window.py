@@ -19,6 +19,7 @@ from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
 from src.core.genetic_algorithm import GeneticAlgorithm
 from src.core.reporting import save_simulation_report
+from src.core.reporting import save_generation_metrics
 
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Recomendacion
@@ -248,7 +249,10 @@ class MainWindow(QMainWindow):
                 "generations": self.saved_time_horizon,
                 "environmental_factors": self.saved_environmental_factors,
             }
-            save_simulation_report(self.ga, saved_params, self.sim_start_time)
+            
+            save_simulation_report(self.ga, saved_params)
+            
+            save_generation_metrics(self.ga, self.ga.current_simulation_id)
 
             # Dibujar líneas de eventos (manual u óptimo)
             schedule = self._optimized_schedule or self._manual_schedule or []
