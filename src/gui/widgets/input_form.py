@@ -94,13 +94,13 @@ class InputForm(QWidget):
 
         # Duración total
         self.time_horizon_sb = QSpinBox()
-        self.time_horizon_sb.setRange(1, 10000)
+        self.time_horizon_sb.setRange(10, 10000)
         self.time_horizon_sb.setValue(100)
         form.addRow("Duración total:", self.time_horizon_sb)
 
         # Tasa de mutación
         self.mut_rate_sb = QDoubleSpinBox()
-        self.mut_rate_sb.setRange(0.0, 1.0)
+        self.mut_rate_sb.setRange(0.05, 1.0)
         self.mut_rate_sb.setSingleStep(0.01)
         self.mut_rate_sb.setValue(0.05)
         form.addRow("Tasa mutación (max 1.00):", self.mut_rate_sb)
@@ -117,7 +117,7 @@ class InputForm(QWidget):
 
         # Tasa de mortalidad
         self.death_rate_sb = QDoubleSpinBox()
-        self.death_rate_sb.setRange(0.0, 1.0)
+        self.death_rate_sb.setRange(0.03, 1.0)
         self.death_rate_sb.setSingleStep(0.01)
         self.death_rate_sb.setValue(0.05)
         form.addRow("Tasa mortalidad (max 1.00):", self.death_rate_sb)
