@@ -1,3 +1,4 @@
+import logging
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -20,10 +21,8 @@ from types import SimpleNamespace
 from src.data.database import get_session
 from src.data.models import Gen
 
-
 class InputForm(QWidget):
-    # Señal que emite genes seleccionados, unidad, tasa mutación, tasa mortalidad y duración total
-    params_submitted = pyqtSignal(list, str, float, float, int)
+    params_submitted = pyqtSignal(list, str, float, float, int, dict, float)  
 
     def __init__(self):
         super().__init__()
@@ -31,40 +30,24 @@ class InputForm(QWidget):
 
         # Layout principal con márgenes y espaciado
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(15, 15, 15, 15)
-        self.main_layout.setSpacing(20)
-
-        # Stylesheet: incluye estilo para QToolTip
-        self.setStyleSheet("""
-            QWidget { font-family: 'Segoe UI'; font-size:12px; }
-            QGroupBox { 
-                border:1px solid #ccc; 
-                border-radius:5px; 
-                margin-top:10px; 
-                padding:10px; 
-            }
-            QLabel { padding-right: 8px; }
-            QToolTip {
-                background-color: #ffffe0;
-                color: #000000;
-                border: 1px solid #000000;
-                padding: 4px;
-            }
-        """)
+        self.main_layout.setContentsMargins(32, 32, 32, 32)
+        self.main_layout.setSpacing(28)
         QToolTip.setFont(QFont("Segoe UI", 10))
 
         # Construcción de la UI
         self.load_data()
         self.create_gene_selection()
         self.create_simulation_params()
+        self.create_environmental_params()
 
         # Botón Guardar parámetros
         self.save_button = QPushButton("Guardar parámetros")
-        self.save_button.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.save_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.save_button.setFixedHeight(38)
         self.save_button.clicked.connect(self.submit)
-        self.main_layout.addWidget(self.save_button, alignment=Qt.AlignCenter)
-
+        self.main_layout.addWidget(self.save_button, alignment=Qt.AlignHCenter)
         self.main_layout.addStretch()
+
 
     def load_data(self):
         """Carga genes como estructuras planas."""
@@ -111,16 +94,16 @@ class InputForm(QWidget):
 
         # Duración total
         self.time_horizon_sb = QSpinBox()
-        self.time_horizon_sb.setRange(1, 10000)
+        self.time_horizon_sb.setRange(10, 10000)
         self.time_horizon_sb.setValue(100)
-        form.addRow("Duración total:", self.time_horizon_sb)
+        form.addRow("Duración total (max 10000 / min 10):", self.time_horizon_sb)
 
         # Tasa de mutación
         self.mut_rate_sb = QDoubleSpinBox()
-        self.mut_rate_sb.setRange(0.0, 1.0)
+        self.mut_rate_sb.setRange(0.05, 1.0)
         self.mut_rate_sb.setSingleStep(0.01)
         self.mut_rate_sb.setValue(0.05)
-        form.addRow("Tasa mutación (max 1.00):", self.mut_rate_sb)
+        form.addRow("Tasa mutación (max 1.00 / min 0.05):", self.mut_rate_sb)
         tooltip_mut = (
             "Probabilidad de que ocurra una mutación genética en cada generación, "
             "impulsando la variabilidad genética."
@@ -134,10 +117,10 @@ class InputForm(QWidget):
 
         # Tasa de mortalidad
         self.death_rate_sb = QDoubleSpinBox()
-        self.death_rate_sb.setRange(0.0, 1.0)
+        self.death_rate_sb.setRange(0.03, 1.0)
         self.death_rate_sb.setSingleStep(0.01)
         self.death_rate_sb.setValue(0.05)
-        form.addRow("Tasa mortalidad (max 1.00):", self.death_rate_sb)
+        form.addRow("Tasa mortalidad (max 1.00 / min 0.03):", self.death_rate_sb)
         tooltip_death = (
             "Probabilidad de que un individuo muera en cada generación, "
             "reflejando la eficacia del tratamiento o condiciones adversas."
@@ -149,11 +132,50 @@ class InputForm(QWidget):
         if label_death:
             label_death.setToolTip(tooltip_death)
 
+        # Tasa de reproducción 
+        self.repro_rate_sb = QDoubleSpinBox()
+        self.repro_rate_sb.setRange(0.01, 5.0)
+        self.repro_rate_sb.setSingleStep(0.01)
+        self.repro_rate_sb.setValue(1.0)
+        form.addRow("Tasa reproducción (max 5.0 / min 0.01):", self.repro_rate_sb)
+        tooltip_repro = (
+            "Multiplicador sobre el crecimiento bacteriano en cada generación. "
+            "Valores >1: aceleran el crecimiento, <1: lo ralentizan."
+        )
+        self.repro_rate_sb.setToolTip(tooltip_repro)
+        self.repro_rate_sb.setToolTipDuration(5000)
+        self.repro_rate_sb.setMouseTracking(True)
+        label_repro = form.labelForField(self.repro_rate_sb)
+        if label_repro:
+            label_repro.setToolTip(tooltip_repro)
+
+        grp.setLayout(form)
+        self.main_layout.addWidget(grp)
+
+    def create_environmental_params(self):
+        grp = QGroupBox("3. Factores Ambientales")
+        form = QFormLayout(grp)
+        form.setContentsMargins(10, 10, 10, 10)
+        form.setHorizontalSpacing(15)
+        form.setVerticalSpacing(10)
+
+        self.temperature_sb = QDoubleSpinBox()
+        self.temperature_sb.setRange(25.0, 45.0)
+        self.temperature_sb.setSingleStep(0.1)
+        self.temperature_sb.setValue(37.0)
+        self.temperature_sb.setSuffix(" °C")
+        form.addRow("Temperatura (°C):", self.temperature_sb)
+
+        self.ph_sb = QDoubleSpinBox()
+        self.ph_sb.setRange(5.0, 9.0)
+        self.ph_sb.setSingleStep(0.1)
+        self.ph_sb.setValue(7.4)
+        form.addRow("pH:", self.ph_sb)
+
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
     def collect_params(self):
-        """Recoge genes seleccionados y parámetros."""
         selected = [gid for gid, cb in self.checks.items() if cb.isChecked()]
         if not selected:
             QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
@@ -162,12 +184,17 @@ class InputForm(QWidget):
         mut = self.mut_rate_sb.value()
         death = self.death_rate_sb.value()
         time_horizon = self.time_horizon_sb.value()
-        return selected, unit, mut, death, time_horizon
+        environmental_factors = {
+            "temperature": self.temperature_sb.value(),
+            "pH": self.ph_sb.value(),
+        }
+        repro = self.repro_rate_sb.value()  # <-- NUEVO
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro
 
     def submit(self):
-        """Emite la señal con los parámetros seleccionados y hace debug de los mismos."""
         params = self.collect_params()
         if params:
-            # Depuración: imprimir valores recolectados
-            print(f"DEBUG InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}")
+            logging.debug(
+            f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, reproduction_rate={params[6]}"
+        )
             self.params_submitted.emit(*params)

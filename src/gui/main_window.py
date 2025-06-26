@@ -1,5 +1,8 @@
 import sys
 import numpy as np
+import pyqtgraph as pg
+import os
+import time
 from PyQt5.QtWidgets import (
     QMainWindow,
     QTabWidget,
@@ -8,16 +11,17 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import QTimer, Qt
-import pyqtgraph as pg
-
+from src.gui.widgets.map_window import MapWindow
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
+from src.gui.widgets.expand_window import ExpandWindow
 from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.schedule_optimizer import ScheduleOptimizer
+from src.core.reporting import save_simulation_report, save_generation_metrics
 from src.data.database import get_session
-from src.data.models import Gen, Antibiotico, Recomendacion
+from src.data.models import Gen, Antibiotico, Recomendacion, Simulacion
+from PyQt5.QtGui import QIcon
 
 # Mapa de colores por tipo de antibiótico
 ANTIBIOTIC_COLORS = {
@@ -30,22 +34,38 @@ ANTIBIOTIC_COLORS = {
 }
 DEFAULT_COLOR = "#7F8C8D"
 
+def get_app_icon():
+    if hasattr(sys, '_MEIPASS'):
+        base_dir = sys._MEIPASS
+    else:
+        base_dir = os.path.abspath(os.path.dirname(__file__))
+    icon_path = os.path.join(base_dir, 'simulador_evolutivo.ico')
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join(base_dir, '..', '..', 'simulador_evolutivo.ico')
+    return QIcon(icon_path)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Simulador Evolutivo por Tratamientos")
-        self.setGeometry(100, 100, 1280, 720)
+        self.setWindowTitle("SRB")
+        self.resize(1280, 720)
+        # Centrar la ventana en la pantalla
+        qr = self.frameGeometry()
+        cp = QApplication.primaryScreen().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
+        self.setWindowIcon(get_app_icon())
 
         # ---- Widgets principales ----
         self.input_tab = InputForm()
-
         session = get_session()
         abs_q = session.query(
-            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima
+            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima, Antibiotico.concentracion_maxima
         ).all()
         session.close()
-        antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2]} for a in abs_q]
-
+        antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2], "conc_max": a[3]} for a in abs_q]
+        self.map_window = None
+        self.expand_window = None 
         self.results_tab = ResultsView(antibiotics)
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
@@ -53,7 +73,6 @@ class MainWindow(QMainWindow):
         # ---- Conectar señales ----
         self.input_tab.params_submitted.connect(self.on_params_saved)
         self.results_tab.simulate_requested.connect(self.handle_simulation)
-        self.results_tab.optimize_requested.connect(self.handle_optimization)
 
         # ---- Pestañas ----
         self.tabs = QTabWidget()
@@ -73,13 +92,24 @@ class MainWindow(QMainWindow):
         self.saved_mut_rate = 0.05
         self.saved_death_rate = 0.05
         self.saved_time_horizon = 100
+        self.saved_environmental_factors = {"temperature": 37.0, "pH": 7.4}
+        self.saved_repro_rate = 1.0     
+        self.initial_attributes = {}
 
-    def on_params_saved(self, genes, unit, mut_rate, death_rate, time_horizon):
+        # Flags para mostrar alertas solo una vez
+        self.alert_shown_extinction = False
+        self.alert_shown_resistance = False
+
+    def on_params_saved(
+        self, genes, unit, mut_rate, death_rate, time_horizon, environmental_factors, reproduction_rate
+    ):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
         self.saved_mut_rate = mut_rate
         self.saved_death_rate = death_rate
         self.saved_time_horizon = time_horizon
+        self.saved_environmental_factors = environmental_factors
+        self.saved_repro_rate = reproduction_rate   
         QMessageBox.information(
             self,
             "Éxito",
@@ -89,122 +119,238 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentWidget(self.results_tab)
 
     def handle_simulation(self, schedule):
-        """Inicia la simulación manual con el schedule proporcionado."""
         if not self.saved_genes:
             QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
             self.tabs.setCurrentWidget(self.input_tab)
             return
 
-        mut = self.saved_mut_rate
-        death = self.saved_death_rate
-        duration = self.saved_time_horizon
-
+        # Recuperar información de genes desde la base de datos
         session = get_session()
-        genes = session.query(Gen).all()
+        genes_orm = session.query(Gen).all()
+        genes = [
+            {"id": g.id, "nombre": g.nombre, "peso_resistencia": g.peso_resistencia}
+            for g in genes_orm
+        ]
+        session.close()
+
+        # Construir la lista de tuplas (tiempo, antibiótico, concentración)
         sched_objs = []
+        session = get_session()
         for t, ab_id, conc in schedule:
-            ab = session.query(Antibiotico).get(ab_id)
+            ab_orm = session.query(Antibiotico).get(ab_id)
+            ab = {
+                "id": ab_orm.id,
+                "nombre": ab_orm.nombre,
+                "tipo": ab_orm.tipo,
+                "concentracion_minima": ab_orm.concentracion_minima,
+                "concentracion_maxima": ab_orm.concentracion_maxima,
+            }
             sched_objs.append((t, ab, conc))
         session.close()
 
-        # Guardamos el schedule para dibujar luego
+        # Determinar el primer antibiótico y concentración (para guardar la simulación)
+        if sched_objs:
+            antibiotico_id = sched_objs[0][1]["id"]
+            concentracion = sched_objs[0][2]
+        else:
+            antibiotico_id = None
+            concentracion = None
+
+        # Crear registro de Simulación en la base de datos
+        session = get_session()
+        simulacion = Simulacion(
+            antibiotico_id=antibiotico_id,
+            concentracion=concentracion if concentracion is not None else 0.0,
+            resistencia_predicha=0.0,
+        )
+        session.add(simulacion)
+        session.commit()
+        simulation_id = simulacion.id
+        session.close()
+
+        # Guardar horarios manuales y despejar cualquier horario optimizado previo
         self._manual_schedule = sched_objs
         self._optimized_schedule = None
+        self.sim_start_time = time.time()
 
-        # Creamos e inicializamos el GA
+        # Instanciar el algoritmo genético con los parámetros
         self.ga = GeneticAlgorithm(
             genes=genes,
             antibiotic_schedule=sched_objs,
-            mutation_rate=mut,
-            generations=duration,
+            mutation_rate=self.saved_mut_rate,
+            generations=self.saved_time_horizon,
             pop_size=200,
-            death_rate=death,
+            death_rate=self.saved_death_rate,
+            environmental_factors=self.saved_environmental_factors,
+            simulation_id=simulation_id,
+            reproduction_rate=self.saved_repro_rate,      
+            pressure_factor=0.25,
         )
         self.ga.initialize(self.saved_genes)
+        self.initial_attributes = self.ga.get_average_attributes()
 
+        # --- Posicionamiento de ventanas de gráficos ---
+        main_window_geom = self.geometry()
+        screen = QApplication.primaryScreen().geometry()
+        margin = 10
+
+        # Crear/actualizar y posicionar la ventana del mapa de calor a la izquierda
+        if self.map_window is None:
+            self.map_window = MapWindow(self.ga)
+        else:
+            self.map_window.ga = self.ga
+            self.map_window.reset()
+        
+        map_geom = self.map_window.frameGeometry()
+        map_x = main_window_geom.x() - map_geom.width() - margin
+        map_x = max(0, map_x)
+        self.map_window.move(map_x, main_window_geom.y())
+        self.map_window.show()
+
+        # Crear/actualizar y posicionar la ventana de expansión a la derecha
+        if self.expand_window is None:
+            self.expand_window = ExpandWindow(self.ga)
+        else:
+            self.expand_window.ga = self.ga
+            self.expand_window.reset()
+
+        expand_geom = self.expand_window.frameGeometry()
+        expand_x = main_window_geom.x() + main_window_geom.width() + margin
+        if expand_x + expand_geom.width() > screen.width():
+            expand_x = screen.width() - expand_geom.width()
+        self.expand_window.move(expand_x, main_window_geom.y())
+        self.expand_window.show()
+
+        # Limpiar gráfica en la pestaña de resultados y arrancar el timer
         self.results_tab.clear_plot()
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
-    def handle_optimization(self):
-        """Ejecuta el ScheduleOptimizer y luego simula el mejor plan."""
-        session = get_session()
-        genes = session.query(Gen).all()
-        antibiotics = session.query(Antibiotico).all()
-        session.close()
-
-        optimizer = ScheduleOptimizer(
-            genes=genes,
-            antibiotics=antibiotics,
-            n_events=3,
-            generations=self.saved_time_horizon,  # iteraciones del optimizador
-            pop_size=6,
-            sim_generations=self.saved_time_horizon,  # duración real de cada GA
-        )
-        best_schedule, score = optimizer.run()
-
-        # Informe rápido
-        lines = [f"Resistencia final promedio: {score:.4f}", ""]
-        for i, (t, ab, conc) in enumerate(best_schedule, 1):
-            lines.append(f"{i}. Tiempo {t:.1f} – {ab.nombre} ({conc:.2f})")
-        QMessageBox.information(self, "Optimización completada", "\n".join(lines))
-
-        # Guardar plan óptimo y simularlo
-        self._optimized_schedule = best_schedule
-        self.handle_simulation([(t, ab.id, conc) for t, ab, conc in best_schedule])
+        self.alert_shown_extinction = False
+        self.alert_shown_resistance = False
 
     def _on_sim_step(self):
         """Avanza la simulación paso a paso y al final actualiza Resultados Detallados."""
         if not self.ga.step():
             self.sim_timer.stop()
+            self._show_threshold_alerts()
 
-            # Dibujar líneas de eventos (manual u óptimo)
+            self.ga.save_final_gene_attributes(self.saved_genes)
+            
+            # Guardar las métricas de la simulación en la base de datos
+            saved_params = {
+                "genes": self.saved_genes,
+                "mutation_rate": self.saved_mut_rate,
+                "death_rate": self.saved_death_rate,
+                "generations": self.saved_time_horizon,
+                "environmental_factors": self.saved_environmental_factors,
+                "reproduction_rate": self.saved_repro_rate,   
+            }
+            save_simulation_report(self.ga, saved_params)
+            save_generation_metrics(self.ga, self.ga.current_simulation_id)
+
             schedule = self._optimized_schedule or self._manual_schedule or []
             for t, ab, conc in schedule:
-                color = ANTIBIOTIC_COLORS.get(ab.tipo, DEFAULT_COLOR)
+                color_line = ANTIBIOTIC_COLORS.get(ab["tipo"], DEFAULT_COLOR)
                 line = pg.InfiniteLine(
-                    pos=t, angle=90, pen=pg.mkPen(color, width=2, style=Qt.DashLine)
+                    pos=t,
+                    angle=90,
+                    pen=pg.mkPen(color_line, width=2, style=Qt.DashLine)
                 )
-                label = pg.TextItem(f"{ab.nombre}\n{conc:.2f}", anchor=(0, 1))
-                ymax = self.results_tab.plot_main.viewRange()[1][1]
-                label.setPos(t, ymax)
+                texto = f"{ab['nombre']}\n{conc:.2f}"
+                label = pg.TextItem(texto, color=color_line, anchor=(0, 1))
+                y_min, y_max = self.results_tab.plot_main.viewRange()[1]
+                rango_y = y_max - y_min
+                porcentaje = 0.08
+                y_pos = y_min + rango_y * porcentaje
+                label.setPos(t, y_pos)
                 self.results_tab.plot_main.addItem(line)
-                self.results_tab.plot_main.addItem(label)
+                self.results_tab.plot_main.addItem(label, ignoreBounds=True)
                 self.results_tab._event_items.extend([line, label])
 
-            # Construir lista de resultados por antibiótico
             session = get_session()
             antibioticos_results = []
             for t_evt, ab, _ in schedule:
-                # buscamos el índice de la generación más cercana a t_evt
                 idx = np.searchsorted(self.ga.times, t_evt, side="right") - 1
-                valor = self.ga.avg_hist[idx]  # supervivencia/promedio en ese instante
-                # cargamos la recomendación de BD
+                valor = self.ga.avg_hist[idx]
                 reco = (
                     session.query(Recomendacion)
-                    .filter_by(antibiotico_id=ab.id)
+                    .filter_by(antibiotico_id=ab["id"])
                     .first()
                 )
                 texto = reco.texto if reco else ""
-                antibioticos_results.append((ab.nombre, valor, texto))
+                antibioticos_results.append((ab["nombre"], valor, texto))
             session.close()
 
-            # Actualizar pestaña 4: Resultados Detallados
+            final_attributes = self.ga.get_average_attributes()
             self.detail_tab.update_results(
-                avg_resistencia=self.ga.avg_hist[-1],
-                max_resistencia=max(self.ga.best_hist),
-                antibiotico="Plan de Tratamiento",
                 antibioticos_results=antibioticos_results,
                 best_hist=self.ga.best_hist,
                 avg_hist=self.ga.avg_hist,
                 div_hist=self.ga.div_hist,
+                initial_attributes=self.initial_attributes,
+                final_attributes=final_attributes,
             )
+            final_res = self.ga.avg_hist[-1]
+            self.results_tab.show_interpretation(final_res)
+            final_pop = self.ga.population_hist[-1] if self.ga.population_hist else 0.0
+            self.results_tab.show_population_interpretation(final_pop)
+            peak_deg = max(self.ga.degradation_hist) if self.ga.degradation_hist else 0.0
+            self.results_tab.show_degradation_interpretation(peak_deg)
+
             return
 
-        # Mientras avanza la simulación, actualizamos las curvas
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
-        self.results_tab.curve_avg.setData(t, self.ga.avg_hist)
+        y = np.array(self.ga.avg_hist)
+        self.results_tab.curve_avg.setData(t, y)
+        ultimo_valor = y[-1]
+        if ultimo_valor < self.results_tab.resistance_thresholds[0]:
+            curvas_color = "#0000FF"
+        elif ultimo_valor < self.results_tab.resistance_thresholds[1]:
+            curvas_color = "#FFA500"
+        else:
+            curvas_color = "#FF0000"
+        self.results_tab.curve_avg.setPen(pg.mkPen(curvas_color, width=2))
+
         self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
+        self.results_tab.update_population_plot(t, self.ga.population_hist)
+        self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
+        self.results_tab.update_degradation_plot(t, self.ga.degradation_hist)
+
+        if getattr(self, "map_window", None) is not None:
+            self.map_window.update_map()
+        if getattr(self, "expand_window", None) is not None:
+            self.expand_window.update_expand()
+
+    def _show_threshold_alerts(self):
+        """Mostrar alertas al alcanzar umbrales críticos solo una vez."""
+        if (
+            not self.alert_shown_extinction
+            and self.ga.population_total <= self.ga.extinction_threshold
+        ):
+            self.alert_shown_extinction = True
+            QMessageBox.warning(
+                self,
+                "Alerta de Extinción",
+                f"La población bacteriana ha caído por debajo del umbral crítico de {self.ga.extinction_threshold}.",
+            )
+        if (
+            not self.alert_shown_resistance
+            and self.ga.avg_hist[-1] >= self.ga.resistance_threshold
+        ):
+            self.alert_shown_resistance = True
+            QMessageBox.warning(
+                self,
+                "Alerta de Resistencia Crítica",
+                f"La resistencia promedio ha superado el umbral crítico de {self.ga.resistance_threshold:.2f}.",
+            )
+
+    def closeEvent(self, event):
+        if hasattr(self, 'map_window') and self.map_window:
+            self.map_window.close()
+        if hasattr(self, 'expand_window') and self.expand_window:
+            self.expand_window.close()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

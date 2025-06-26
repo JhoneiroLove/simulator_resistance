@@ -47,3 +47,9 @@ resistencia.db
 */*/__pycache__/
 
 */__pycache__/
+
+SimuladorEvolutivo.spec
+
+Output/
+
+.vscode

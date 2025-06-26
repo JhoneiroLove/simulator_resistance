@@ -2,10 +2,13 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout
 from PyQt5.QtGui import QFont
 import pyqtgraph as pg
 
+from ..main_window import get_app_icon
+
 class DiversityWindow(QDialog):
     def __init__(self, times, diversity_hist, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Diversidad Genética")
+        self.setWindowIcon(get_app_icon())
         self.resize(600, 400)
         layout = QVBoxLayout(self)
 
