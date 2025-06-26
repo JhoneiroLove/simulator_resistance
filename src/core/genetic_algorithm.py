@@ -35,6 +35,7 @@ class GeneticAlgorithm:
         death_rate: float = 0.05,
         environmental_factors=None,
         simulation_id=None,
+        reproduction_rate: float = 1.0,
         phenotype_mutation_prob: float = 0.02,
         phenotype_mutation_sigma: float = 0.05,
         evo_rescue_threshold: float = 0.2,
@@ -66,6 +67,7 @@ class GeneticAlgorithm:
             "temperature": 37.0,
             "pH": 7.4,
         }
+        self.reproduction_rate = reproduction_rate
         self.resistance_threshold = self.environmental_factors.get(
             "resistance_threshold", 0.9
         )
@@ -353,7 +355,7 @@ class GeneticAlgorithm:
         growth_mod = self.growth_modifier()
         death_mod = self.death_modifier()
 
-        r = self.r_growth * growth_mod
+        r = self.r_growth * self.reproduction_rate * growth_mod 
         death_rate = self.death_rate * death_mod
 
         growth = r * prev_population * (1 - prev_population / self.K_capacity)

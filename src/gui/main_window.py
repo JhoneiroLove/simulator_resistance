@@ -18,12 +18,9 @@ from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
 from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.reporting import save_simulation_report
-from src.core.reporting import save_generation_metrics
-
+from src.core.reporting import save_simulation_report, save_generation_metrics
 from src.data.database import get_session
-from src.data.models import Gen, Antibiotico, Recomendacion
-from src.data.models import Simulacion
+from src.data.models import Gen, Antibiotico, Recomendacion, Simulacion
 from PyQt5.QtGui import QIcon
 
 # Mapa de colores por tipo de antibiótico
@@ -61,7 +58,6 @@ class MainWindow(QMainWindow):
 
         # ---- Widgets principales ----
         self.input_tab = InputForm()
-        
         session = get_session()
         abs_q = session.query(
             Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima, Antibiotico.concentracion_maxima
@@ -77,7 +73,6 @@ class MainWindow(QMainWindow):
         # ---- Conectar señales ----
         self.input_tab.params_submitted.connect(self.on_params_saved)
         self.results_tab.simulate_requested.connect(self.handle_simulation)
-
 
         # ---- Pestañas ----
         self.tabs = QTabWidget()
@@ -98,6 +93,7 @@ class MainWindow(QMainWindow):
         self.saved_death_rate = 0.05
         self.saved_time_horizon = 100
         self.saved_environmental_factors = {"temperature": 37.0, "pH": 7.4}
+        self.saved_repro_rate = 1.0     
         self.initial_attributes = {}
 
         # Flags para mostrar alertas solo una vez
@@ -105,7 +101,7 @@ class MainWindow(QMainWindow):
         self.alert_shown_resistance = False
 
     def on_params_saved(
-        self, genes, unit, mut_rate, death_rate, time_horizon, environmental_factors
+        self, genes, unit, mut_rate, death_rate, time_horizon, environmental_factors, reproduction_rate
     ):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
@@ -113,6 +109,7 @@ class MainWindow(QMainWindow):
         self.saved_death_rate = death_rate
         self.saved_time_horizon = time_horizon
         self.saved_environmental_factors = environmental_factors
+        self.saved_repro_rate = reproduction_rate   
         QMessageBox.information(
             self,
             "Éxito",
@@ -186,7 +183,8 @@ class MainWindow(QMainWindow):
             death_rate=self.saved_death_rate,
             environmental_factors=self.saved_environmental_factors,
             simulation_id=simulation_id,
-            pressure_factor=0.25,  # Reducir la presión para fomentar supervivencia
+            reproduction_rate=self.saved_repro_rate,      
+            pressure_factor=0.25,
         )
         self.ga.initialize(self.saved_genes)
         self.initial_attributes = self.ga.get_average_attributes()
@@ -205,7 +203,7 @@ class MainWindow(QMainWindow):
         
         map_geom = self.map_window.frameGeometry()
         map_x = main_window_geom.x() - map_geom.width() - margin
-        map_x = max(0, map_x)  # Asegurarse de que no se salga de la pantalla
+        map_x = max(0, map_x)
         self.map_window.move(map_x, main_window_geom.y())
         self.map_window.show()
 
@@ -218,7 +216,6 @@ class MainWindow(QMainWindow):
 
         expand_geom = self.expand_window.frameGeometry()
         expand_x = main_window_geom.x() + main_window_geom.width() + margin
-        # Asegurarse de que no se salga de la pantalla
         if expand_x + expand_geom.width() > screen.width():
             expand_x = screen.width() - expand_geom.width()
         self.expand_window.move(expand_x, main_window_geom.y())
@@ -229,7 +226,6 @@ class MainWindow(QMainWindow):
         self.sim_timer.start(100)
         self.tabs.setCurrentWidget(self.results_tab)
 
-        # Reiniciar flags de alerta
         self.alert_shown_extinction = False
         self.alert_shown_resistance = False
 
@@ -248,51 +244,35 @@ class MainWindow(QMainWindow):
                 "death_rate": self.saved_death_rate,
                 "generations": self.saved_time_horizon,
                 "environmental_factors": self.saved_environmental_factors,
+                "reproduction_rate": self.saved_repro_rate,   
             }
-            
             save_simulation_report(self.ga, saved_params)
-            
             save_generation_metrics(self.ga, self.ga.current_simulation_id)
 
-            # Dibujar líneas de eventos (manual u óptimo)
             schedule = self._optimized_schedule or self._manual_schedule or []
             for t, ab, conc in schedule:
-                # 1) Obtén el color según el tipo de antibiótico
                 color_line = ANTIBIOTIC_COLORS.get(ab["tipo"], DEFAULT_COLOR)
-
-                # 2) Dibuja la línea vertical en t con ese color
                 line = pg.InfiniteLine(
                     pos=t,
                     angle=90,
                     pen=pg.mkPen(color_line, width=2, style=Qt.DashLine)
                 )
-
-                # 3) Prepara el texto (nombre + concentración) con el mismo color
                 texto = f"{ab['nombre']}\n{conc:.2f}"
                 label = pg.TextItem(texto, color=color_line, anchor=(0, 1))
-
-                # 4) Colócalo un poco por encima de y_min (porcentaje del rango en Y)
                 y_min, y_max = self.results_tab.plot_main.viewRange()[1]
                 rango_y = y_max - y_min
-                porcentaje = 0.08  # 8% por encima de y_min
+                porcentaje = 0.08
                 y_pos = y_min + rango_y * porcentaje
                 label.setPos(t, y_pos)
-
-                # 5) Añádelo sin que modifique el auto-rango
                 self.results_tab.plot_main.addItem(line)
                 self.results_tab.plot_main.addItem(label, ignoreBounds=True)
-
-                # 6) Guarda referencias para luego poder limpiar
                 self.results_tab._event_items.extend([line, label])
 
-            # Construir lista de resultados por antibiótico
             session = get_session()
             antibioticos_results = []
             for t_evt, ab, _ in schedule:
-                # buscamos el índice de la generación más cercana a t_evt
                 idx = np.searchsorted(self.ga.times, t_evt, side="right") - 1
-                valor = self.ga.avg_hist[idx]  # supervivencia/promedio en ese instante
-                # cargamos la recomendación de BD
+                valor = self.ga.avg_hist[idx]
                 reco = (
                     session.query(Recomendacion)
                     .filter_by(antibiotico_id=ab["id"])
@@ -302,7 +282,6 @@ class MainWindow(QMainWindow):
                 antibioticos_results.append((ab["nombre"], valor, texto))
             session.close()
 
-            # Capturar atributos finales y actualizar pestaña 4
             final_attributes = self.ga.get_average_attributes()
             self.detail_tab.update_results(
                 antibioticos_results=antibioticos_results,
@@ -312,7 +291,6 @@ class MainWindow(QMainWindow):
                 initial_attributes=self.initial_attributes,
                 final_attributes=final_attributes,
             )
-
             final_res = self.ga.avg_hist[-1]
             self.results_tab.show_interpretation(final_res)
             final_pop = self.ga.population_hist[-1] if self.ga.population_hist else 0.0
@@ -322,10 +300,8 @@ class MainWindow(QMainWindow):
 
             return
 
-        # Si aún hay generaciones por ejecutar, actualizar gráficas y ventanas
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
         y = np.array(self.ga.avg_hist)
-
         self.results_tab.curve_avg.setData(t, y)
         ultimo_valor = y[-1]
         if ultimo_valor < self.results_tab.resistance_thresholds[0]:
@@ -341,11 +317,8 @@ class MainWindow(QMainWindow):
         self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
         self.results_tab.update_degradation_plot(t, self.ga.degradation_hist)
 
-        # Actualizar también el mapa de expansión bacteriana
         if getattr(self, "map_window", None) is not None:
             self.map_window.update_map()
-
-        # Actualizar la ventana ExpandWindow (si existe)
         if getattr(self, "expand_window", None) is not None:
             self.expand_window.update_expand()
 
@@ -373,17 +346,11 @@ class MainWindow(QMainWindow):
             )
 
     def closeEvent(self, event):
-        """
-        Maneja el evento de cierre de la ventana principal para asegurar
-        que toda la aplicación se termine correctamente.
-        """
-        # Cierra las ventanas secundarias explícitamente si existen
         if hasattr(self, 'map_window') and self.map_window:
             self.map_window.close()
         if hasattr(self, 'expand_window') and self.expand_window:
             self.expand_window.close()
-            
-        event.accept()  # Acepta el evento de cierre para la ventana principal
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

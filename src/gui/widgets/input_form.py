@@ -22,7 +22,7 @@ from src.data.database import get_session
 from src.data.models import Gen
 
 class InputForm(QWidget):
-    params_submitted = pyqtSignal(list, str, float, float, int, dict)
+    params_submitted = pyqtSignal(list, str, float, float, int, dict, float)  
 
     def __init__(self):
         super().__init__()
@@ -132,6 +132,23 @@ class InputForm(QWidget):
         if label_death:
             label_death.setToolTip(tooltip_death)
 
+        # Tasa de reproducción 
+        self.repro_rate_sb = QDoubleSpinBox()
+        self.repro_rate_sb.setRange(0.01, 5.0)
+        self.repro_rate_sb.setSingleStep(0.01)
+        self.repro_rate_sb.setValue(1.0)
+        form.addRow("Tasa reproducción (max 5.0):", self.repro_rate_sb)
+        tooltip_repro = (
+            "Multiplicador sobre el crecimiento bacteriano en cada generación. "
+            "Valores >1: aceleran el crecimiento, <1: lo ralentizan."
+        )
+        self.repro_rate_sb.setToolTip(tooltip_repro)
+        self.repro_rate_sb.setToolTipDuration(5000)
+        self.repro_rate_sb.setMouseTracking(True)
+        label_repro = form.labelForField(self.repro_rate_sb)
+        if label_repro:
+            label_repro.setToolTip(tooltip_repro)
+
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
@@ -171,12 +188,13 @@ class InputForm(QWidget):
             "temperature": self.temperature_sb.value(),
             "pH": self.ph_sb.value(),
         }
-        return selected, unit, mut, death, time_horizon, environmental_factors
+        repro = self.repro_rate_sb.value()  # <-- NUEVO
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro
 
     def submit(self):
         params = self.collect_params()
         if params:
             logging.debug(
-            f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}"
+            f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, reproduction_rate={params[6]}"
         )
             self.params_submitted.emit(*params)
