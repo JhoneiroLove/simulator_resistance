@@ -96,14 +96,14 @@ class InputForm(QWidget):
         self.time_horizon_sb = QSpinBox()
         self.time_horizon_sb.setRange(10, 10000)
         self.time_horizon_sb.setValue(100)
-        form.addRow("Duración total:", self.time_horizon_sb)
+        form.addRow("Duración total (max 10000 / min 10):", self.time_horizon_sb)
 
         # Tasa de mutación
         self.mut_rate_sb = QDoubleSpinBox()
         self.mut_rate_sb.setRange(0.05, 1.0)
         self.mut_rate_sb.setSingleStep(0.01)
         self.mut_rate_sb.setValue(0.05)
-        form.addRow("Tasa mutación (max 1.00):", self.mut_rate_sb)
+        form.addRow("Tasa mutación (max 1.00 / min 0.05):", self.mut_rate_sb)
         tooltip_mut = (
             "Probabilidad de que ocurra una mutación genética en cada generación, "
             "impulsando la variabilidad genética."
@@ -120,7 +120,7 @@ class InputForm(QWidget):
         self.death_rate_sb.setRange(0.03, 1.0)
         self.death_rate_sb.setSingleStep(0.01)
         self.death_rate_sb.setValue(0.05)
-        form.addRow("Tasa mortalidad (max 1.00):", self.death_rate_sb)
+        form.addRow("Tasa mortalidad (max 1.00 / min 0.03):", self.death_rate_sb)
         tooltip_death = (
             "Probabilidad de que un individuo muera en cada generación, "
             "reflejando la eficacia del tratamiento o condiciones adversas."
@@ -137,7 +137,7 @@ class InputForm(QWidget):
         self.repro_rate_sb.setRange(0.01, 5.0)
         self.repro_rate_sb.setSingleStep(0.01)
         self.repro_rate_sb.setValue(1.0)
-        form.addRow("Tasa reproducción (max 5.0):", self.repro_rate_sb)
+        form.addRow("Tasa reproducción (max 5.0 / min 0.01):", self.repro_rate_sb)
         tooltip_repro = (
             "Multiplicador sobre el crecimiento bacteriano en cada generación. "
             "Valores >1: aceleran el crecimiento, <1: lo ralentizan."
