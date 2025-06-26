@@ -15,9 +15,10 @@ from PyQt5.QtWidgets import (
     QFrame,
     QSizePolicy,
     QDialog,
+    QSpinBox,
     QTableWidgetItem,
 )
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QLocale
 import pyqtgraph as pg
 import numpy as np
 
@@ -34,6 +35,20 @@ def value_to_color_hex(value, thresholds, colors):
     r, g, b = colors[-1]
     return f"#{r:02x}{g:02x}{b:02x}"
 
+
+ANTIBIOTICS_LIST = [
+    {"id": 1, "nombre": "Meropenem", "conc_min": 0.03, "conc_max": 64.0},
+    {"id": 2, "nombre": "Ciprofloxacino", "conc_min": 0.25, "conc_max": 256.0},
+    {"id": 3, "nombre": "Colistina", "conc_min": 0.06, "conc_max": 512.0},
+    {"id": 4, "nombre": "Amikacina", "conc_min": 0.5, "conc_max": 512.0},
+    {"id": 5, "nombre": "Piperacilina/Tazobactam", "conc_min": 0.5, "conc_max": 1024.0},
+    {"id": 6, "nombre": "Ceftazidima", "conc_min": 0.25, "conc_max": 1024.0},
+    {"id": 7, "nombre": "Gentamicina", "conc_min": 0.5, "conc_max": 512.0},
+    {"id": 8, "nombre": "Tobramicina", "conc_min": 0.25, "conc_max": 1024.0},
+    {"id": 9, "nombre": "Imipenem", "conc_min": 0.12, "conc_max": 128.0},
+    {"id": 10, "nombre": "Cefepime", "conc_min": 1.0, "conc_max": 32.0},
+]
+
 class ResultsView(QWidget):
     simulate_requested = pyqtSignal(list)
 
@@ -49,16 +64,10 @@ class ResultsView(QWidget):
         table.setRowCount(len(self.antibiotics))
         for i, ab in enumerate(self.antibiotics):
             item_nombre = QTableWidgetItem(str(ab.get("nombre", "")))
-            # Buscar clave correcta para min y max
-            min_val = ab.get("concentracion_minima")
-            if min_val is None:
-                min_val = ab.get("conc_min")
-            max_val = ab.get("concentracion_maxima")
-            if max_val is None:
-                max_val = ab.get("conc_max")
+            min_val = ab.get("conc_min")
+            max_val = ab.get("conc_max")
             item_min = QTableWidgetItem(str(min_val if min_val is not None else "-"))
             item_max = QTableWidgetItem(str(max_val if max_val is not None else "-"))
-            # Solo lectura
             flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
             item_nombre.setFlags(flags)
             item_min.setFlags(flags)
@@ -81,9 +90,9 @@ class ResultsView(QWidget):
         """
         self.run_button.setEnabled(self.schedule_table.rowCount() > 0)
 
-    def __init__(self, antibiotics, parent=None):
+    def __init__(self, antibiotics=None, parent=None):
         super().__init__(parent)
-        self.antibiotics = antibiotics  # list of dicts: {id, nombre, conc_min}
+        self.antibiotics = antibiotics if antibiotics is not None else ANTIBIOTICS_LIST
         self._event_items = []
         self._schedule_events = []
 
@@ -91,28 +100,21 @@ class ResultsView(QWidget):
         main_layout.setContentsMargins(32, 32, 32, 32)
         main_layout.setSpacing(24)
 
-        # ——— Calendario de Tratamientos ———
         grp_schedule = QGroupBox("Secuencia de Tratamientos")
         schedule_layout = QVBoxLayout(grp_schedule)
 
-        # Columnas: Antibiótico, Concentración, Tiempo
         self.schedule_table = QTableWidget(0, 3)
         self.schedule_table.setHorizontalHeaderLabels(
             ["Antibiótico", "Concentración (mg/l)", "Tiempo (Generacion)"]
         )
         self.schedule_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        self.schedule_table.setFixedHeight(120)                    
-        self.schedule_table.setSizePolicy(
-            QSizePolicy.Expanding, 
-            QSizePolicy.Fixed
-        )
+        self.schedule_table.setFixedHeight(120)
+        self.schedule_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.schedule_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.schedule_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         schedule_layout.addWidget(self.schedule_table)
 
-        # Botones Agregar/Eliminar filas
         btn_hbox = QHBoxLayout()
         btn_add = QPushButton("Agregar")
         btn_del = QPushButton("Eliminar")
@@ -127,20 +129,15 @@ class ResultsView(QWidget):
 
         main_layout.addWidget(grp_schedule)
 
-        # ——— Botones de acción ———
         actions_hbox = QHBoxLayout()
         actions_hbox.addStretch()
-
-        # Botón simular
         self.run_button = QPushButton("Iniciar Simulación")
         self.run_button.clicked.connect(self._emit_simulation)
         actions_hbox.addWidget(self.run_button)
 
-        # Botón ver intervalos de dosis
         self.dose_intervals_button = QPushButton("Ver intervalos de dosis")
         self.dose_intervals_button.clicked.connect(self.show_dose_intervals_modal)
         actions_hbox.addWidget(self.dose_intervals_button)
-        # Ahora que el botón existe, conecta las señales y actualiza el estado
         self.schedule_table.model().rowsInserted.connect(self._update_run_button_state)
         self.schedule_table.model().rowsRemoved.connect(self._update_run_button_state)
         self._update_run_button_state()
@@ -600,19 +597,34 @@ class ResultsView(QWidget):
             ab_cb.addItem(a["nombre"], a["id"])
 
         # SpinBox de concentración
+        selected_ab = self.antibiotics[0]
         conc_sb = QDoubleSpinBox()
-        conc_sb.setRange(0, 1e6)
-        conc_sb.setValue(self.antibiotics[0].get("conc_min", 0))
+        conc_sb.setDecimals(2)
+        conc_sb.setSingleStep(0.01)
+        conc_sb.setLocale(QLocale(QLocale.C))
+        conc_sb.setRange(selected_ab["conc_min"], selected_ab["conc_max"])
+        conc_sb.setValue(selected_ab["conc_min"])
+
+        def on_antibiotic_changed(index):
+            ab_data = self.antibiotics[index]
+            min_c = ab_data["conc_min"]
+            max_c = ab_data["conc_max"]
+            conc_sb.setRange(min_c, max_c)
+            # Si el valor actual está fuera del nuevo rango, ajústalo al mínimo
+            if not (min_c <= conc_sb.value() <= max_c):
+                conc_sb.setValue(min_c)
+        ab_cb.currentIndexChanged.connect(on_antibiotic_changed)
 
         # SpinBox de tiempo (generación)
-        time_sb = QDoubleSpinBox()
-        time_sb.setRange(0, 1e6)
+        time_sb = QSpinBox()
+        time_sb.setRange(0, 10000)
         time_sb.setValue(0)
 
         # Colocar en columnas
         self.schedule_table.setCellWidget(row, 0, ab_cb)
         self.schedule_table.setCellWidget(row, 1, conc_sb)
         self.schedule_table.setCellWidget(row, 2, time_sb)
+
         # El estado del botón se actualiza automáticamente por la señal rowsInserted
 
     def _del_schedule_row(self):
@@ -627,9 +639,21 @@ class ResultsView(QWidget):
     def _emit_simulation(self):
         sched = []
         for r in range(self.schedule_table.rowCount()):
-            ab_id = self.schedule_table.cellWidget(r, 0).currentData()
-            conc = self.schedule_table.cellWidget(r, 1).value()
+            ab_cb = self.schedule_table.cellWidget(r, 0)
+            conc_sb = self.schedule_table.cellWidget(r, 1)
+            ab_index = ab_cb.currentIndex()
+            ab_data = self.antibiotics[ab_index]
+            conc = conc_sb.value()
+            # --- Validación por rango ---
+            if not (ab_data["conc_min"] <= conc <= ab_data["conc_max"]):
+                ab_name = ab_data["nombre"]
+                self.show_alert(
+                    "Concentración fuera de rango",
+                    f"La concentración para {ab_name} debe estar entre {ab_data['conc_min']} y {ab_data['conc_max']} mg/l."
+                )
+                return
             t = self.schedule_table.cellWidget(r, 2).value()
+            ab_id = ab_cb.currentData()
             sched.append((t, ab_id, conc))
 
         # Registrar eventos para dibujo
