@@ -170,10 +170,10 @@ class ExpandWindow(QDialog):
     def update_expand(self, first_time=False):
         """
         Se llama en cada paso de la simulación para:
-          1) Construir un heatmap radial de recubrimiento (sin cambiar su colormap).
-          2) Dibujar scatter de letalidad/reproducción usando verde→rojo.
-          3) Aplicar cross‐fade entre viejo y nuevo.
-          Si first_time=True, pinta el “nuevo” directamente (sin animar).
+            1) Construir un heatmap radial de recubrimiento (sin cambiar su colormap).
+            2) Dibujar scatter de letalidad/reproducción usando verde→rojo.
+            3) Aplicar cross‐fade entre viejo y nuevo.
+            Si first_time=True, pinta el “nuevo” directamente (sin animar).
         """
         t_idx = self.ga.current_step - 1
         if t_idx < 0:

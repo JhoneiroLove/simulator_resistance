@@ -53,3 +53,5 @@ SimuladorEvolutivo.spec
 Output/
 
 .vscode
+
+exported_results
