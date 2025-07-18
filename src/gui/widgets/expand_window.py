@@ -20,7 +20,6 @@ class FadeImageItem(pg.ImageItem):
 
     opacityProp = pyqtProperty(float, fget=getOpacity, fset=setOpacityProp)
 
-
 class FadeScatterItem(pg.ScatterPlotItem):
     """
     Subclase de ScatterPlotItem que expone la opacidad como propiedad animable.
@@ -37,7 +36,6 @@ class FadeScatterItem(pg.ScatterPlotItem):
         super().setOpacity(val)
 
     opacityProp = pyqtProperty(float, fget=getOpacity, fset=setOpacityProp)
-
 
 class ExpandWindow(QDialog):
     """
@@ -145,11 +143,11 @@ class ExpandWindow(QDialog):
         self.update_expand(first_time=True)
 
     def _crossfade(self, old_item: QObject, new_item: QObject,
-                   old_opacity: float, new_opacity: float, duration=300):
+                old_opacity: float, new_opacity: float, duration=300):
         """
         Anima en paralelo:
-          - old_item.opacityProp: old_opacity → 0.0
-          - new_item.opacityProp: 0.0 → new_opacity
+            - old_item.opacityProp: old_opacity → 0.0
+            - new_item.opacityProp: 0.0 → new_opacity
         duration en milisegundos.
         """
         anim_out = QPropertyAnimation(old_item, b"opacityProp", self)

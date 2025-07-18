@@ -35,13 +35,13 @@ ANTIBIOTIC_COLORS = {
 DEFAULT_COLOR = "#7F8C8D"
 
 def get_app_icon():
-    if hasattr(sys, '_MEIPASS'):
+    if hasattr(sys, "_MEIPASS"):
         base_dir = sys._MEIPASS
     else:
         base_dir = os.path.abspath(os.path.dirname(__file__))
-    icon_path = os.path.join(base_dir, 'simulador_evolutivo.ico')
+    icon_path = os.path.join(base_dir, "simulador_evolutivo.ico")
     if not os.path.exists(icon_path):
-        icon_path = os.path.join(base_dir, '..', '..', 'simulador_evolutivo.ico')
+        icon_path = os.path.join(base_dir, "..", "..", "simulador_evolutivo.ico")
     return QIcon(icon_path)
 
 class MainWindow(QMainWindow):
@@ -60,12 +60,18 @@ class MainWindow(QMainWindow):
         self.input_tab = InputForm()
         session = get_session()
         abs_q = session.query(
-            Antibiotico.id, Antibiotico.nombre, Antibiotico.concentracion_minima, Antibiotico.concentracion_maxima
+            Antibiotico.id,
+            Antibiotico.nombre,
+            Antibiotico.concentracion_minima,
+            Antibiotico.concentracion_maxima,
         ).all()
         session.close()
-        antibiotics = [{"id": a[0], "nombre": a[1], "conc_min": a[2], "conc_max": a[3]} for a in abs_q]
+        antibiotics = [
+            {"id": a[0], "nombre": a[1], "conc_min": a[2], "conc_max": a[3]}
+            for a in abs_q
+        ]
         self.map_window = None
-        self.expand_window = None 
+        self.expand_window = None
         self.results_tab = ResultsView(antibiotics)
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
@@ -93,7 +99,7 @@ class MainWindow(QMainWindow):
         self.saved_death_rate = 0.05
         self.saved_time_horizon = 100
         self.saved_environmental_factors = {"temperature": 37.0, "pH": 7.4}
-        self.saved_repro_rate = 1.0     
+        self.saved_repro_rate = 1.0
         self.initial_attributes = {}
 
         # Flags para mostrar alertas solo una vez
@@ -101,7 +107,14 @@ class MainWindow(QMainWindow):
         self.alert_shown_resistance = False
 
     def on_params_saved(
-        self, genes, unit, mut_rate, death_rate, time_horizon, environmental_factors, reproduction_rate
+        self,
+        genes,
+        unit,
+        mut_rate,
+        death_rate,
+        time_horizon,
+        environmental_factors,
+        reproduction_rate,
     ):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
@@ -109,7 +122,7 @@ class MainWindow(QMainWindow):
         self.saved_death_rate = death_rate
         self.saved_time_horizon = time_horizon
         self.saved_environmental_factors = environmental_factors
-        self.saved_repro_rate = reproduction_rate   
+        self.saved_repro_rate = reproduction_rate
         QMessageBox.information(
             self,
             "Éxito",
@@ -183,7 +196,7 @@ class MainWindow(QMainWindow):
             death_rate=self.saved_death_rate,
             environmental_factors=self.saved_environmental_factors,
             simulation_id=simulation_id,
-            reproduction_rate=self.saved_repro_rate,      
+            reproduction_rate=self.saved_repro_rate,
             pressure_factor=0.25,
         )
         self.ga.initialize(self.saved_genes)
@@ -200,7 +213,7 @@ class MainWindow(QMainWindow):
         else:
             self.map_window.ga = self.ga
             self.map_window.reset()
-        
+
         map_geom = self.map_window.frameGeometry()
         map_x = main_window_geom.x() - map_geom.width() - margin
         map_x = max(0, map_x)
@@ -236,7 +249,7 @@ class MainWindow(QMainWindow):
             self._show_threshold_alerts()
 
             self.ga.save_final_gene_attributes(self.saved_genes)
-            
+
             # Guardar las métricas de la simulación en la base de datos
             saved_params = {
                 "genes": self.saved_genes,
@@ -244,29 +257,14 @@ class MainWindow(QMainWindow):
                 "death_rate": self.saved_death_rate,
                 "generations": self.saved_time_horizon,
                 "environmental_factors": self.saved_environmental_factors,
-                "reproduction_rate": self.saved_repro_rate,   
+                "reproduction_rate": self.saved_repro_rate,
             }
             save_simulation_report(self.ga, saved_params)
             save_generation_metrics(self.ga, self.ga.current_simulation_id)
 
+            # Añadir marcadores de antibióticos al gráfico de resistencia
             schedule = self._optimized_schedule or self._manual_schedule or []
-            for t, ab, conc in schedule:
-                color_line = ANTIBIOTIC_COLORS.get(ab["tipo"], DEFAULT_COLOR)
-                line = pg.InfiniteLine(
-                    pos=t,
-                    angle=90,
-                    pen=pg.mkPen(color_line, width=2, style=Qt.DashLine)
-                )
-                texto = f"{ab['nombre']}\n{conc:.2f}"
-                label = pg.TextItem(texto, color=color_line, anchor=(0, 1))
-                y_min, y_max = self.results_tab.plot_main.viewRange()[1]
-                rango_y = y_max - y_min
-                porcentaje = 0.08
-                y_pos = y_min + rango_y * porcentaje
-                label.setPos(t, y_pos)
-                self.results_tab.plot_main.addItem(line)
-                self.results_tab.plot_main.addItem(label, ignoreBounds=True)
-                self.results_tab._event_items.extend([line, label])
+            self.results_tab.add_antibiotic_markers(schedule)
 
             session = get_session()
             antibioticos_results = []
@@ -295,28 +293,24 @@ class MainWindow(QMainWindow):
             self.results_tab.show_interpretation(final_res)
             final_pop = self.ga.population_hist[-1] if self.ga.population_hist else 0.0
             self.results_tab.show_population_interpretation(final_pop)
-            peak_deg = max(self.ga.degradation_hist) if self.ga.degradation_hist else 0.0
+            peak_deg = (
+                max(self.ga.degradation_hist) if self.ga.degradation_hist else 0.0
+            )
             self.results_tab.show_degradation_interpretation(peak_deg)
 
             return
 
         t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
         y = np.array(self.ga.avg_hist)
-        self.results_tab.curve_avg.setData(t, y)
-        ultimo_valor = y[-1]
-        if ultimo_valor < self.results_tab.resistance_thresholds[0]:
-            curvas_color = "#0000FF"
-        elif ultimo_valor < self.results_tab.resistance_thresholds[1]:
-            curvas_color = "#FFA500"
-        else:
-            curvas_color = "#FF0000"
-        self.results_tab.curve_avg.setPen(pg.mkPen(curvas_color, width=2))
 
-        self.results_tab.curve_div_tab.setData(t, self.ga.div_hist)
+        # Usar los nuevos métodos de actualización de los widgets
+        self.results_tab.update_resistance_plot(t, y)
+        self.results_tab.update_diversity_plot(t, self.ga.div_hist)
         self.results_tab.update_population_plot(t, self.ga.population_hist)
         self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
         self.results_tab.update_degradation_plot(t, self.ga.degradation_hist)
 
+        # Actualizar ventanas flotantes
         if getattr(self, "map_window", None) is not None:
             self.map_window.update_map()
         if getattr(self, "expand_window", None) is not None:
@@ -346,9 +340,9 @@ class MainWindow(QMainWindow):
             )
 
     def closeEvent(self, event):
-        if hasattr(self, 'map_window') and self.map_window:
+        if hasattr(self, "map_window") and self.map_window:
             self.map_window.close()
-        if hasattr(self, 'expand_window') and self.expand_window:
+        if hasattr(self, "expand_window") and self.expand_window:
             self.expand_window.close()
         event.accept()
 
