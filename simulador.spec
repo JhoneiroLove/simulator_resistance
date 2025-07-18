@@ -2,7 +2,7 @@
 import os
 import sys
 
-project_root = os.path.abspath(os.path.dirname(sys.argv[0]))  # ruta relativa y portátil al root del proyecto
+project_root = os.path.abspath(os.path.dirname(sys.argv[0]))
 
 a = Analysis(
     ['main.py'],
@@ -12,9 +12,12 @@ a = Analysis(
         (os.path.join(project_root, 'simulador_evolutivo.ico'), '.'),
         (os.path.join(project_root, 'style.qss'), '.'),
         (os.path.join(project_root, 'data', 'resistencia.db'), 'data'),
-        (os.path.join(project_root, 'src', 'migrations'), 'migrations'),  # <--- incluye migraciones
+        (os.path.join(project_root, 'src', 'migrations'), 'migrations'),
+        (os.path.join(project_root, 'splash_screen.py'), '.'),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        'splash_screen',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
