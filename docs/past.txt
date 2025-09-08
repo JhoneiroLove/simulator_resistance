@@ -1,0 +1,47 @@
+# Antecedentes científicos y referencias bibliográficas utilizadas en el desarrollo del simulador
+
+A continuación se detallan las referencias bibliográficas empleadas en el proyecto y la sección específica del código o datos donde cada una fue utilizada.
+
+---
+
+### (Morosini et al., 2005)
+Referencia utilizada para definir los valores de concentración mínima inhibitoria (CMI) de diferentes antibióticos en la simulación.
+→ @[src\migrations\002_seed_data.sql:L20-L29]
+
+MOROSINI, M.I., GARCÍA-CASTILLO, M., LOZA, E., PÉREZ-VÁZQUEZ, M., BAQUERO, F. y CANTÓN, R., 2005. Breakpoints for Predicting Pseudomonas aeruginosa Susceptibility to Inhaled Tobramycin in Cystic Fibrosis Patients: Use of High-Range Etest Strips. Journal of Clinical Microbiology, vol. 43, no. 9, pp. 4480-4485. ISSN 0095-1137, 1098-660X. DOI 10.1128/JCM.43.9.4480-4485.2005.
+
+### (Martínez y Baquero, 2014)
+Referencia empleada para la representación genética de las bacterias, específicamente en la codificación de los genes como bits.
+→ @[src\core\genetic_algorithm.py:L14]
+
+MARTÍNEZ, José Luis y BAQUERO, Fernando. Emergence and spread of antibiotic resistance: setting a parameter space. Upsala Journal of Medical Sciences [en línea]. 2014, vol. 119, no. 2, pp. 68-77. ISSN 0300-9734. Disponible en: https://doi.org/10.3109/03009734.2014.901444
+
+### (Donlan, 2001)
+Referencia utilizada para el modelado de la característica de recubrimiento bacteriano en la simulación.
+→ @[src\core\genetic_algorithm.py:L15]
+
+DONLAN, Rodney M. Biofilms and device-associated infections. Emerging Infectious Diseases [en línea]. 2001, vol. 7, no. 2, pp. 277-281. ISSN 1080-6040. Disponible en: https://wwwnc.cdc.gov/eid/article/7/2/01-7202_article
+
+### (Levin y Rozen, 2006)
+Referencia empleada para la implementación de la función de reproducción bacteriana.
+→ @[src\core\genetic_algorithm.py:L16]
+
+LEVIN, Bruce R. y ROZEN, Daniel E. Non-inherited antibiotic resistance. Nature Reviews Microbiology [en línea]. 2006, vol. 4, no. 7, pp. 556-562. ISSN 1740-1526. Disponible en: https://doi.org/10.1038/nrmicro1445
+
+### (Casadevall y Pirofski, 1999)
+Referencia utilizada para definir la letalidad bacteriana en el modelo.
+→ @[src\core\genetic_algorithm.py:L17]
+
+CASADEVALL, Arturo y PIROFSKI, Liise-Anne. Host-pathogen interactions: redefining the basic concepts of virulence and pathogenicity. Infection and Immunity [en línea]. 1999, vol. 67, no. 8, pp. 3703–3713. ISSN 0019-9567. Disponible en: https://iai.asm.org/content/67/8/3703
+
+### (Delcour, 2009)
+Referencia empleada para la modelación de la permeabilidad de la membrana bacteriana.
+→ @[src\core\genetic_algorithm.py:L18]
+
+DELCOUR, Anne H. Outer membrane permeability and antibiotic resistance. Biochimica et Biophysica Acta (BBA) - Biomembranes [en línea]. 2009, vol. 1794, no. 5, pp. 808–816. ISSN 0005-2736. Disponible en: https://doi.org/10.1016/j.bbapap.2008.11.005
+
+### (Bush y Jacoby, 2010)
+Referencia utilizada para la inclusión de enzimas en el modelo de resistencia bacteriana.
+→ @[src\core\genetic_algorithm.py:L19]
+
+BUSH, Karen y JACOBY, George A. Updated functional classification of β-lactamases. Antimicrobial Agents and Chemotherapy [en línea]. 2010, vol. 54, no. 3, pp. 969–976. ISSN 0066-4804. Disponible en: https://doi.org/10.1128/AAC.01009-09
