@@ -50,17 +50,16 @@ class GeneticAlgorithm:
         logging.debug(f"Antibiotic schedule: {antibiotic_schedule}")
         """
         :param genes: lista de objetos con .id y .peso_resistencia
-        :param antibiotic_schedule: lista de tuplas (t_evt, ab, conc[, latency, duration])
-        :param mutation_rate: probabilidad base de mutar cada bit
-        :param mutation_boost_factor: factor multiplicativo de mut_rate durante exposición
+        :param antibiotic_schedule: lista de tuplas (t_event, antibiotic_obj, concentration)
+        :param mutation_rate: probabilidad de mutar cada bit
         :param generations: número de pasos (generaciones)
         :param pop_size: tamaño de la población
         :param death_rate: tasa de muerte natural
         :param environmental_factors: dict con factores ambientales como temperatura y pH
         """
         self.genes = genes
+        self.schedule = sorted(antibiotic_schedule or [], key=lambda e: e[0])
         self.mutation_rate = mutation_rate
-        self.mutation_boost_factor = mutation_boost_factor
         self.generations = generations
         self.pop_size = pop_size
         self.death_rate = death_rate
@@ -105,7 +104,7 @@ class GeneticAlgorithm:
         self.best_hist = []
         self.avg_hist = []
         self.kill_hist = []
-        self.mut_hist = []  # ahora almacenará mutaciones efectivas
+        self.mut_hist = []
         self.div_hist = []
 
         self.expansion_index_hist = []  
@@ -267,6 +266,7 @@ class GeneticAlgorithm:
     def step(self) -> bool:
         if self.current_step >= len(self.times):
             return False
+
         t = self.times[self.current_step]
         self.current_time = t
 
@@ -347,7 +347,7 @@ class GeneticAlgorithm:
         self.best_hist.append(best)
         self.avg_hist.append(avg)
         self.kill_hist.append(kill)
-        self.mut_hist.append(total_mut)
+        self.mut_hist.append(mut)
         self.div_hist.append(H)
 
         prev_population = self.population_total
