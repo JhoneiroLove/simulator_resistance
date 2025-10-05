@@ -30,6 +30,7 @@ class Simulacion(Base):
     resistencia_predicha = Column(Float, nullable=False)
     fecha = Column(DateTime, server_default=func.now())
     genes = relationship("Gen", secondary="simulacion_genes", lazy="joined")
+    huesped = relationship("Guest", back_populates="simulaciones")
 
 class SimulacionGen(Base):
     __tablename__ = "simulacion_genes"
@@ -76,3 +77,47 @@ class MetricaGeneracion(Base):
     valor = Column(Float, nullable=False)
 
     simulacion = relationship("Simulacion", backref="metricas_generacion")
+
+class Guest(Base):
+    """
+    Modelo de paciente/huésped para simulaciones de resistencia bacteriana.
+    """
+    __tablename__ = "guests"
+    
+    # Campos básicos
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    age = Column(Integer, nullable=False)
+    weight = Column(Float, nullable=False)
+    sex = Column(String(10), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Función renal
+    creatinina_serica = Column(Float)
+    clearance_creatinina = Column(Float)
+    
+    # Función hepática
+    alt = Column(Float)
+    ast = Column(Float)
+    bilirrubina_total = Column(Float)
+    
+    # Estado inmunológico
+    estado_inmune = Column(String(30), nullable=False, default='normal')
+    
+    # Relaciones
+    simulaciones = relationship("Simulacion", back_populates="huesped")
+
+class InfectionSite(Base):
+    """
+    Modelo de sitios de infección con características ambientales.
+    Encapsula las propiedades físicas y fisiológicas del sitio donde ocurre la infección.
+    """
+    __tablename__ = "sitios_infeccion"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nombre = Column(String(100), nullable=False, unique=True)
+    ph = Column(Float, nullable=False)
+    capacidad_carga = Column(Float, nullable=False)
+    perfusion_sanguinea = Column(Float, nullable=False, default=0.5)
+    
+    def __repr__(self):
+        return f"<InfectionSite(id={self.id}, nombre='{self.nombre}', pH={self.ph}, perfusion={self.perfusion_sanguinea})>"
