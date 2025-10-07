@@ -304,7 +304,79 @@ class InputForm(QWidget):
         estado_inmune = self.estado_inmune_cb.currentText()
         sitio_infeccion_id = self.sitio_infeccion_cb.currentData()
         return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight, creatinina, estado_inmune, sitio_infeccion_id
-    
+
+    def crear_huesped_desde_form(self, age_range: str, weight: float, creatinina: float, estado_inmune: str):
+        """
+        Crea un objeto Huesped (Guest) desde los datos del formulario.
+        
+        Args:
+            age_range: Rango de edad seleccionado (ej: "Adulto (18-65 años)")
+            weight: Peso en kg
+            creatinina: Creatinina sérica en mg/dL
+            estado_inmune: Estado inmune (Normal, Inmunodeprimido, Inmunodeprimido severo)
+        
+        Returns:
+            Guest: Objeto Huesped válido o None si hay error
+        """
+        from src.data.models import Guest
+        from src.core.guest_service import GuestService
+        
+        # Mapeo de rangos de edad a edad numérica (punto medio del rango)
+        age_mapping = {
+            "Neonato (0-28 días)": 0.05,  # ~18 días en años
+            "Infante (1 mes - 2 años)": 1.0,
+            "Niño (2-12 años)": 7,
+            "Adolescente (12-18 años)": 15,
+            "Adulto (18-65 años)": 40,
+            "Anciano (>65 años)": 75
+        }
+        
+        age = age_mapping.get(age_range, 40)  # Default: 40 años
+        
+        # Mapeo de estado inmune al formato de BD
+        estado_inmune_mapping = {
+            "Normal": "normal",
+            "Inmunodeprimido": "inmunodeprimido",
+            "Inmunodeprimido severo": "inmunodeprimido_severo"
+        }
+        
+        estado_inmune_db = estado_inmune_mapping.get(estado_inmune, "normal")
+        
+        sex = "M"
+        
+        try:
+            # Crear objeto Guest
+            guest = Guest(
+                age=int(age),
+                weight=float(weight),
+                sex=sex,
+                creatinina_serica=float(creatinina),
+                estado_inmune=estado_inmune_db
+            )
+            
+            # Calcular clearance de creatinina usando GuestService
+            clearance = GuestService.calcular_clearance_creatinina(
+                age=guest.age,
+                weight=guest.weight,
+                sex=guest.sex,
+                creatinina_serica=guest.creatinina_serica
+            )
+            
+            if clearance:
+                guest.clearance_creatinina = clearance
+            
+            logging.info(
+                f"Guest created: age={guest.age}, weight={guest.weight}, sex={guest.sex}, "
+                f"creatinina={guest.creatinina_serica}, clearance={guest.clearance_creatinina}, "
+                f"estado_inmune={guest.estado_inmune}"
+            )
+            
+            return guest
+            
+        except Exception as e:
+            logging.error(f"Error creating Guest from form: {e}")
+            return None
+
     def submit(self):
         params = self.collect_params()
         if params:
