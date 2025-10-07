@@ -24,7 +24,7 @@ from src.data.models import Gen
 
 class InputForm(QWidget):
     params_submitted = pyqtSignal(
-        list, str, float, float, int, dict, float, str, float, float, str
+        list, str, float, float, int, dict, float, str, float, float, str, object
     )
 
     def __init__(self):
@@ -54,10 +54,23 @@ class InputForm(QWidget):
 
 
     def load_data(self):
-        """Carga genes como estructuras planas."""
+        """Carga genes y sitios de infección como estructuras planas."""
         genes_q = self.session.query(Gen.id, Gen.nombre, Gen.descripcion).all()
         self.genes = [
             SimpleNamespace(id=g[0], nombre=g[1], descripcion=g[2]) for g in genes_q
+        ]
+        
+        # Cargar sitios de infección
+        from src.data.models import InfectionSite
+        sitios_q = self.session.query(
+            InfectionSite.id, 
+            InfectionSite.nombre, 
+            InfectionSite.ph, 
+            InfectionSite.capacidad_carga
+        ).all()
+        self.sitios_infeccion = [
+            SimpleNamespace(id=s[0], nombre=s[1], ph=s[2], capacidad_carga=s[3]) 
+            for s in sitios_q
         ]
 
     def create_gene_selection(self):
@@ -252,6 +265,21 @@ class InputForm(QWidget):
         )
         self.estado_inmune_cb.setToolTip(tooltip_inmune)
         self.estado_inmune_cb.setToolTipDuration(5000)
+        
+        # ComboBox sitio de infección
+        self.sitio_infeccion_cb = QComboBox()
+        self.sitio_infeccion_cb.addItem("Ninguno (usar valores por defecto)", None)
+        for sitio in self.sitios_infeccion:
+            self.sitio_infeccion_cb.addItem(sitio.nombre, sitio.id)
+        self.sitio_infeccion_cb.setCurrentIndex(0)  # Default: Ninguno
+        form.addRow("Sitio de infección:", self.sitio_infeccion_cb)
+        tooltip_sitio = (
+            "Seleccione el sitio anatómico donde ocurre la infección. "
+            "Cada sitio tiene características específicas (pH, capacidad de carga, perfusión) "
+            "que afectan la efectividad del tratamiento."
+        )
+        self.sitio_infeccion_cb.setToolTip(tooltip_sitio)
+        self.sitio_infeccion_cb.setToolTipDuration(5000)
 
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
@@ -274,8 +302,9 @@ class InputForm(QWidget):
         weight = self.weight_sb.value()
         creatinina = self.creatinina_sb.value()
         estado_inmune = self.estado_inmune_cb.currentText()
-        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight, creatinina, estado_inmune
-
+        sitio_infeccion_id = self.sitio_infeccion_cb.currentData()
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight, creatinina, estado_inmune, sitio_infeccion_id
+    
     def submit(self):
         params = self.collect_params()
         if params:
@@ -283,6 +312,6 @@ class InputForm(QWidget):
                 f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, "
                 f"death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, "
                 f"reproduction_rate={params[6]}, age_range={params[7]}, weight={params[8]}, "
-                f"creatinina={params[9]}, estado_inmune={params[10]}"
+                f"creatinina={params[9]}, estado_inmune={params[10]}, sitio_infeccion_id={params[11]}"
             )
             self.params_submitted.emit(*params)
