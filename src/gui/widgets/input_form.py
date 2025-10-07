@@ -23,7 +23,7 @@ from src.data.database import get_session
 from src.data.models import Gen
 
 class InputForm(QWidget):
-    params_submitted = pyqtSignal(list, str, float, float, int, dict, float, str)
+    params_submitted = pyqtSignal(list, str, float, float, int, dict, float, str, float)
 
     def __init__(self):
         super().__init__()
@@ -203,6 +203,21 @@ class InputForm(QWidget):
         self.age_range_cb.setToolTip(tooltip_age)
         self.age_range_cb.setToolTipDuration(5000)
 
+        # SpinBox de peso
+        self.weight_sb = QDoubleSpinBox()
+        self.weight_sb.setRange(0.5, 200.0)
+        self.weight_sb.setSingleStep(0.1)
+        self.weight_sb.setValue(70.0)  # Default: 70 kg
+        self.weight_sb.setDecimals(1)
+        self.weight_sb.setSuffix(" kg")
+        form.addRow("Peso (kg):", self.weight_sb)
+        tooltip_weight = (
+            "Ingrese el peso del paciente en kilogramos. "
+            "Se usa para calcular dosificación y ajustes farmacocinéticos."
+        )
+        self.weight_sb.setToolTip(tooltip_weight)
+        self.weight_sb.setToolTipDuration(5000)
+
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
@@ -221,7 +236,8 @@ class InputForm(QWidget):
         }
         repro = self.repro_rate_sb.value()
         age_range = self.age_range_cb.currentText()
-        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range
+        weight = self.weight_sb.value()
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight
 
     def submit(self):
         params = self.collect_params()
@@ -229,6 +245,6 @@ class InputForm(QWidget):
             logging.debug(
                 f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, "
                 f"death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, "
-                f"reproduction_rate={params[6]}, age_range={params[7]}"
+                f"reproduction_rate={params[6]}, age_range={params[7]}, weight={params[8]}"
             )
             self.params_submitted.emit(*params)
