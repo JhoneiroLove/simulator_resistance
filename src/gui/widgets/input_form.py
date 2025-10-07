@@ -23,7 +23,7 @@ from src.data.database import get_session
 from src.data.models import Gen
 
 class InputForm(QWidget):
-    params_submitted = pyqtSignal(list, str, float, float, int, dict, float, str, float)
+    params_submitted = pyqtSignal(list, str, float, float, int, dict, float, str, float, float)
 
     def __init__(self):
         super().__init__()
@@ -218,6 +218,22 @@ class InputForm(QWidget):
         self.weight_sb.setToolTip(tooltip_weight)
         self.weight_sb.setToolTipDuration(5000)
 
+        # Creatinina sérica
+        self.creatinina_sb = QDoubleSpinBox()
+        self.creatinina_sb.setRange(0.1, 15.0)
+        self.creatinina_sb.setSingleStep(0.1)
+        self.creatinina_sb.setValue(1.0)  # Default: 1.0 mg/dL (normal)
+        self.creatinina_sb.setDecimals(2)
+        self.creatinina_sb.setSuffix(" mg/dL")
+        form.addRow("Creatinina sérica:", self.creatinina_sb)
+        tooltip_creatinina = (
+            "Ingrese el valor de creatinina sérica en mg/dL. "
+            "Se usa para calcular el clearance de creatinina y ajustar dosis por función renal. "
+            "Valor normal: 0.6-1.2 mg/dL"
+        )
+        self.creatinina_sb.setToolTip(tooltip_creatinina)
+        self.creatinina_sb.setToolTipDuration(5000)
+
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
@@ -237,7 +253,8 @@ class InputForm(QWidget):
         repro = self.repro_rate_sb.value()
         age_range = self.age_range_cb.currentText()
         weight = self.weight_sb.value()
-        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight
+        creatinina = self.creatinina_sb.value()
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight, creatinina
 
     def submit(self):
         params = self.collect_params()
@@ -245,6 +262,6 @@ class InputForm(QWidget):
             logging.debug(
                 f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, "
                 f"death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, "
-                f"reproduction_rate={params[6]}, age_range={params[7]}, weight={params[8]}"
+                f"reproduction_rate={params[6]}, age_range={params[7]}, weight={params[8]}, creatinina={params[9]}"
             )
             self.params_submitted.emit(*params)
