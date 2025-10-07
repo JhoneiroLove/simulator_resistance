@@ -376,6 +376,40 @@ class InputForm(QWidget):
         except Exception as e:
             logging.error(f"Error creating Guest from form: {e}")
             return None
+    
+    def obtener_sitio_seleccionado(self, sitio_infeccion_id):
+        """
+        Obtiene el objeto InfectionSite seleccionado desde la base de datos.
+        
+        Args:
+            sitio_infeccion_id: ID del sitio de infección o None
+        
+        Returns:
+            InfectionSite: Objeto InfectionSite válido o None si no hay selección
+        """
+        if sitio_infeccion_id is None:
+            logging.info("No infection site selected, using default parameters")
+            return None
+        
+        from src.data.models import InfectionSite
+        
+        try:
+            sitio = self.session.query(InfectionSite).filter_by(id=sitio_infeccion_id).first()
+            
+            if sitio:
+                logging.info(
+                    f"Infection site selected: id={sitio.id}, nombre={sitio.nombre}, "
+                    f"pH={sitio.ph}, capacidad_carga={sitio.capacidad_carga}, "
+                    f"perfusion={sitio.perfusion_sanguinea}"
+                )
+            else:
+                logging.warning(f"Infection site with id={sitio_infeccion_id} not found in database")
+            
+            return sitio
+            
+        except Exception as e:
+            logging.error(f"Error fetching InfectionSite from database: {e}")
+            return None
 
     def submit(self):
         params = self.collect_params()
