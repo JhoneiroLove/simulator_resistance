@@ -1,3 +1,4 @@
+import logging
 import sys
 import numpy as np
 import pyqtgraph as pg
@@ -115,6 +116,11 @@ class MainWindow(QMainWindow):
         time_horizon,
         environmental_factors,
         reproduction_rate,
+        age_range,
+        weight,
+        creatinina,
+        estado_inmune,
+        sitio_infeccion_id
     ):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
@@ -123,6 +129,14 @@ class MainWindow(QMainWindow):
         self.saved_time_horizon = time_horizon
         self.saved_environmental_factors = environmental_factors
         self.saved_repro_rate = reproduction_rate
+        
+        # Guardar parámetros del paciente y sitio
+        self.saved_age_range = age_range
+        self.saved_weight = weight
+        self.saved_creatinina = creatinina
+        self.saved_estado_inmune = estado_inmune
+        self.saved_sitio_infeccion_id = sitio_infeccion_id
+        
         QMessageBox.information(
             self,
             "Éxito",
@@ -144,11 +158,9 @@ class MainWindow(QMainWindow):
             {"id": g.id, "nombre": g.nombre, "peso_resistencia": g.peso_resistencia}
             for g in genes_orm
         ]
-        session.close()
 
         # Construir la lista de tuplas (tiempo, antibiótico, concentración)
         sched_objs = []
-        session = get_session()
         for t, ab_id, conc in schedule:
             ab_orm = session.query(Antibiotico).get(ab_id)
             ab = {
@@ -159,9 +171,8 @@ class MainWindow(QMainWindow):
                 "concentracion_maxima": ab_orm.concentracion_maxima,
             }
             sched_objs.append((t, ab, conc))
-        session.close()
 
-        # Determinar el primer antibiótico y concentración (para guardar la simulación)
+        # Determinar el primer antibiótico y concentración
         if sched_objs:
             antibiotico_id = sched_objs[0][1]["id"]
             concentracion = sched_objs[0][2]
@@ -169,24 +180,47 @@ class MainWindow(QMainWindow):
             antibiotico_id = None
             concentracion = None
 
+        # Crear objeto Guest (huésped)
+        guest = None
+        if hasattr(self, 'saved_age_range'):
+            guest = self.input_tab.crear_huesped_desde_form(
+                age_range=self.saved_age_range,
+                weight=self.saved_weight,
+                creatinina=self.saved_creatinina,
+                estado_inmune=self.saved_estado_inmune
+            )
+            if guest:
+                # Guardar guest en BD
+                session.add(guest)
+                session.commit()
+                session.refresh(guest)
+                logging.info(f"Guest saved to database with id={guest.id}")
+
+        # Obtener objeto InfectionSite
+        sitio_infeccion = None
+        if hasattr(self, 'saved_sitio_infeccion_id') and self.saved_sitio_infeccion_id:
+            sitio_infeccion = self.input_tab.obtener_sitio_seleccionado(
+                self.saved_sitio_infeccion_id
+            )
+
         # Crear registro de Simulación en la base de datos
-        session = get_session()
         simulacion = Simulacion(
             antibiotico_id=antibiotico_id,
             concentracion=concentracion if concentracion is not None else 0.0,
             resistencia_predicha=0.0,
+            huesped_id=guest.id if guest else None  # Vincular guest
         )
         session.add(simulacion)
         session.commit()
         simulation_id = simulacion.id
         session.close()
 
-        # Guardar horarios manuales y despejar cualquier horario optimizado previo
+        # Guardar horarios manuales
         self._manual_schedule = sched_objs
         self._optimized_schedule = None
         self.sim_start_time = time.time()
 
-        # Instanciar el algoritmo genético con los parámetros
+        # Instanciar el algoritmo genético con huesped y sitio_infeccion
         self.ga = GeneticAlgorithm(
             genes=genes,
             antibiotic_schedule=sched_objs,
@@ -198,7 +232,10 @@ class MainWindow(QMainWindow):
             simulation_id=simulation_id,
             reproduction_rate=self.saved_repro_rate,
             pressure_factor=0.25,
+            huesped=guest,
+            sitio_infeccion=sitio_infeccion
         )
+        
         self.ga.initialize(self.saved_genes)
         self.initial_attributes = self.ga.get_average_attributes()
 
