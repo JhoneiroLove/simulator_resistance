@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QPushButton,
     QToolTip,
+    QComboBox,
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui import QFont
@@ -22,7 +23,7 @@ from src.data.database import get_session
 from src.data.models import Gen
 
 class InputForm(QWidget):
-    params_submitted = pyqtSignal(list, str, float, float, int, dict, float)  
+    params_submitted = pyqtSignal(list, str, float, float, int, dict, float, str)
 
     def __init__(self):
         super().__init__()
@@ -39,6 +40,7 @@ class InputForm(QWidget):
         self.create_gene_selection()
         self.create_simulation_params()
         self.create_environmental_params()
+        self.create_patient_params()
 
         # Botón Guardar parámetros
         self.save_button = QPushButton("Guardar parámetros")
@@ -175,6 +177,35 @@ class InputForm(QWidget):
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
+    def create_patient_params(self):
+        grp = QGroupBox("4. Parámetros del Paciente")
+        form = QFormLayout(grp)
+        form.setContentsMargins(10, 10, 10, 10)
+        form.setHorizontalSpacing(15)
+        form.setVerticalSpacing(10)
+
+        # ComboBox de rango de edad
+        self.age_range_cb = QComboBox()
+        self.age_range_cb.addItems([
+            "Neonato (0-28 días)",
+            "Infante (1 mes - 2 años)",
+            "Niño (2-12 años)",
+            "Adolescente (12-18 años)",
+            "Adulto (18-65 años)",
+            "Anciano (>65 años)"
+        ])
+        self.age_range_cb.setCurrentIndex(4)  # Default: Adulto
+        form.addRow("Rango de edad:", self.age_range_cb)
+        tooltip_age = (
+            "Seleccione el rango de edad del paciente. "
+            "Esto afecta parámetros fisiológicos y farmacocinéticos en la simulación."
+        )
+        self.age_range_cb.setToolTip(tooltip_age)
+        self.age_range_cb.setToolTipDuration(5000)
+
+        grp.setLayout(form)
+        self.main_layout.addWidget(grp)
+
     def collect_params(self):
         selected = [gid for gid, cb in self.checks.items() if cb.isChecked()]
         if not selected:
@@ -188,13 +219,16 @@ class InputForm(QWidget):
             "temperature": self.temperature_sb.value(),
             "pH": self.ph_sb.value(),
         }
-        repro = self.repro_rate_sb.value()  # <-- NUEVO
-        return selected, unit, mut, death, time_horizon, environmental_factors, repro
+        repro = self.repro_rate_sb.value()
+        age_range = self.age_range_cb.currentText()
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range
 
     def submit(self):
         params = self.collect_params()
         if params:
             logging.debug(
-            f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, reproduction_rate={params[6]}"
-        )
+                f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, "
+                f"death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, "
+                f"reproduction_rate={params[6]}, age_range={params[7]}"
+            )
             self.params_submitted.emit(*params)
