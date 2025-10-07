@@ -263,6 +263,59 @@ class GeneticAlgorithm:
 
     def get_environmental_factor(self, key: str) -> float:
         return self.environmental_factors.get(key)
+    
+    def calcular_dosis_ajustada(self, dosis_estandar: float, antibiotico_tipo: str) -> float:
+        """
+        Calcula la dosis ajustada según la función renal del huésped.
+        
+        Args:
+            dosis_estandar: Dosis estándar del antibiótico (mg)
+            antibiotico_tipo: Tipo de antibiótico
+            
+        Returns:
+            float: Dosis ajustada según clearance de creatinina
+        """
+        if not self.huesped or not self.huesped.clearance_creatinina:
+            return dosis_estandar
+        
+        from src.core.guest_service import GuestService
+        
+        clearance = self.huesped.clearance_creatinina
+        kidney_status = GuestService.get_kidney_function_status(clearance)
+        
+        # Factores de ajuste según función renal y tipo de antibiótico
+        # Antibióticos con excreción renal requieren mayor ajuste
+        ajuste_renal = {
+            "normal": 1.0,
+            "leve_disminucion": 1.0,
+            "moderada_disminucion": 0.75,
+            "severa_disminucion": 0.5,
+            "fallo_renal": 0.25
+        }
+        
+        # Algunos antibióticos requieren ajuste más agresivo
+        antibioticos_alta_excrecion_renal = [
+            "aminoglucósido", 
+            "carbapenémico", 
+            "cefalosporina",
+            "polimixina"
+        ]
+        
+        factor_base = ajuste_renal.get(kidney_status, 1.0)
+        
+        # Ajuste adicional para antibióticos de alta excreción renal
+        if antibiotico_tipo.lower() in antibioticos_alta_excrecion_renal:
+            if kidney_status in ["severa_disminucion", "fallo_renal"]:
+                factor_base *= 0.8  # Reducción adicional del 20%
+        
+        dosis_ajustada = dosis_estandar * factor_base
+        
+        logging.info(
+            f"Dosis ajustada: {dosis_estandar:.2f} mg → {dosis_ajustada:.2f} mg "
+            f"(kidney_status={kidney_status}, clearance={clearance:.2f} mL/min)"
+        )
+        
+        return dosis_ajustada
 
     def _sigmoid_survival(self, concentration, lo, hi):
         """Calcula la supervivencia con una función sigmoidal."""
