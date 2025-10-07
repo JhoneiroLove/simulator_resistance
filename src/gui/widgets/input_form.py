@@ -23,7 +23,9 @@ from src.data.database import get_session
 from src.data.models import Gen
 
 class InputForm(QWidget):
-    params_submitted = pyqtSignal(list, str, float, float, int, dict, float, str, float, float)
+    params_submitted = pyqtSignal(
+        list, str, float, float, int, dict, float, str, float, float, str
+    )
 
     def __init__(self):
         super().__init__()
@@ -234,6 +236,23 @@ class InputForm(QWidget):
         self.creatinina_sb.setToolTip(tooltip_creatinina)
         self.creatinina_sb.setToolTipDuration(5000)
 
+        # ComboBox estado inmune
+        self.estado_inmune_cb = QComboBox()
+        self.estado_inmune_cb.addItems([
+            "Normal",
+            "Inmunodeprimido",
+            "Inmunodeprimido severo"
+        ])
+        self.estado_inmune_cb.setCurrentIndex(0)  # Default: Normal
+        form.addRow("Estado inmune:", self.estado_inmune_cb)
+        tooltip_inmune = (
+            "Seleccione el estado del sistema inmune del paciente. "
+            "Esto afecta la capacidad de combatir la infección bacteriana. "
+            "Pacientes inmunodeprimidos requieren tratamientos más agresivos."
+        )
+        self.estado_inmune_cb.setToolTip(tooltip_inmune)
+        self.estado_inmune_cb.setToolTipDuration(5000)
+
         grp.setLayout(form)
         self.main_layout.addWidget(grp)
 
@@ -254,7 +273,8 @@ class InputForm(QWidget):
         age_range = self.age_range_cb.currentText()
         weight = self.weight_sb.value()
         creatinina = self.creatinina_sb.value()
-        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight, creatinina
+        estado_inmune = self.estado_inmune_cb.currentText()
+        return selected, unit, mut, death, time_horizon, environmental_factors, repro, age_range, weight, creatinina, estado_inmune
 
     def submit(self):
         params = self.collect_params()
@@ -262,6 +282,7 @@ class InputForm(QWidget):
             logging.debug(
                 f"InputForm.collect_params -> genes={params[0]}, unit={params[1]}, mut_rate={params[2]}, "
                 f"death_rate={params[3]}, time_horizon={params[4]}, environmental_factors={params[5]}, "
-                f"reproduction_rate={params[6]}, age_range={params[7]}, weight={params[8]}, creatinina={params[9]}"
+                f"reproduction_rate={params[6]}, age_range={params[7]}, weight={params[8]}, "
+                f"creatinina={params[9]}, estado_inmune={params[10]}"
             )
             self.params_submitted.emit(*params)
