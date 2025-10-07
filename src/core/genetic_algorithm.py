@@ -46,6 +46,7 @@ class GeneticAlgorithm:
         K_capacity: float = 1e6,
         pressure_factor: float = 0.5,
         huesped=None,
+        sitio_infeccion=None,
     ):
         logging.info(
             f"Initializing Genetic Algorithm with simulation_id={simulation_id}"
@@ -59,6 +60,11 @@ class GeneticAlgorithm:
             logging.debug(
                 f"Guest parameters: age={huesped.age}, weight={huesped.weight}, sex={huesped.sex}"
             )
+        if sitio_infeccion:
+            logging.debug(
+                f"Infection site parameters: nombre={sitio_infeccion.nombre}, pH={sitio_infeccion.ph}, "
+                f"perfusion={sitio_infeccion.perfusion_sanguinea}, capacidad_carga={sitio_infeccion.capacidad_carga}"
+            )
         """
         :param genes: lista de objetos con .id y .peso_resistencia
         :param antibiotic_schedule: lista de tuplas (t_event, antibiotic_obj, concentration)
@@ -68,6 +74,7 @@ class GeneticAlgorithm:
         :param death_rate: tasa de muerte natural
         :param environmental_factors: dict con factores ambientales como temperatura y pH
         :param huesped: objeto Guest opcional con parámetros del paciente
+        :param sitio_infeccion: objeto InfectionSite opcional con características del sitio
         """
         self.genes = genes
         self.schedule = sorted(antibiotic_schedule or [], key=lambda e: e[0])
@@ -114,6 +121,25 @@ class GeneticAlgorithm:
 
             logging.info(
                 f"Guest modifiers applied: death_rate={self.death_rate:.4f}, reproduction_rate={self.reproduction_rate:.4f}"
+            )
+
+        # Almacenar sitio de infección y aplicar modificadores si está presente
+        self.sitio_infeccion = sitio_infeccion
+        if self.sitio_infeccion:
+            # Actualizar pH ambiental con el pH del sitio
+            self.environmental_factors["pH"] = self.sitio_infeccion.ph
+
+            # Actualizar capacidad de carga con la del sitio
+            self.K_capacity = self.sitio_infeccion.capacidad_carga
+
+            # El modificador de perfusión afectará la tasa de muerte
+            perfusion_modifier = 0.5 + (self.sitio_infeccion.perfusion_sanguinea * 0.5)
+            self.death_rate *= perfusion_modifier
+
+            logging.info(
+                f"Infection site modifiers applied: pH={self.sitio_infeccion.ph}, "
+                f"K_capacity={self.K_capacity:.2f}, perfusion_modifier={perfusion_modifier:.4f}, "
+                f"adjusted_death_rate={self.death_rate:.4f}"
             )
 
         self.toolbox = base.Toolbox()
@@ -218,6 +244,15 @@ class GeneticAlgorithm:
 
     def death_modifier(self):
         pH = self.environmental_factors.get("pH", 7.4)
+
+        if self.sitio_infeccion and self.current_ab:
+            from src.core.infection_site_service import InfectionSiteService
+
+            ph_modifier = InfectionSiteService.get_ph_modifier(
+                self.sitio_infeccion.ph, self.current_ab.get("tipo", "")
+            )
+            return 2.0 - ph_modifier
+
         if 6.5 <= pH <= 7.5:
             return 1.0
         else:
@@ -235,17 +270,12 @@ class GeneticAlgorithm:
             return 1.0 if concentration < lo else 0.0
 
         c50 = (lo + hi) / 2.0
-        # El factor k determina la pendiente de la curva.
-        # Un valor más alto de k hace la transición más abrupta.
-        # k=10 es un valor común para una transición estándar.
-        # Se ajusta k en función del rango (hi - lo) para mantener una pendiente consistente.
         k = 10 / (hi - lo)
 
         survival = 1.0 / (1.0 + np.exp(k * (concentration - c50)))
         return survival
 
     def evaluate(self, individual):
-        # logging.debug(f"Evaluating individual: {individual}")
         raw_resistance = sum(
             g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual)
         )
@@ -259,7 +289,20 @@ class GeneticAlgorithm:
                 self.current_ab["concentracion_minima"],
                 self.current_ab["concentracion_maxima"],
             )
-            surv = self._sigmoid_survival(self.current_conc, lo, hi)
+
+            # Concentración efectiva considerando penetración del sitio
+            effective_conc = self.current_conc
+            if self.sitio_infeccion:
+                from src.core.infection_site_service import InfectionSiteService
+
+                penetration_factor = (
+                    InfectionSiteService.calcular_penetracion_antibiotico(
+                        self.sitio_infeccion, self.current_ab
+                    )
+                )
+                effective_conc = self.current_conc * penetration_factor
+
+            surv = self._sigmoid_survival(effective_conc, lo, hi)
             N *= surv
 
         death_rate_adj = self.death_rate * self.death_modifier()
@@ -304,7 +347,7 @@ class GeneticAlgorithm:
 
         self._update_antibiotic(t)
 
-        start_time = time.perf_counter()  # Inicio de medición
+        start_time = time.perf_counter()
 
         offspring = self.toolbox.select(self.pop, len(self.pop))
         offspring = list(map(self.toolbox.clone, offspring))
@@ -337,7 +380,6 @@ class GeneticAlgorithm:
             convergence_rate = abs(slope)
             logging.info(f"Tasa de convergencia: {convergence_rate:.6f}")
 
-            # Adaptar mutación si convergencia es lenta
             if convergence_rate < 0.001:
                 new_mutation_rate = min(0.5, self.mutation_rate * 1.2)
                 logging.warning(
@@ -398,13 +440,12 @@ class GeneticAlgorithm:
 
         log_details = f"Pop dynamics: N_prev={prev_population:.2f}, growth={growth:.2f}, deaths={deaths:.2f}, N_after_growth/death={N_next:.2f}"
 
-        # Si hay antibiótico activo, aplicamos presión selectiva de forma más suave
         if self.current_ab:
             pressure = (1 - avg) * self.pressure_factor
             N_next *= 1 - pressure
             log_details += f", avg_fitness={avg:.4f}, pressure_applied={pressure:.4f}, N_after_pressure={N_next:.2f}"
 
-        N_next = max(N_next, 1.0)  # evitar negativos
+        N_next = max(N_next, 1.0)
         self.population_total = N_next
         self.population_hist.append(self.population_total)
         logging.debug(log_details)
@@ -415,7 +456,6 @@ class GeneticAlgorithm:
             degradation = 0.0
         self.degradation_hist.append(degradation)
 
-        # Detectar extinción y loguear solo la primera vez
         if self.population_total <= self.extinction_threshold:
             if not self.extinction_reached:
                 logging.warning(
@@ -423,7 +463,6 @@ class GeneticAlgorithm:
                 )
             self.extinction_reached = True
 
-        # Detectar resistencia crítica y loguear solo la primera vez
         if self.avg_hist[-1] >= self.resistance_threshold:
             if not self.resistance_critical:
                 logging.warning(
@@ -431,13 +470,11 @@ class GeneticAlgorithm:
                 )
             self.resistance_critical = True
 
-        # Cálculo índice de expansión
         idx_exp = N_next / prev_population if prev_population > 0 else 0.0
         self.expansion_index_hist.append(idx_exp)
 
         generation_time = time.perf_counter() - start_time
 
-        # 1. Adaptación de tamaño de población
         if generation_time > self.target_time_per_generation:
             reduction_factor = max(
                 0.7, self.target_time_per_generation / generation_time
@@ -449,7 +486,6 @@ class GeneticAlgorithm:
                 )
                 self.pop = tools.selBest(self.pop, new_pop_size)
 
-        # 2. Adaptación de tasa de mutación
         if H < self.diversity_threshold:
             increase_factor = min(2.0, 1.0 + (self.diversity_threshold - H))
             new_mutation_rate = min(0.2, self.mutation_rate * increase_factor)
@@ -495,7 +531,7 @@ class GeneticAlgorithm:
         """Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación."""
         session = get_session()
         antibiotico_id = self.current_ab["id"] if self.current_ab else None
-        generacion_final = self.current_step - 1  # Última generación
+        generacion_final = self.current_step - 1
 
         for idx, gen in enumerate(self.genes):
             if gen["id"] in selected_gene_ids:
