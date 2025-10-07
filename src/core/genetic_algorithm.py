@@ -20,11 +20,13 @@ class BacteriaIndividual(list):
         self.permeabilidad = permeabilidad
         self.enzimas = enzimas
 
+
 # ——— DEAP setup ———
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", BacteriaIndividual, fitness=creator.FitnessMax)
 
-class GeneticAlgorithm: 
+
+class GeneticAlgorithm:
     def __init__(
         self,
         genes,
@@ -43,11 +45,20 @@ class GeneticAlgorithm:
         r_growth: float = 0.2,
         K_capacity: float = 1e6,
         pressure_factor: float = 0.5,
+        huesped=None,
     ):
-        logging.info(f"Initializing Genetic Algorithm with simulation_id={simulation_id}")
-        logging.debug(f"GA params: mutation_rate={mutation_rate}, generations={generations}, pop_size={pop_size}, death_rate={death_rate}")
+        logging.info(
+            f"Initializing Genetic Algorithm with simulation_id={simulation_id}"
+        )
+        logging.debug(
+            f"GA params: mutation_rate={mutation_rate}, generations={generations}, pop_size={pop_size}, death_rate={death_rate}"
+        )
         logging.debug(f"Environmental factors: {environmental_factors}")
         logging.debug(f"Antibiotic schedule: {antibiotic_schedule}")
+        if huesped:
+            logging.debug(
+                f"Guest parameters: age={huesped.age}, weight={huesped.weight}, sex={huesped.sex}"
+            )
         """
         :param genes: lista de objetos con .id y .peso_resistencia
         :param antibiotic_schedule: lista de tuplas (t_event, antibiotic_obj, concentration)
@@ -56,6 +67,7 @@ class GeneticAlgorithm:
         :param pop_size: tamaño de la población
         :param death_rate: tasa de muerte natural
         :param environmental_factors: dict con factores ambientales como temperatura y pH
+        :param huesped: objeto Guest opcional con parámetros del paciente
         """
         self.genes = genes
         self.schedule = sorted(antibiotic_schedule or [], key=lambda e: e[0])
@@ -86,6 +98,24 @@ class GeneticAlgorithm:
         self.extinction_reached = False
         self.resistance_critical = False
 
+        # Almacenar huésped y aplicar modificadores si está presente
+        self.huesped = huesped
+        if self.huesped:
+            from src.core.guest_service import GuestService
+
+            # Aplicar modificadores del huésped
+            death_modifier = GuestService.get_death_rate_modifier(self.huesped)
+            self.death_rate *= death_modifier
+
+            repro_modifier = GuestService.get_reproduction_rate_modifier(
+                self.huesped.estado_inmune
+            )
+            self.reproduction_rate *= repro_modifier
+
+            logging.info(
+                f"Guest modifiers applied: death_rate={self.death_rate:.4f}, reproduction_rate={self.reproduction_rate:.4f}"
+            )
+
         self.toolbox = base.Toolbox()
         self.toolbox.register("clone", copy.deepcopy)
         self.toolbox.register("individual", self.init_individual)
@@ -107,15 +137,15 @@ class GeneticAlgorithm:
         self.mut_hist = []
         self.div_hist = []
 
-        self.expansion_index_hist = []  
+        self.expansion_index_hist = []
 
-        self.population_total = None  
-        self.population_hist = []  
+        self.population_total = None
+        self.population_hist = []
 
-        self.degradation_hist = []  
+        self.degradation_hist = []
 
-        self.extinction_threshold = 100  
-        self.resistance_threshold = 0.8  
+        self.extinction_threshold = 100
+        self.resistance_threshold = 0.8
 
         self.recubrimiento_vals = []
         self.reproduccion_vals = []
@@ -139,7 +169,9 @@ class GeneticAlgorithm:
         letalidad = random.uniform(0.5, 1.0)
         permeabilidad = random.uniform(0.5, 1.0)
         enzimas = random.uniform(0.5, 1.0)
-        return creator.Individual(genes_bits, recubrimiento, reproduccion, letalidad, permeabilidad, enzimas)
+        return creator.Individual(
+            genes_bits, recubrimiento, reproduccion, letalidad, permeabilidad, enzimas
+        )
 
     def _mutate_individual(self, individual):
         tools.mutFlipBit(individual, indpb=self.mutation_rate)
@@ -151,7 +183,7 @@ class GeneticAlgorithm:
             individual.permeabilidad,
             individual.enzimas,
         ]
-        
+
         tools.mutGaussian(
             bio_attrs,
             mu=0.0,
@@ -253,15 +285,15 @@ class GeneticAlgorithm:
         self.mut_hist.clear()
         self.div_hist.clear()
 
-        self.population_total = 1e4  
+        self.population_total = 1e4
         self.population_hist.clear()
         self.population_hist.append(self.population_total)
 
         self.expansion_index_hist.clear()
-        self.expansion_index_hist.append(1.0)  
+        self.expansion_index_hist.append(1.0)
 
         self.degradation_hist.clear()
-        self.degradation_hist.append(0.0)  
+        self.degradation_hist.append(0.0)
 
     def step(self) -> bool:
         if self.current_step >= len(self.times):
@@ -304,11 +336,13 @@ class GeneticAlgorithm:
             slope = np.polyfit(range(10), window, 1)[0]
             convergence_rate = abs(slope)
             logging.info(f"Tasa de convergencia: {convergence_rate:.6f}")
-            
+
             # Adaptar mutación si convergencia es lenta
             if convergence_rate < 0.001:
                 new_mutation_rate = min(0.5, self.mutation_rate * 1.2)
-                logging.warning(f"¡Convergencia lenta! Aumentando mutación a {new_mutation_rate}")
+                logging.warning(
+                    f"¡Convergencia lenta! Aumentando mutación a {new_mutation_rate}"
+                )
                 self.mutation_rate = new_mutation_rate
 
         if self.current_ab:
@@ -333,9 +367,9 @@ class GeneticAlgorithm:
             if 0 < p_j < 1:
                 H += -p_j * np.log2(p_j) - (1 - p_j) * np.log2(1 - p_j)
 
-        if H < self.evo_rescue_threshold:  
+        if H < self.evo_rescue_threshold:
             for ind in self.pop:
-                if random.random() < self.evo_rescue_prob:  
+                if random.random() < self.evo_rescue_prob:
                     idx = random.randint(0, len(ind) - 1)
                     ind[idx] = 1 - ind[idx]
                     del ind.fitness.values
@@ -355,7 +389,7 @@ class GeneticAlgorithm:
         growth_mod = self.growth_modifier()
         death_mod = self.death_modifier()
 
-        r = self.r_growth * self.reproduction_rate * growth_mod 
+        r = self.r_growth * self.reproduction_rate * growth_mod
         death_rate = self.death_rate * death_mod
 
         growth = r * prev_population * (1 - prev_population / self.K_capacity)
@@ -367,7 +401,7 @@ class GeneticAlgorithm:
         # Si hay antibiótico activo, aplicamos presión selectiva de forma más suave
         if self.current_ab:
             pressure = (1 - avg) * self.pressure_factor
-            N_next *= (1 - pressure)
+            N_next *= 1 - pressure
             log_details += f", avg_fitness={avg:.4f}, pressure_applied={pressure:.4f}, N_after_pressure={N_next:.2f}"
 
         N_next = max(N_next, 1.0)  # evitar negativos
@@ -384,7 +418,9 @@ class GeneticAlgorithm:
         # Detectar extinción y loguear solo la primera vez
         if self.population_total <= self.extinction_threshold:
             if not self.extinction_reached:
-                logging.warning(f"Extinction threshold reached at step {self.current_step}.")
+                logging.warning(
+                    f"Extinction threshold reached at step {self.current_step}."
+                )
             self.extinction_reached = True
 
         # Detectar resistencia crítica y loguear solo la primera vez
@@ -400,21 +436,27 @@ class GeneticAlgorithm:
         self.expansion_index_hist.append(idx_exp)
 
         generation_time = time.perf_counter() - start_time
-        
+
         # 1. Adaptación de tamaño de población
         if generation_time > self.target_time_per_generation:
-            reduction_factor = max(0.7, self.target_time_per_generation / generation_time)
+            reduction_factor = max(
+                0.7, self.target_time_per_generation / generation_time
+            )
             new_pop_size = max(self.min_pop_size, int(len(self.pop) * reduction_factor))
             if new_pop_size < len(self.pop):
-                logging.info(f"Adaptación: reduciendo población de {len(self.pop)} a {new_pop_size} por eficiencia")
+                logging.info(
+                    f"Adaptación: reduciendo población de {len(self.pop)} a {new_pop_size} por eficiencia"
+                )
                 self.pop = tools.selBest(self.pop, new_pop_size)
-        
+
         # 2. Adaptación de tasa de mutación
         if H < self.diversity_threshold:
             increase_factor = min(2.0, 1.0 + (self.diversity_threshold - H))
             new_mutation_rate = min(0.2, self.mutation_rate * increase_factor)
             if new_mutation_rate > self.mutation_rate:
-                logging.info(f"Adaptación: aumentando mutación de {self.mutation_rate} a {new_mutation_rate} por baja diversidad")
+                logging.info(
+                    f"Adaptación: aumentando mutación de {self.mutation_rate} a {new_mutation_rate} por baja diversidad"
+                )
                 self.mutation_rate = new_mutation_rate
         elif self.mutation_rate > self.base_mutation_rate:
             self.mutation_rate = max(self.base_mutation_rate, self.mutation_rate * 0.9)
@@ -447,12 +489,14 @@ class GeneticAlgorithm:
         return avg_attributes
 
     def save_final_gene_attributes(self, selected_gene_ids):
-        logging.info(f"Saving final gene attributes for simulation_id={self.current_simulation_id}")
+        logging.info(
+            f"Saving final gene attributes for simulation_id={self.current_simulation_id}"
+        )
         """Guarda solo los genes activos (seleccionados por el usuario) al final de la simulación."""
         session = get_session()
         antibiotico_id = self.current_ab["id"] if self.current_ab else None
         generacion_final = self.current_step - 1  # Última generación
-        
+
         for idx, gen in enumerate(self.genes):
             if gen["id"] in selected_gene_ids:
                 valores = [ind[idx] for ind in self.pop]
@@ -467,7 +511,7 @@ class GeneticAlgorithm:
                     desviacion_std=std,
                 )
                 session.add(sim_attr)
-        
+
         atributos = [
             "recubrimiento",
             "reproduccion",
@@ -475,7 +519,7 @@ class GeneticAlgorithm:
             "permeabilidad",
             "enzimas",
         ]
-        
+
         for atributo in atributos:
             valores = [getattr(ind, atributo) for ind in self.pop]
             promedio = float(np.mean(valores)) if valores else 0.0
