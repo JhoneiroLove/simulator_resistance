@@ -303,6 +303,15 @@ class GeneticAlgorithm:
                 effective_conc = self.current_conc * penetration_factor
 
             surv = self._sigmoid_survival(effective_conc, lo, hi)
+            
+            # Aplicar factor inmune del huésped
+            if self.huesped:
+                from src.core.guest_service import GuestService
+                factor_inmune = GuestService.obtener_factor_inmune(self.huesped.estado_inmune)
+                # Factor inmune bajo = sistema inmune débil = mayor supervivencia bacteriana
+                # Invertir el factor: si factor_inmune=0.1 (débil), bacterias sobreviven más
+                surv *= (2.0 - factor_inmune)
+            
             N *= surv
 
         death_rate_adj = self.death_rate * self.death_modifier()
