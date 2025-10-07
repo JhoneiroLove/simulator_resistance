@@ -29,8 +29,13 @@ class Simulacion(Base):
     concentracion = Column(Float, nullable=False)
     resistencia_predicha = Column(Float, nullable=False)
     fecha = Column(DateTime, server_default=func.now())
+    huesped_id = Column(Integer, ForeignKey("guests.id"))
+
     genes = relationship("Gen", secondary="simulacion_genes", lazy="joined")
-    huesped = relationship("Guest", back_populates="simulaciones")
+    # Agregar foreign_keys
+    huesped = relationship(
+        "Guest", back_populates="simulaciones", foreign_keys=[huesped_id]
+    )
 
 class SimulacionGen(Base):
     __tablename__ = "simulacion_genes"
@@ -82,29 +87,31 @@ class Guest(Base):
     """
     Modelo de paciente/huésped para simulaciones de resistencia bacteriana.
     """
+
     __tablename__ = "guests"
-    
+
     # Campos básicos
     id = Column(Integer, primary_key=True, autoincrement=True)
     age = Column(Integer, nullable=False)
     weight = Column(Float, nullable=False)
     sex = Column(String(10), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
-    
+
     # Función renal
     creatinina_serica = Column(Float)
     clearance_creatinina = Column(Float)
-    
+
     # Función hepática
     alt = Column(Float)
     ast = Column(Float)
     bilirrubina_total = Column(Float)
-    
+
     # Estado inmunológico
-    estado_inmune = Column(String(30), nullable=False, default='normal')
-    
-    # Relaciones
-    simulaciones = relationship("Simulacion", back_populates="huesped")
+    estado_inmune = Column(String(30), nullable=False, default="normal")
+
+    simulaciones = relationship(
+        "Simulacion", back_populates="huesped", foreign_keys="Simulacion.huesped_id"
+    )
 
 class InfectionSite(Base):
     """

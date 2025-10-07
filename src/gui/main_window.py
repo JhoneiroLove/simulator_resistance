@@ -182,12 +182,12 @@ class MainWindow(QMainWindow):
 
         # Crear objeto Guest (huésped)
         guest = None
-        if hasattr(self, 'saved_age_range'):
+        if hasattr(self, "saved_age_range"):
             guest = self.input_tab.crear_huesped_desde_form(
                 age_range=self.saved_age_range,
                 weight=self.saved_weight,
                 creatinina=self.saved_creatinina,
-                estado_inmune=self.saved_estado_inmune
+                estado_inmune=self.saved_estado_inmune,
             )
             if guest:
                 # Guardar guest en BD
@@ -195,13 +195,18 @@ class MainWindow(QMainWindow):
                 session.commit()
                 session.refresh(guest)
                 logging.info(f"Guest saved to database with id={guest.id}")
+                # Desconectar de la sesión - solo expunge es suficiente
+                session.expunge(guest)
 
         # Obtener objeto InfectionSite
         sitio_infeccion = None
-        if hasattr(self, 'saved_sitio_infeccion_id') and self.saved_sitio_infeccion_id:
+        if hasattr(self, "saved_sitio_infeccion_id") and self.saved_sitio_infeccion_id:
             sitio_infeccion = self.input_tab.obtener_sitio_seleccionado(
                 self.saved_sitio_infeccion_id
             )
+            if sitio_infeccion:
+                # Desconectar de la sesión antes de cerrarla
+                session.expunge(sitio_infeccion)
 
         # Crear registro de Simulación en la base de datos
         simulacion = Simulacion(

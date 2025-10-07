@@ -268,7 +268,7 @@ class InputForm(QWidget):
         
         # ComboBox sitio de infección
         self.sitio_infeccion_cb = QComboBox()
-        self.sitio_infeccion_cb.addItem("Ninguno (usar valores por defecto)", None)
+        self.sitio_infeccion_cb.addItem("Ninguno", None)
         for sitio in self.sitios_infeccion:
             self.sitio_infeccion_cb.addItem(sitio.nombre, sitio.id)
         self.sitio_infeccion_cb.setCurrentIndex(0)  # Default: Ninguno
