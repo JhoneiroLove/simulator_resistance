@@ -1,0 +1,18 @@
+Antibiotico,Organismo,S_MIC,R_MIC,Norma,Version,Fuente
+Piperacilina,Pseudomonas aeruginosa,0.001,16.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Piperacilina/Tazobactam,Pseudomonas aeruginosa,0.001,16.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Ticarcilina/Clavulanato,Pseudomonas aeruginosa,0.001,16.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Cefepime,Pseudomonas aeruginosa,0.001,8.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Ceftazidima,Pseudomonas aeruginosa,8.0,8.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Ceftazidima/Avibactam,Pseudomonas aeruginosa,8.0,8.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Ceftolozano/Tazobactam,Pseudomonas aeruginosa,4.0,4.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Cefiderocol,Pseudomonas aeruginosa,2.0,2.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Imipenem,Pseudomonas aeruginosa,2.0,8.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Meropenem,Pseudomonas aeruginosa,2.0,8.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Meropenem/Vaborbactam,Pseudomonas aeruginosa,8.0,8.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Aztreonam,Pseudomonas aeruginosa,0.001,16.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Ciprofloxacino,Pseudomonas aeruginosa,0.001,0.5,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Levofloxacino,Pseudomonas aeruginosa,0.001,2.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Amikacina,Pseudomonas aeruginosa,16.0,16.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Tobramicina,Pseudomonas aeruginosa,2.0,2.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf
+Colistina,Pseudomonas aeruginosa,4.0,4.0,EUCAST,v15.0 (2025),v_15.0_Breakpoint_Tables.pdf

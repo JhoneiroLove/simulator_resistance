@@ -1,0 +1,11 @@
+﻿Gen,Tipo_de_mutación,Mecanismo,Antibióticos_afectados,Incremento_MIC_(x),Fitness_cost,Fuente
+gyrA,Sustitución T83I,Alteración del blanco (ADN girasa),"Fluoroquinolonas (ciprofloxacino, levofloxacino)",8,Media,"CARD, PMID:30756138"
+parC,Sustitución S87L,Alteración del blanco (topoisomerasa IV),"Fluoroquinolonas (ciprofloxacino, levofloxacino)",4,Baja,"CARD, PMID:30756138"
+oprD,Deleción o frameshift,Pérdida de porina OprD,"Carbapenémicos (imipenem, meropenem)",8,Baja,"CARD, PMID:29910070"
+ampC,Mutación promotora (-32C→T),Sobreexpresión β-lactamasa AmpC,"Cefalosporinas (cefepime, ceftazidima)",4,Baja,"ResFinder, PMID:32645612"
+ampD,Deleción total,Desrepresión de ampC,β-lactámicos de amplio espectro,8,Media,"CARD, PMID:28827029"
+mexR,Inactivación por frameshift,Sobreexpresión bomba MexAB-OprM,"Fluoroquinolonas, tetraciclinas, cloranfenicol",4,Media,"CARD, PMID:30131202"
+nalC,Mutación Q83K,Activación regulatoria MexAB-OprM,Fluoroquinolonas,2,Baja,"CARD, PMID:30131202"
+mexZ,Deleción,Activación bomba MexXY-OprM,"Aminoglucósidos (amikacina, tobramicina)",4,Media,"CARD, PMID:31296920"
+ftsI (PBP3),Inserción YRIN,Alteración del blanco (proteína fijadora de penicilina),"Cefalosporinas, carbapenémicos",2,Media,"NCBI AMR, PMID:33790238"
+blaVIM / blaIMP,Presencia de gen adquirido,Metalobetalactamasa (MBL),"Carbapenémicos (imipenem, meropenem)",32,Alta,"NCBI AMR, PMID:35500117"

@@ -1,0 +1,14 @@
+﻿Familia,Antibiótico,Especies_aplicables,Mecanismo_de_acción,Fuente
+Carbapenémico,Meropenem,"Pseudomonas aeruginosa, Klebsiella pneumoniae, E. coli",Inhibe la síntesis de pared bacteriana,"CLSI M07 (2023), EUCAST v15.0 (2025)"
+Carbapenémico,Imipenem,"Pseudomonas aeruginosa, Acinetobacter baumannii, E. coli",Inhibe la síntesis de pared bacteriana,CLSI M07 (2023)
+Cefalosporina (4ta gen),Cefepime,"Pseudomonas aeruginosa, Enterobacter cloacae, Klebsiella pneumoniae",Inhibe síntesis de peptidoglucano,EUCAST v15.0 (2025)
+Cefalosporina (3ra gen),Ceftazidima,"Pseudomonas aeruginosa, E. coli, Serratia marcescens",Interfiere en la pared celular bacteriana,CLSI M07 (2023)
+Aminoglucósido,Amikacina,"Pseudomonas aeruginosa, E. coli, Klebsiella pneumoniae",Inhibe síntesis proteica (30S ribosomal),EUCAST v15.0 (2025)
+Aminoglucósido,Tobramicina,"Pseudomonas aeruginosa, Acinetobacter baumannii",Inhibe síntesis proteica,CLSI M07 (2023)
+Fluoroquinolona,Ciprofloxacino,"Pseudomonas aeruginosa, E. coli, Salmonella spp.",Inhibe ADN girasa y topoisomerasa IV,EUCAST v15.0 (2025)
+Fluoroquinolona,Levofloxacino,"Pseudomonas aeruginosa, Enterobacter cloacae",Inhibe replicación del ADN bacteriano,EUCAST v15.0 (2025)
+Polimixina,Colistina,"Pseudomonas aeruginosa, Acinetobacter baumannii",Altera la membrana externa bacteriana,EUCAST v15.0 (2025)
+β-lactámico + inhibidor β-lactamasa,Piperacilina/Tazobactam,"Pseudomonas aeruginosa, Klebsiella pneumoniae, E. coli",Inhibe síntesis de pared y bloquea β-lactamasas,CLSI M07 (2023)
+Cefalosporina + inhibidor β-lactamasa,Ceftazidima/Avibactam,"Pseudomonas aeruginosa, Klebsiella pneumoniae",Bloquea β-lactamasas clase A y C,EUCAST v15.0 (2025)
+Cefalosporina + inhibidor β-lactamasa,Ceftolozano/Tazobactam,"Pseudomonas aeruginosa, E. coli","Alta afinidad por PBPs, estable ante AmpC",EUCAST v15.0 (2025)
+Cefalosporina sideróforo,Cefiderocol,"Pseudomonas aeruginosa, Acinetobacter baumannii, Klebsiella pneumoniae",Usa transporte dependiente de hierro,EUCAST v15.0 (2025)

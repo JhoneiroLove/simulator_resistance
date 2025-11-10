@@ -1,0 +1,28 @@
+Antibiotic,Organism,S_MIC,I_SDD,R_MIC,CLSI_vs_FDA_match,Fuente
+Amikacin,Pseudomonas aeruginosa,16,32,64,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Aztreonam,Pseudomonas aeruginosa,8,16,32,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Cefepime,Pseudomonas aeruginosa,8,16,32,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Cefepime-Enmetazobactam,Pseudomonas aeruginosa,-,-,-,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Cefiderocol,Pseudomonas aeruginosa,4,8,16,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Ceftazidime,Pseudomonas aeruginosa,8,16,32,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Ceftazidime-Avibactam ,Pseudomonas aeruginosa,8/4,-,16/4,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Ceftolozane-Tazobactam,Pseudomonas aeruginosa,4/4,8/4,16/4,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Ciprofloxacin,Pseudomonas aeruginosa,0.5,1,2,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Colistin,Pseudomonas aeruginosa,-,2,4,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Delafloxacin,Pseudomonas aeruginosa,-,-,-,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Doripenem,Pseudomonas aeruginosa,2,4,8,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Gatifloxacin,Pseudomonas aeruginosa,2,4,8,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Gentamicin,Pseudomonas aeruginosa,-,-,-,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Imipenem,Pseudomonas aeruginosa,2,4,8,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Imipenem-Relebactam,Pseudomonas aeruginosa,2/4,4/4,8/4,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Levofloxacin,Pseudomonas aeruginosa,1,2,4,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Lomefloxacin,Pseudomonas aeruginosa,2,4,8,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Meropenem,Pseudomonas aeruginosa,2,4,8,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Netilmicin,Pseudomonas aeruginosa,8,16,32,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Norfloxacin,Pseudomonas aeruginosa,4,8,16,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Ofloxacin,Pseudomonas aeruginosa,2,4,8,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Piperacillin,Pseudomonas aeruginosa,16,32,64,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Piperacillin-Tazobactam,Pseudomonas aeruginosa,16/4,32/4,64/4,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Polymyxin B,Pseudomonas aeruginosa,-,2,8,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Ticarcillin-Clavulanate,Pseudomonas aeruginosa,16/2,32/2-64/2,128/2,Yes,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
+Tobramycin,Pseudomonas aeruginosa,1,2,4,No,bit-part-b-91525-_clsi_vs_fda_breakpoints-1.xlsb :: MIC BP Table
