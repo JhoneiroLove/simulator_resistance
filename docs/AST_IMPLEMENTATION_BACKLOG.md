@@ -137,12 +137,12 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 |------|-------------|-------------|----------|--------|
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
-| **FASE 2**: Motor AST Core | 4 | 2 | 50% | � En Progreso |
+| **FASE 2**: Motor AST Core | 4 | 3 | 75% | � En Progreso |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **13** | **50%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **14** | **54%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1056,18 +1056,24 @@ def calculate_od_max_with_antibiotic(base_od_max, concentration, mic_real):
 
 ## 📌 ITEM 2.3: Módulo Breakpoint Service
 **Archivo**: `src/core/breakpoint_service.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
-**Estimación**: 1.5 horas (SIMPLIFICADO)
+**Estimación**: 1.5 horas (SIMPLIFICADO)  
+**Tiempo real**: 2 horas
 
 ### Tareas
-- [ ] Método `get_breakpoint(antibiotico_id, guideline='CLSI', version='M100-2025')`
+- [x] Método `get_breakpoint(antibiotico_id, guideline='EUCAST', version=None)`
   - **SIN parámetro organism_id** (siempre P. aeruginosa)
   - Query directo a tabla `breakpoints` filtrado solo por antibiotico_id
+  - Fallback automático: EUCAST → CLSI si no encuentra
   
-- [ ] Método `interpret_mic(mic_value, mic_operator, breakpoint_s, breakpoint_r)`
-- [ ] Método `check_breakpoint_coverage(panel_layout_id, antibiotico_id)`
-- [ ] Cacheo de breakpoints frecuentes
+- [x] Método `get_breakpoint_by_name(antibiotico_nombre, guideline='EUCAST')`
+- [x] Método `interpret_mic(mic_value, mic_operator, breakpoint_s, breakpoint_r)`
+- [x] Método `interpret_with_breakpoint(mic_value, mic_operator, antibiotico_id, guideline)`
+- [x] Método `check_breakpoint_coverage(panel_layout_id, antibiotico_id)`
+- [x] Método `get_all_breakpoints_for_panel(antibiotico_ids, guideline)`
+- [x] Cacheo de breakpoints frecuentes con `_breakpoint_cache`
+- [x] Métodos utilitarios: `clear_cache()`, `get_cache_stats()`
 
 ### 💡 NOTA PARA EL AGENTE (YO)
 Simplificar query SQL:
@@ -1110,6 +1116,70 @@ def interpret_mic(mic_value, mic_operator, breakpoint_s, breakpoint_r):
         else:
             return 'I'
 ```
+
+### Resultados ITEM 2.3
+**Archivo creado**: `src/core/breakpoint_service.py` (398 líneas)
+
+**Clase principal**: `BreakpointService`
+
+**Métodos implementados** (9 totales):
+
+1. **`__init__(use_cache=True)`**:
+   - Inicializa sesión SQLAlchemy
+   - Activa cache de breakpoints en memoria
+
+2. **`get_breakpoint(antibiotico_id, guideline='EUCAST', version=None)`**:
+   - Query simplificado sin organism_id
+   - Fallback automático: EUCAST → CLSI
+   - Orden por versión descendente (más reciente primero)
+   - Uso de cache para optimización
+
+3. **`get_breakpoint_by_name(antibiotico_nombre, guideline='EUCAST')`**:
+   - Wrapper para buscar por nombre de antibiótico
+   - Consulta tabla `antibioticos` primero
+
+4. **`interpret_mic(mic_value, mic_operator, breakpoint_s, breakpoint_r)`**:
+   - Lógica S/I/R completa
+   - Manejo de operadores: '=', '<=', '>='
+   - Normalización de operadores (≤ → <=, ≥ → >=)
+   - Interpretación conservadora en casos ambiguos
+
+5. **`interpret_with_breakpoint(mic_value, mic_operator, antibiotico_id, guideline)`**:
+   - Función de conveniencia: combina get_breakpoint + interpret_mic
+   - Retorna tupla: (interpretación, breakpoint_usado)
+   - Retorna 'UNKNOWN' si no encuentra breakpoint
+
+6. **`check_breakpoint_coverage(panel_layout_id, antibiotico_id, guideline)`**:
+   - Verifica si panel cubre breakpoints S y R
+   - Criterio: ±1 dilución (factor 2) alrededor de breakpoint
+   - Retorna dict con covers_s, covers_r, missing_concentrations, panel_concentrations
+
+7. **`get_all_breakpoints_for_panel(antibiotico_ids, guideline)`**:
+   - Carga múltiples breakpoints de una vez
+   - Útil para inicialización de simulación
+   - Retorna dict {antibiotico_id: Breakpoint}
+
+8. **`clear_cache()`**:
+   - Limpia cache global `_breakpoint_cache`
+   - Útil si se actualizan breakpoints en BD
+
+9. **`get_cache_stats()`**:
+   - Retorna estadísticas: cached_entries, cache_enabled
+
+**Características**:
+- ✅ Cache global en memoria para consultas frecuentes
+- ✅ Fallback automático EUCAST → CLSI
+- ✅ Sin organism_id (P. aeruginosa implícito)
+- ✅ Type hints completos
+- ✅ Docstrings con ejemplos ejecutables
+- ✅ Manejo robusto de operadores MIC
+
+**Integración con ASTSimulator**:
+- `get_breakpoint()` → llamada desde `_interpret_mic()` del simulador
+- `interpret_with_breakpoint()` → interpretación directa de MICs
+- `check_breakpoint_coverage()` → validación de diseño de panel
+
+
 
 ---
 
