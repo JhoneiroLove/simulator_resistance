@@ -137,12 +137,12 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 |------|-------------|-------------|----------|--------|
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
-| **FASE 2**: Motor AST Core | 4 | 1 | 25% | � En Progreso |
+| **FASE 2**: Motor AST Core | 4 | 2 | 50% | � En Progreso |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **12** | **46%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **13** | **50%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -969,15 +969,18 @@ print(f"Organismo: {ORGANISM_NAME}")  # "Pseudomonas aeruginosa"
 
 ## 📌 ITEM 2.2: Módulo Growth Models
 **Archivo**: `src/core/growth_models.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
-**Estimación**: 2-3 horas
+**Estimación**: 2-3 horas  
+**Tiempo real**: 1.5 horas
 
 ### Tareas
-- [ ] Función `logistic_growth(t, od_max, k, t_mid, od_initial)`
-- [ ] Función `calculate_od_max_with_antibiotic(base_od_max, concentration, mic_real)`
-- [ ] Función `add_measurement_noise(od_value, noise_level=0.05)`
-- [ ] Función `classify_turbidity(od_value)` → 'claro', 'ligero', 'moderado', 'turbio'
+- [x] Función `logistic_growth(t, od_max, k, t_mid, od_initial)`
+- [x] Función `calculate_od_max_with_antibiotic(base_od_max, concentration, mic_real)`
+- [x] Función `add_measurement_noise(od_value, noise_level=0.05)`
+- [x] Función `classify_turbidity(od_value)` → 'claro', 'ligero', 'moderado', 'turbio'
+- [x] Función EXTRA: `calculate_growth_parameters(mic_value, concentration, ...)` (helper)
+- [x] Función EXTRA: `simulate_well_growth_curve(...)` (integración completa)
 
 ### Modelo Matemático
 ```python
@@ -999,6 +1002,55 @@ def calculate_od_max_with_antibiotic(base_od_max, concentration, mic_real):
     survival = 1 / (1 + (concentration / mic_real) ** hill_coefficient)
     return base_od_max * survival
 ```
+
+### Resultados ITEM 2.2
+**Archivo creado**: `src/core/growth_models.py` (274 líneas)
+
+**Funciones implementadas** (6 totales):
+1. **`logistic_growth(t, od_max, k, t_mid, od_initial)`**:
+   - Ecuación de Verhulst implementada con protección contra overflow
+   - Límites en exponente: [-100, 100]
+   - Documentación con ejemplo ejecutable
+
+2. **`calculate_od_max_with_antibiotic(base_od_max, concentration, mic_real, hill_coefficient=4.0)`**:
+   - Ecuación de Hill con coeficiente n=4 (por defecto)
+   - Validación de MIC > 0
+   - Manejo de concentración ≤ 0 (retorna od_max sin inhibición)
+
+3. **`add_measurement_noise(od_value, noise_level=0.05)`**:
+   - Ruido gaussiano con desviación estándar relativa
+   - Nivel típico: 2-10% (0.02-0.10)
+   - Valores OD negativos corregidos a 0.0
+
+4. **`classify_turbidity(od_value)`**:
+   - Retorna tupla: `(categoría, descripción)`
+   - 5 categorías: claro, ligero, moderado, turbio, muy_turbio
+   - Rangos de OD: <0.1, 0.1-0.3, 0.3-1.0, 1.0-2.0, ≥2.0
+
+5. **`calculate_growth_parameters(mic_value, concentration, ...)`** (EXTRA):
+   - Calcula parámetros ajustados (od_max, k, t_mid)
+   - Lógica: C < MIC (normal), C ≈ MIC (reducido), C >> MIC (mínimo)
+   - Retarda t_mid y reduce k para concentraciones altas
+
+6. **`simulate_well_growth_curve(mic_value, concentration, time_points, ...)`** (EXTRA):
+   - Función de alto nivel que integra todos los modelos
+   - Genera serie temporal completa con ruido opcional
+   - Usa `calculate_growth_parameters()` + `logistic_growth()` + `add_measurement_noise()`
+
+**Validaciones**:
+- ✅ Todas las funciones con type hints
+- ✅ Docstrings con ejemplos ejecutables
+- ✅ Manejo de casos edge (MIC≤0, concentración≤0, OD negativo)
+- ✅ Protección contra overflow matemático (exp)
+- ✅ Imports mínimos: math, random, typing.Tuple
+
+**Integración con ASTSimulator**:
+- `logistic_growth()` → llamada desde `_simulate_test_well()`
+- `calculate_od_max_with_antibiotic()` → cálculo de od_max inhibido
+- `add_measurement_noise()` → ruido opcional en lecturas
+- `classify_turbidity()` → interpretación visual de OD
+
+
 
 ---
 
