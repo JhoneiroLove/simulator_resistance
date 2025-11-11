@@ -15,7 +15,6 @@ from PyQt5.QtCore import QTimer, Qt
 from src.gui.widgets.map_window import MapWindow
 from src.gui.widgets.input_form import InputForm
 from src.gui.widgets.results_view import ResultsView
-from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
 from src.gui.workflows.ast_workflow import ASTWorkflow
@@ -77,7 +76,6 @@ class MainWindow(QMainWindow):
         self.map_window = None
         self.expand_window = None
         self.results_tab = ResultsView(antibiotics)
-        self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
         self.ast_tab = ASTWorkflow()
 
@@ -89,9 +87,8 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.input_tab, "1. Selección y Parámetros")
         self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
-        self.tabs.addTab(self.csv_tab, "3. Validación CSV")
-        self.tabs.addTab(self.detail_tab, "4. Resultados Detallados")
-        self.tabs.addTab(self.ast_tab, "5. AST Antibiograma")
+        self.tabs.addTab(self.detail_tab, "3. Resultados Detallados")
+        self.tabs.addTab(self.ast_tab, "4. AST Antibiograma")
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 

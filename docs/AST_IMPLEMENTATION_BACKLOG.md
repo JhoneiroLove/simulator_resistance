@@ -1902,9 +1902,8 @@ class MainWindow(QMainWindow):
         # Pestañas
         self.tabs.addTab(self.input_tab, "1. Selección y Parámetros")
         self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
-        self.tabs.addTab(self.csv_tab, "3. Validación CSV")
-        self.tabs.addTab(self.detail_tab, "4. Resultados Detallados")
-        self.tabs.addTab(self.ast_tab, "5. AST Antibiograma")  # ← NUEVO
+        self.tabs.addTab(self.detail_tab, "3. Resultados Detallados")
+        self.tabs.addTab(self.ast_tab, "4. AST Antibiograma")  # ← NUEVO
 ```
 
 **Características del Workflow**:
