@@ -138,11 +138,11 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
 | **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo | � En Progreso |
-| **FASE 3**: GUI Wizard | 5 | 3 | 60% | � En Progreso |
+| **FASE 3**: GUI Wizard | 5 | 4 | 80% | � En Progreso |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **18** | **69%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **19** | **73%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1709,17 +1709,123 @@ OD
 ---
 
 ## 📌 ITEM 3.5: Integrar en Main Window
-**Archivo**: `src/gui/main_window.py`  
-**Estado**: 🔴 Pendiente  
+**Archivo**: `src/gui/main_window.py` + `src/gui/workflows/ast_workflow.py`  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
 **Estimación**: 1 hora
+**Tiempo real**: 1 hora
 
 ### Tareas
-- [ ] Añadir tab "AST" al QTabWidget
-- [ ] Integrar ASTPanelWidget
-- [ ] Integrar ASTResultsTable
-- [ ] Signal connections
-- [ ] Menú "AST" en MenuBar
+- [x] Añadir tab "5. AST Antibiograma" al QTabWidget
+- [x] Crear ASTWorkflow que integra todos los widgets
+- [x] Integrar ASTPanelWidget (panel de control)
+- [x] Integrar ASTPlateViewer (placa 96 pocillos)
+- [x] Integrar ASTResultsTable (tabla de resultados)
+- [x] Signal connections entre widgets
+- [x] Layout con splitter horizontal (40% placa, 60% tabla)
+- [x] Mensajes en status bar para feedback
+
+### Resultados Implementación
+
+**Archivo Workflow**: `src/gui/workflows/ast_workflow.py` (240 líneas)
+
+**Clase Principal**: `ASTWorkflow(QWidget)`
+- **Propósito**: Widget integrador que conecta todos los componentes AST
+- **Signals manejadas**:
+  - `panel_widget.ast_completed(dict)` → Carga placa y tabla
+  - `panel_widget.ast_failed(str)` → Muestra error en status bar
+  - `plate_viewer.well_clicked(str, dict)` → Info de pocillo en status bar
+  - `results_table.antibiotic_selected(str, dict)` → Info de antibiótico en status bar
+
+**Widgets Integrados**:
+1. **ASTPanelWidget** (control superior)
+   - Panel selector
+   - Inóculo, temperatura
+   - Botón ejecutar con progress bar
+
+2. **ASTPlateViewer** (izquierda, 40%)
+   - Grid 8×12 (96 pocillos)
+   - Slider temporal 0-18h
+   - Colores por OD
+
+3. **ASTResultsTable** (derecha, 60%)
+   - Tabla 7 columnas
+   - Filtro guideline
+   - Botones CSV + PDF
+
+**Layout Implementado**:
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🧫 Simulador de Antibiograma (AST)                         │
+├─────────────────────────────────────────────────────────────┤
+│  Configuración del Panel AST                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Panel: [Pseudomonas EUCAST ▼]  Inóculo: [0.5]      │   │
+│  │ Temp: [35.0°C]  [▶ Ejecutar AST] [████████░░] 80%  │   │
+│  └─────────────────────────────────────────────────────┘   │
+├─────────────────────────┬───────────────────────────────────┤
+│ Visualización de Placa  │ Resultados MIC e Interpretación   │
+│ ┌───────────────────┐   │ ┌─────────────────────────────┐   │
+│ │  A1  A2  A3  ...  │   │ │Antibiótico│MIC│S/I/R│Guide │   │
+│ │  B1  B2  B3  ...  │   │ ├───────────┼───┼─────┼──────┤   │
+│ │  ...              │   │ │Meropenem  │8.0│  R  │CLSI  │   │
+│ │  H11(+) H12(-)    │   │ │Gentamicina│1.0│  S  │CLSI  │   │
+│ └───────────────────┘   │ └─────────────────────────────┘   │
+│ Tiempo: [18h] ━━━━━━●   │ [Guideline▼] [CSV] [PDF]          │
+└─────────────────────────┴───────────────────────────────────┘
+```
+
+**Métodos Principales**:
+- `_init_ui()`: Construye el layout con GroupBox y Splitter
+- `_connect_signals()`: Conecta señales entre widgets
+- `_on_ast_completed(results)`: Carga datos en placa y tabla
+- `_on_ast_failed(error)`: Muestra error
+- `_on_well_clicked(well_id, data)`: Feedback de pocillo
+- `_on_antibiotic_selected(ab, data)`: Feedback de antibiótico
+- `clear_all()`: Limpia todos los widgets
+
+**Integración en MainWindow**:
+```python
+# src/gui/main_window.py (líneas modificadas)
+
+from src.gui.workflows.ast_workflow import ASTWorkflow
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        # ...
+        self.ast_tab = ASTWorkflow()
+        
+        # Pestañas
+        self.tabs.addTab(self.input_tab, "1. Selección y Parámetros")
+        self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
+        self.tabs.addTab(self.csv_tab, "3. Validación CSV")
+        self.tabs.addTab(self.detail_tab, "4. Resultados Detallados")
+        self.tabs.addTab(self.ast_tab, "5. AST Antibiograma")  # ← NUEVO
+```
+
+**Características del Workflow**:
+- ✅ Separación visual clara (GroupBox con colores)
+- ✅ Splitter ajustable (usuario puede redimensionar)
+- ✅ Feedback en status bar para todas las acciones
+- ✅ Conexiones de señales automáticas
+- ✅ Método `clear_all()` para reiniciar
+- ✅ Título con emoji 🧫 para mejor UX
+
+**Estilos Aplicados**:
+- **Título**: Fondo gris claro (#ecf0f1), font 18px bold
+- **Panel de Control**: Border gris (#bdc3c7)
+- **Placa**: Border azul (#3498db)
+- **Resultados**: Border verde (#27ae60)
+
+**Validación**:
+- ✅ 240 líneas de código limpio
+- ✅ Sin errores de lint
+- ✅ Tipado completo con type hints
+- ✅ Docstrings descriptivos
+- ✅ Separación de responsabilidades
+- ✅ Fácil de mantener y extender
+
+
 
 ---
 

@@ -18,6 +18,7 @@ from src.gui.widgets.results_view import ResultsView
 from src.gui.widgets.csv_validation import CSVValidationWidget
 from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
+from src.gui.workflows.ast_workflow import ASTWorkflow
 from src.core.genetic_algorithm import GeneticAlgorithm
 from src.core.reporting import save_simulation_report, save_generation_metrics
 from src.data.database import get_session
@@ -35,6 +36,7 @@ ANTIBIOTIC_COLORS = {
 }
 DEFAULT_COLOR = "#7F8C8D"
 
+
 def get_app_icon():
     if hasattr(sys, "_MEIPASS"):
         base_dir = sys._MEIPASS
@@ -44,6 +46,7 @@ def get_app_icon():
     if not os.path.exists(icon_path):
         icon_path = os.path.join(base_dir, "..", "..", "simulador_evolutivo.ico")
     return QIcon(icon_path)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -76,6 +79,7 @@ class MainWindow(QMainWindow):
         self.results_tab = ResultsView(antibiotics)
         self.csv_tab = CSVValidationWidget()
         self.detail_tab = DetailedResults()
+        self.ast_tab = ASTWorkflow()
 
         # ---- Conectar señales ----
         self.input_tab.params_submitted.connect(self.on_params_saved)
@@ -87,6 +91,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
         self.tabs.addTab(self.csv_tab, "3. Validación CSV")
         self.tabs.addTab(self.detail_tab, "4. Resultados Detallados")
+        self.tabs.addTab(self.ast_tab, "5. AST Antibiograma")
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
 
@@ -120,7 +125,7 @@ class MainWindow(QMainWindow):
         weight,
         creatinina,
         estado_inmune,
-        sitio_infeccion_id
+        sitio_infeccion_id,
     ):
         """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
         self.saved_genes = genes
@@ -129,14 +134,14 @@ class MainWindow(QMainWindow):
         self.saved_time_horizon = time_horizon
         self.saved_environmental_factors = environmental_factors
         self.saved_repro_rate = reproduction_rate
-        
+
         # Guardar parámetros del paciente y sitio
         self.saved_age_range = age_range
         self.saved_weight = weight
         self.saved_creatinina = creatinina
         self.saved_estado_inmune = estado_inmune
         self.saved_sitio_infeccion_id = sitio_infeccion_id
-        
+
         QMessageBox.information(
             self,
             "Éxito",
@@ -213,7 +218,7 @@ class MainWindow(QMainWindow):
             antibiotico_id=antibiotico_id,
             concentracion=concentracion if concentracion is not None else 0.0,
             resistencia_predicha=0.0,
-            huesped_id=guest.id if guest else None  # Vincular guest
+            huesped_id=guest.id if guest else None,  # Vincular guest
         )
         session.add(simulacion)
         session.commit()
@@ -238,9 +243,9 @@ class MainWindow(QMainWindow):
             reproduction_rate=self.saved_repro_rate,
             pressure_factor=0.25,
             huesped=guest,
-            sitio_infeccion=sitio_infeccion
+            sitio_infeccion=sitio_infeccion,
         )
-        
+
         self.ga.initialize(self.saved_genes)
         self.initial_attributes = self.ga.get_average_attributes()
 
@@ -387,6 +392,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "expand_window") and self.expand_window:
             self.expand_window.close()
         event.accept()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
