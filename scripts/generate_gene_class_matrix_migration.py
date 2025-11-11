@@ -91,12 +91,12 @@ def generate_sql(multipliers, genes, clases):
         "    gen TEXT NOT NULL,                      -- Nombre del gen mutado"
     )
     sql_lines.append(
-        "    clase_antibiotico TEXT NOT NULL,        -- Clase de antibiótico afectada"
+        "    clase_antibiotica TEXT NOT NULL,        -- Clase de antibiótico afectada"
     )
     sql_lines.append(
         "    multiplicador_mic REAL NOT NULL,        -- Factor de incremento MIC (1.0 = sin efecto)"
     )
-    sql_lines.append("    UNIQUE(gen, clase_antibiotico)")
+    sql_lines.append("    UNIQUE(gen, clase_antibiotica)")
     sql_lines.append(");")
     sql_lines.append("")
 
@@ -134,7 +134,7 @@ def generate_sql(multipliers, genes, clases):
         # INSERTs para esta clase
         for mult in class_mults:
             sql_lines.append(
-                f"INSERT INTO gene_class_multipliers (gen, clase_antibiotico, multiplicador_mic) VALUES\n"
+                f"INSERT INTO gene_class_multipliers (gen, clase_antibiotica, multiplicador_mic) VALUES\n"
                 f"('{mult['gen']}', '{mult['clase']}', {mult['multiplicador']});"
             )
 
@@ -149,7 +149,7 @@ def generate_sql(multipliers, genes, clases):
     sql_lines.append("    id INTEGER PRIMARY KEY AUTOINCREMENT,")
     sql_lines.append("    antibiotico TEXT NOT NULL,")
     sql_lines.append(
-        "    clase TEXT NOT NULL,                     -- FK a gene_class_multipliers.clase_antibiotico"
+        "    clase TEXT NOT NULL,                     -- FK a gene_class_multipliers.clase_antibiotica"
     )
     sql_lines.append("    UNIQUE(antibiotico)")
     sql_lines.append(");")
