@@ -24,6 +24,7 @@ from PyQt5.QtCore import Qt
 from src.gui.widgets.ast_panel_widget import ASTPanelWidget
 from src.gui.widgets.ast_plate_viewer import ASTPlateViewer
 from src.gui.widgets.ast_results_table import ASTResultsTable
+from src.gui.widgets.growth_curve_widget import GrowthCurveWidget
 
 
 class ASTWorkflow(QWidget):
@@ -43,6 +44,13 @@ class ASTWorkflow(QWidget):
     │  [Slider tiempo]   │  [Filtro] [CSV] [PDF]      │
     │                    │                            │
     └────────────────────┴────────────────────────────┘
+    ┌─────────────────────────────────────────────────┐
+    │  Curvas de Crecimiento (GrowthCurveWidget)      │
+    │  [Antibiótico ▼]  OD vs Tiempo  [🗑️ Limpiar]   │
+    │                                                 │
+    │  [Gráfico pyqtgraph con múltiples curvas]       │
+    │                                                 │
+    └─────────────────────────────────────────────────┘
     """
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -150,6 +158,30 @@ class ASTWorkflow(QWidget):
 
         layout.addWidget(splitter, stretch=1)
 
+        # === CURVAS DE CRECIMIENTO (Nuevo panel inferior) ===
+        curves_group = QGroupBox(" Curvas de Crecimiento Bacteriano")
+        curves_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #9b59b6;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                color: #9b59b6;
+            }
+        """)
+        curves_layout = QVBoxLayout(curves_group)
+
+        self.growth_curve_widget = GrowthCurveWidget()
+        curves_layout.addWidget(self.growth_curve_widget)
+
+        layout.addWidget(curves_group, stretch=1)
+
     def _connect_signals(self):
         """Conecta las señales entre widgets."""
         # Cuando se completa la simulación AST
@@ -181,6 +213,13 @@ class ASTWorkflow(QWidget):
         # Cargar resultados MIC en la tabla
         mic_results = results.get("mic_results", [])
         self.results_table.load_results(mic_results)
+
+        # Generar y cargar curvas de crecimiento
+        growth_data = self._generate_growth_curves_from_wells(
+            well_data_list, mic_results
+        )
+        if growth_data:
+            self.growth_curve_widget.load_growth_data(growth_data)
 
         # Mostrar mensaje de éxito en status bar (si existe)
         total_wells = len(well_data_list)
@@ -248,10 +287,106 @@ class ASTWorkflow(QWidget):
         if hasattr(main_window, "statusBar"):
             main_window.statusBar().showMessage(status_msg, 3000)
 
+    def _generate_growth_curves_from_wells(
+        self, well_data_list: list, mic_results: list
+    ) -> dict:
+        """
+        Genera datos de curvas de crecimiento a partir de los datos de pocillos.
+
+        Args:
+            well_data_list: Lista de datos de pocillos del AST
+            mic_results: Lista de resultados MIC
+
+        Returns:
+            Diccionario con estructura para GrowthCurveWidget:
+            {
+                'antibiotico1': [
+                    {
+                        'concentracion': float,
+                        'tiempos': List[int],
+                        'ods': List[float],
+                        'mic': bool
+                    },
+                    ...
+                ],
+                ...
+            }
+        """
+        # Agrupar pocillos por antibiótico
+        antibiotics_data = {}
+
+        for well in well_data_list:
+            antibiotico = well.get("antibiotico")
+            if not antibiotico or antibiotico == "Control Negativo":
+                continue
+
+            concentracion = well.get("concentracion", 0)
+            growth_curve = well.get("growth_curve", [])
+
+            if antibiotico not in antibiotics_data:
+                antibiotics_data[antibiotico] = {}
+
+            # Guardar curva por concentración
+            antibiotics_data[antibiotico][concentracion] = growth_curve
+
+        # Crear MIC lookup
+        mic_lookup = {}
+        for mic_result in mic_results:
+            antibiotico = mic_result.get("antibiotico")
+            mic_value = mic_result.get("mic_value", 0)
+            mic_lookup[antibiotico] = mic_value
+
+        # Formatear datos para el widget
+        growth_data = {}
+
+        for antibiotico, concentrations in antibiotics_data.items():
+            curves_list = []
+            mic_value = mic_lookup.get(antibiotico, 0)
+
+            # Ordenar concentraciones
+            sorted_concs = sorted(concentrations.keys())
+
+            for conc in sorted_concs:
+                curve = concentrations[conc]
+
+                # Extraer tiempos y ODs
+                if isinstance(curve, list) and len(curve) > 0:
+                    if isinstance(curve[0], dict):
+                        # Formato: [{'time': 0, 'od': 0.1}, ...]
+                        tiempos = [
+                            point.get("time", idx) for idx, point in enumerate(curve)
+                        ]
+                        ods = [point.get("od", 0.1) for point in curve]
+                    else:
+                        # Formato: [0.1, 0.15, 0.2, ...]
+                        tiempos = list(range(len(curve)))
+                        ods = curve
+                else:
+                    # Sin datos, generar curva plana
+                    tiempos = list(range(19))
+                    ods = [0.1] * 19
+
+                # Determinar si esta concentración es el MIC
+                is_mic = abs(conc - mic_value) < 0.01  # Tolerancia pequeña
+
+                curves_list.append(
+                    {
+                        "concentracion": conc,
+                        "tiempos": tiempos,
+                        "ods": ods,
+                        "mic": is_mic,
+                    }
+                )
+
+            growth_data[antibiotico] = curves_list
+
+        return growth_data
+
     def clear_all(self):
         """Limpia todos los widgets y reinicia el workflow."""
         self.plate_viewer.clear()
         self.results_table.clear()
+        self.growth_curve_widget.clear()
 
         # Resetear panel widget (si tiene método reset)
         if hasattr(self.panel_widget, "reset"):

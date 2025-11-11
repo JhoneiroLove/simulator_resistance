@@ -137,12 +137,12 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 |------|-------------|-------------|----------|--------|
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
-| **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo | � En Progreso |
-| **FASE 3**: GUI Wizard | 5 | 4 | 80% | � En Progreso |
+| **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo |
+| **FASE 3**: GUI Wizard | 5 | 5 | 100% | ✅ Completo |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **19** | **73%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **20** | **77%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1680,18 +1680,19 @@ results_table.antibiotic_selected.connect(on_antibiotic_selected)
 
 ## 📌 ITEM 3.4: Widget Growth Curves
 **Archivo**: `src/gui/widgets/growth_curve_widget.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 💡 BAJA (Nice to have)  
 **Estimación**: 2-3 horas
+**Tiempo real**: 1.5 horas
 
 ### Tareas
-- [ ] PlotWidget (pyqtgraph)
-- [ ] Eje X: Tiempo (horas)
-- [ ] Eje Y: OD 600 nm
-- [ ] Múltiples curvas por concentración
-- [ ] Leyenda con concentraciones
-- [ ] Línea vertical marcando MIC
-- [ ] Selector de antibiótico
+- [x] PlotWidget (pyqtgraph)
+- [x] Eje X: Tiempo (horas)
+- [x] Eje Y: OD 600 nm
+- [x] Múltiples curvas por concentración
+- [x] Leyenda con concentraciones
+- [x] Línea vertical marcando MIC
+- [x] Selector de antibiótico
 
 ### Gráfico Ejemplo
 ```
@@ -1705,6 +1706,90 @@ OD
 0.0 │────────────────────────────
     0    6    12   18  Tiempo (h)
 ```
+
+### Resultados Implementación
+
+**Archivo**: `src/gui/widgets/growth_curve_widget.py` (379 líneas)
+
+**Clase Principal**: `GrowthCurveWidget(QWidget)`
+- **Propósito**: Visualización de curvas de crecimiento bacteriano OD vs Tiempo
+- **Signals**:
+  - `antibiotic_changed(str)` → Emitido al cambiar antibiótico seleccionado
+
+**Componentes UI**:
+1. **Barra de Control**:
+   - QComboBox para selección de antibiótico
+   - QPushButton para limpiar gráfico (rojo, icono 🗑️)
+
+2. **PlotWidget (pyqtgraph)**:
+   - Eje X: Tiempo (0-18 horas)
+   - Eje Y: OD 600 nm (0-3.5 rango)
+   - Grid con alpha 0.3
+   - Leyenda automática (offset 10,10)
+   - Fondo blanco
+
+3. **Info Box**:
+   - GroupBox con información del antibiótico actual
+   - Número de curvas graficadas
+   - Rango de concentraciones
+   - MIC detectado (si aplica)
+
+**Características Gráfico**:
+- **Paleta de colores**: 8 colores para diferentes concentraciones
+  - Verde (#27ae60): Control positivo (0 µg/mL)
+  - Verde claro, naranja, naranja oscuro, rojo, rojo oscuro, púrpura, azul oscuro
+- **Estilo de líneas**:
+  - Control positivo: width=3, solid
+  - Otras concentraciones: width=2
+- **Símbolos**: Círculos (size=4) en cada punto de datos
+- **Leyenda**: Muestra concentración + "← MIC" si aplica
+
+**Métodos Principales**:
+- `load_growth_data(growth_data: Dict)`: Carga datos para múltiples antibióticos
+- `_plot_antibiotic(antibiotic: str)`: Grafica curvas para antibiótico seleccionado
+- `clear()`: Limpia gráfico y resetea widget
+- `export_to_csv(filename: str)`: Exporta datos de curvas a CSV
+
+**Formato Datos de Entrada**:
+```python
+{
+    'antibiotico1': [
+        {
+            'concentracion': 0.0,  # µg/mL
+            'tiempos': [0, 1, 2, ..., 18],  # horas
+            'ods': [0.1, 0.15, 0.25, ..., 2.5],  # OD 600nm
+            'mic': False  # Si esta concentración es el MIC
+        },
+        ...
+    ],
+    'antibiotico2': [...],
+    ...
+}
+```
+
+**Función Auxiliar**:
+- `generate_sample_growth_data()`: Genera datos de ejemplo usando modelo logístico
+  - Modelo: `OD = OD_max / (1 + exp(-k*(t - t_mid)))`
+  - Inhibición proporcional a concentración
+  - Ruido gaussiano (σ=0.02)
+  - 3 antibióticos × 7 concentraciones
+
+**Estilo Visual**:
+- Botón limpiar: Rojo (#e74c3c), hover (#c0392b)
+- Títulos y labels: Color #2c3e50
+- Info label: Color gris (#7f8c8d), tamaño 10pt
+- GroupBox: Border #bdc3c7, radius 5px
+
+**Dependencias**:
+- PyQt5.QtWidgets (layouts, combo, label, button, groupbox)
+- PyQt5.QtCore (pyqtSignal)
+- pyqtgraph (PlotWidget, mkPen, InfiniteLine)
+- numpy (cálculos modelo logístico)
+
+**Testing**:
+- Función generadora de datos sintéticos incluida
+- Modelo logístico de crecimiento bacteriano
+- Parámetros ajustables (OD_max, k, t_mid)
 
 ---
 
@@ -1743,15 +1828,22 @@ OD
    - Inóculo, temperatura
    - Botón ejecutar con progress bar
 
-2. **ASTPlateViewer** (izquierda, 40%)
+2. **ASTPlateViewer** (izquierda en splitter horizontal)
    - Grid 8×12 (96 pocillos)
    - Slider temporal 0-18h
    - Colores por OD
 
-3. **ASTResultsTable** (derecha, 60%)
+3. **ASTResultsTable** (derecha arriba en splitter horizontal)
    - Tabla 7 columnas
    - Filtro guideline
    - Botones CSV + PDF
+
+4. **GrowthCurveWidget** (panel inferior completo) **← NUEVO**
+   - Selector de antibiótico
+   - Gráfico pyqtgraph OD vs Tiempo
+   - Múltiples curvas por concentración
+   - Leyenda con MIC marcado
+   - Botón limpiar
 
 **Layout Implementado**:
 ```
@@ -1772,17 +1864,29 @@ OD
 │ │  H11(+) H12(-)    │   │ │Gentamicina│1.0│  S  │CLSI  │   │
 │ └───────────────────┘   │ └─────────────────────────────┘   │
 │ Tiempo: [18h] ━━━━━━●   │ [Guideline▼] [CSV] [PDF]          │
-└─────────────────────────┴───────────────────────────────────┘
+├─────────────────────────┴───────────────────────────────────┤
+│ 📊 Curvas de Crecimiento Bacteriano                         │
+│ ┌─────────────────────────────────────────────────────┐   │
+│ │ Antibiótico: [Meropenem ▼]               [🗑️]      │   │
+│ │ OD                                                   │   │
+│ │ 3.0│    ╱─────  (0 µg/mL Control)                   │   │
+│ │ 2.0│  ╱────     (1.0 µg/mL)                         │   │
+│ │ 1.0│╱──         (4.0 µg/mL) ← MIC                   │   │
+│ │ 0.0├────────────────────────                        │   │
+│ │    0    6    12   18  Tiempo (h)                    │   │
+│ └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Métodos Principales**:
-- `_init_ui()`: Construye el layout con GroupBox y Splitter
+- `_init_ui()`: Construye el layout con 4 GroupBox (control + placa + tabla + curvas)
 - `_connect_signals()`: Conecta señales entre widgets
-- `_on_ast_completed(results)`: Carga datos en placa y tabla
+- `_on_ast_completed(results)`: Carga datos en placa, tabla Y curvas
+- `_generate_growth_curves_from_wells(wells, mics)`: Transforma datos AST → formato curvas
 - `_on_ast_failed(error)`: Muestra error
 - `_on_well_clicked(well_id, data)`: Feedback de pocillo
 - `_on_antibiotic_selected(ab, data)`: Feedback de antibiótico
-- `clear_all()`: Limpia todos los widgets
+- `clear_all()`: Limpia todos los widgets (incluyendo curvas)
 
 **Integración en MainWindow**:
 ```python
@@ -1814,6 +1918,36 @@ class MainWindow(QMainWindow):
 **Estilos Aplicados**:
 - **Título**: Fondo gris claro (#ecf0f1), font 18px bold
 - **Panel de Control**: Border gris (#bdc3c7)
+- **Placa**: Border azul (#3498db)
+- **Tabla**: Border verde (#27ae60)
+- **Curvas**: Border púrpura (#9b59b6) **← NUEVO**
+
+**Estadísticas Finales**:
+- **Archivo**: `src/gui/workflows/ast_workflow.py`
+- **Líneas de código**: 326 (actualizado con integración de curvas)
+- **Widgets integrados**: 4 (Panel + Placa + Tabla + Curvas)
+- **Señales conectadas**: 4
+- **Métodos públicos**: 2 (`clear_all`, `__init__`)
+- **Métodos privados**: 7 (incluyendo `_generate_growth_curves_from_wells`)
+
+**Validación**:
+- ✅ Tests de integración creados (`tests/test_ast_workflow_integration.py`)
+- ✅ 4/4 tests pasando
+- ✅ Sin errores de lint
+- ✅ Workflow completo funcional
+
+**Flujo de Datos Completo**:
+1. Usuario ejecuta AST desde `ASTPanelWidget`
+2. `ast_completed` signal emitido con `results` dict
+3. `_on_ast_completed()` recibe resultados
+4. Carga `well_data_list` en `ASTPlateViewer`
+5. Carga `mic_results` en `ASTResultsTable`
+6. Genera curvas con `_generate_growth_curves_from_wells()`
+7. Carga curvas en `GrowthCurveWidget`
+8. Usuario puede explorar:
+   - Placa con slider temporal
+   - Tabla con filtros y exportación
+   - Curvas con selector de antibiótico
 - **Placa**: Border azul (#3498db)
 - **Resultados**: Border verde (#27ae60)
 
