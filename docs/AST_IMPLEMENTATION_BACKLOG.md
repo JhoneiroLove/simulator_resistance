@@ -137,12 +137,12 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 |------|-------------|-------------|----------|--------|
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
-| **FASE 2**: Motor AST Core | 4 | 3 | 75% | � En Progreso |
+| **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo | � En Progreso |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **14** | **54%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **15** | **58%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1185,15 +1185,20 @@ def interpret_mic(mic_value, mic_operator, breakpoint_s, breakpoint_r):
 
 ## 📌 ITEM 2.4: Módulo QC Validator
 **Archivo**: `src/core/qc_validator.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: ⚠️ MEDIA  
-**Estimación**: 2 horas
+**Estimación**: 2 horas  
+**Tiempo real**: 2.5 horas
 
 ### Tareas
-- [ ] Método `validate_positive_control(run_id)` - OD > 0.5
-- [ ] Método `validate_negative_control(run_id)` - OD < 0.1
-- [ ] Método `validate_coherence(run_id)` - Antibióticos relacionados
-- [ ] Método `generate_qc_report(run_id)`
+- [x] Dataclass `QCResult` - Resultado de validación individual
+- [x] Dataclass `CoherenceIssue` - Problema de coherencia detectado
+- [x] Método `validate_positive_control(od_value, well_position)` - OD > 1.0
+- [x] Método `validate_negative_control(od_value, well_position)` - OD < 0.1
+- [x] Método `validate_coherence(mic_results)` - Antibióticos relacionados
+- [x] Método `generate_qc_report(positive_od, negative_od, mic_results)` - Reporte completo
+- [x] Método `reset()` - Limpia validaciones previas
+- [x] Métodos auxiliares: `_check_cross_resistance()`, `_check_hierarchical()`, `_check_similar_activity()`
 
 ### Reglas de Coherencia
 ```python
@@ -1205,6 +1210,73 @@ COHERENCE_RULES = {
     # Resistencia cruzada común
 }
 ```
+
+### Resultados ITEM 2.4
+**Archivo creado**: `src/core/qc_validator.py` (480 líneas)
+
+**Dataclasses** (2):
+1. **`QCResult`**: Resultado de validación individual (check_type, passed, value, expected_range, message, severity)
+2. **`CoherenceIssue`**: Problema de coherencia (family, antibiotics, issue, expected, actual, severity)
+
+**Constantes globales**:
+- **`COHERENCE_RULES`**: 4 familias (carbapenems, fluoroquinolonas, aminoglucosidos, cefalosporinas_antipseudomonas)
+- **`QC_THRESHOLDS`**: Umbrales para controles (positive ≥1.0, negative ≤0.1, test_max ≤3.0)
+
+**Clase principal**: `QCValidator`
+
+**Métodos públicos** (6):
+
+1. **`validate_positive_control(od_value, well_position='H11')`**:
+   - Valida OD ≥ 1.0 (crecimiento robusto)
+   - Severidades: PASS, WARNING (≥0.8), FAIL (<0.8)
+   - Retorna `QCResult`
+
+2. **`validate_negative_control(od_value, well_position='H12')`**:
+   - Valida OD ≤ 0.1 (sin contaminación)
+   - Severidades: PASS, WARNING (≤0.15), FAIL (>0.15)
+   - Retorna `QCResult`
+
+3. **`validate_coherence(mic_results)`**:
+   - Valida 3 tipos de reglas: cross_resistance, hierarchical, similar
+   - Detecta: resistencia cruzada inconsistente, jerarquía invertida, diferencias excesivas
+   - Retorna `List[CoherenceIssue]`
+
+4. **`generate_qc_report(positive_od, negative_od, mic_results=None)`**:
+   - Genera reporte completo con timestamp
+   - Determina overall_status: PASS / WARNING / FAIL
+   - Retorna dict estructurado con controls, coherence, summary
+
+5. **`reset()`**:
+   - Limpia qc_results y coherence_issues
+
+**Métodos privados** (3):
+
+6. **`_check_cross_resistance(family, results, tolerance, description)`**:
+   - Si uno es R, esperamos I/R en los demás (no S)
+   - Genera WARNING si hay resistente + sensible simultáneo
+
+7. **`_check_hierarchical(family, results, description)`**:
+   - Verifica Amikacina MIC ≤ Gentamicina MIC
+   - Genera WARNING si jerarquía invertida (Amikacina >2x peor)
+
+8. **`_check_similar_activity(family, results, tolerance, description)`**:
+   - Compara MICs por pares usando log2
+   - Genera WARNING si diferencia > tolerance diluciones
+
+**Características técnicas**:
+- ✅ Basado en CLSI M07 guidelines
+- ✅ 4 familias de antibióticos con reglas específicas
+- ✅ Severidades: PASS (verde), WARNING (amarillo), FAIL (rojo)
+- ✅ Type hints completos con dataclasses
+- ✅ Docstrings con ejemplos ejecutables
+- ✅ Validación borderline (80-100% para positivo, 100-150% para negativo)
+
+**Integración con ASTSimulator**:
+- `apply_qc_checks()` del simulador → usará `generate_qc_report()`
+- Validación automática post-simulación
+- Alertas en reporte final si QC FAIL
+
+
 
 ---
 
