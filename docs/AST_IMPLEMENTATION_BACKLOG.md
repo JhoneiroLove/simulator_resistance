@@ -4,7 +4,7 @@
 **Fecha de creación**: 9 de noviembre de 2025  
 **Última actualización**: 11 de noviembre de 2025  
 **Objetivo**: Refactorizar aplicación + Implementar workflow AST completo para microbiólogos  
-**Estado**: 🟡 EN PROGRESO (11% completado - 3/28 items)
+**Estado**: 🟡 EN PROGRESO (14% completado - 4/28 items)
 
 ---
 
@@ -135,14 +135,14 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 | Fase | Total Items | Completados | Progreso | Estado |
 |------|-------------|-------------|----------|--------|
-| **FASE 0**: Datos + Hardware Reemplazo | 8 | 3 | 38% | 🟡 En Progreso |
+| **FASE 0**: Datos + Hardware Reemplazo | 8 | 4 | 50% | 🟡 En Progreso |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 2**: Motor AST Core | 4 | 0 | 0% | 🔴 Pendiente |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **28** | **3** | **11%** | 🟡 INICIADO |
+| **TOTAL** | **28** | **4** | **14%** | 🟡 INICIADO |
 
 ---
 
@@ -249,94 +249,6 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 ---
 
 ## 📌 ITEM 0.2: Migración de Panel Layouts
-  ```sql
-  CREATE TABLE IF NOT EXISTS gene_class_multipliers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      gen TEXT NOT NULL,                      -- 'gyrA_T83I', 'oprD_loss', etc.
-      clase_antibiotico TEXT NOT NULL,        -- 'carbapenemicos', 'fluoroquinolonas', etc.
-      multiplicador_mic REAL NOT NULL,        -- 1.0, 2.0, 4.0, 8.0, 16.0
-      UNIQUE(gen, clase_antibiotico)
-  );
-  ```
-
-- [ ] Insertar 99 combinaciones desde matriz CSV:
-  ```sql
-  INSERT INTO gene_class_multipliers (gen, clase_antibiotico, multiplicador_mic) VALUES
-  -- Carbapenemicos
-  ('gyrA_T83I', 'carbapenemicos', 1.0),
-  ('parC_S87L', 'carbapenemicos', 1.0),
-  ('oprD_loss', 'carbapenemicos', 8.0),
-  ('ampC_promoter_-32C_T', 'carbapenemicos', 1.0),
-  ('ampD_loss', 'carbapenemicos', 1.0),
-  ('mexR_frameshift', 'carbapenemicos', 1.0),
-  ('nalC_Q83K', 'carbapenemicos', 1.0),
-  ('mexZ_loss', 'carbapenemicos', 1.0),
-  ('ftsI_PBP3_insertion_YRIN', 'carbapenemicos', 2.0),
-  ('blaVIM_or_blaIMP', 'carbapenemicos', 16.0),
-  ('pmrB_mut', 'carbapenemicos', 1.0),
-  
-  -- Fluoroquinolonas (casos críticos)
-  ('gyrA_T83I', 'fluoroquinolonas', 8.0),     -- ×8 MIC Cipro
-  ('parC_S87L', 'fluoroquinolonas', 4.0),     -- ×4 MIC Cipro
-  ('mexR_frameshift', 'fluoroquinolonas', 4.0), -- Bomba eflujo
-  ('nalC_Q83K', 'fluoroquinolonas', 2.0),
-  
-  -- Aminoglucosidos
-  ('mexZ_loss', 'aminoglucosidos', 4.0),      -- MexXY-OprM
-  
-  -- Polimixinas
-  ('pmrB_mut', 'polimixinas', 8.0),           -- Resistencia colistina
-  
-  -- ... (continuar con las 99 filas del CSV)
-  ```
-
-- [ ] Crear tabla auxiliar `antibiotic_classes` (mapeo antibiótico → clase):
-  ```sql
-  CREATE TABLE IF NOT EXISTS antibiotic_classes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      antibiotico TEXT NOT NULL,
-      clase TEXT NOT NULL,                     -- Referencia a gene_class_multipliers.clase_antibiotico
-      UNIQUE(antibiotico)
-  );
-  
-  INSERT INTO antibiotic_classes (antibiotico, clase) VALUES
-  ('Meropenem', 'carbapenemicos'),
-  ('Imipenem', 'carbapenemicos'),
-  ('Doripenem', 'carbapenemicos'),
-  ('Ceftazidima', 'cef_3G_ceftazidima'),
-  ('Cefepime', 'cef_4G_cefepime'),
-  ('Ceftazidima/Avibactam', 'cef_inhibidor'),
-  ('Ceftolozano/Tazobactam', 'cef_inhibidor'),
-  ('Aztreonam', 'monobactam_aztreonam'),
-  ('Piperacilina/Tazobactam', 'penicilina_inhibidor'),
-  ('Amikacina', 'aminoglucosidos'),
-  ('Tobramicina', 'aminoglucosidos'),
-  ('Ciprofloxacino', 'fluoroquinolonas'),
-  ('Levofloxacino', 'fluoroquinolonas'),
-  ('Colistina', 'polimixinas'),
-  ('Cefiderocol', 'sideroforo_cefiderocol');
-  ```
-
-### 💡 VALIDACIÓN
-```sql
--- Verificar genes con mayor impacto en carbapenem
-SELECT gen, multiplicador_mic 
-FROM gene_class_multipliers 
-WHERE clase_antibiotico='carbapenemicos' AND multiplicador_mic > 1 
-ORDER BY multiplicador_mic DESC;
--- Debe retornar: blaVIM (16), oprD_loss (8), ftsI (2)
-
--- Verificar genes con mayor impacto en fluoroquinolonas
-SELECT gen, multiplicador_mic 
-FROM gene_class_multipliers 
-WHERE clase_antibiotico='fluoroquinolonas' AND multiplicador_mic > 1 
-ORDER BY multiplicador_mic DESC;
--- Debe retornar: gyrA_T83I (8), parC_S87L (4), mexR (4), nalC (2)
-```
-
----
-
-## 📌 ITEM 0.2: Migración de Panel Layouts
 **Archivo**: `src/migrations/017_seed_panel_layouts.sql`  
 **Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (Define concentraciones del panel AST)  
@@ -369,23 +281,22 @@ ORDER BY multiplicador_mic DESC;
 
 ## 📌 ITEM 0.3: Migración de Familias Antibióticas
 **Archivo**: `src/migrations/018_update_antibioticos_familias.sql`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: ⚠️ MEDIA (Metadatos educativos)  
-**Estimación**: 0.5 horas
+**Estimación**: 0.5 horas  
+**Tiempo real**: 0.5 horas
 
 ### Tareas
-- [ ] Agregar columnas a tabla `antibioticos` existente:
-  ```sql
-  ALTER TABLE antibioticos ADD COLUMN familia TEXT;
-  ALTER TABLE antibioticos ADD COLUMN mecanismo_accion TEXT;
-  ```
+- [x] Crear script `scripts/generate_antibioticos_familias_migration.py`
+- [x] Agregar columnas familia y mecanismo_accion a tabla antibioticos
+- [x] Generar 13 UPDATE statements desde CSV de familias
+- [x] Incluir queries de validacion
 
-- [ ] Seed desde `familias_antibioticas_y_especies_base_utf8_bom.csv`:
-  ```sql
-  UPDATE antibioticos SET familia='Carbapenémico', mecanismo_accion='Inhibe síntesis de pared bacteriana' WHERE nombre='Meropenem';
-  UPDATE antibioticos SET familia='Carbapenémico', mecanismo_accion='Inhibe síntesis de pared bacteriana' WHERE nombre='Imipenem';
-  -- ... (13 antibióticos)
-  ```
+### Resultados
+- Archivo generado: `src/migrations/018_update_antibioticos_familias.sql` (3671 caracteres)
+- 13 antibioticos actualizados con metadata educativa
+- 9 familias unicas: Carbapenémico, Cefalosporinas (3ra/4ta gen), Aminoglucósido, Fluoroquinolona, Polimixina, β-lactámico+inhibidor, Cefalosporina+inhibidor, Cefalosporina sideróforo
+- Script reusable: `scripts/generate_antibioticos_familias_migration.py` (127 lineas)
 
 ---
 
