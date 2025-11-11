@@ -135,14 +135,14 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 | Fase | Total Items | Completados | Progreso | Estado |
 |------|-------------|-------------|----------|--------|
-| **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | � Casi Completo |
-| **FASE 1**: Modelo de Datos SQLAlchemy | 3 | 0 | 0% | 🔴 Pendiente |
+| **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% |  Completo |
+| **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% |  Completo |
 | **FASE 2**: Motor AST Core | 4 | 0 | 0% | 🔴 Pendiente |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **28** | **7** | **25%** | 🟡 INICIADO |
+| **TOTAL** | **26** | **11** | **42%** |  EN PROGRESO |
 
 ---
 
@@ -578,112 +578,56 @@ Esta tabla guarda el "punto de partida" bacteriano antes de AST. Útil para audi
 
 # FASE 1: MODELO DE DATOS (MODELOS SQLAlchemy)
 
-## 📌 ITEM 1.1: Modelo Mutation (Genética de Resistencia)
+## 📌 ITEM 1.1: Modelos AST Core (5 clases SQLAlchemy)
 **Archivo**: `src/data/models.py` (agregar a archivo existente)  
-**Estado**: 🔴 Pendiente  
-**Prioridad**: 🔥 CRÍTICA (Fundamento científico)  
-**Estimación**: 0.5 horas
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
+**Prioridad**: 🔥 CRÍTICA  
+**Estimación**: 1.5 horas  
+**Tiempo real**: 1.5 horas
 
 ### Tareas
-- [ ] Agregar clase `Mutation` a `models.py`:
-  ```python
-  from sqlalchemy import Column, Integer, String, Text
-  
-  class Mutation(Base):
-      __tablename__ = 'mutations'
-      
-      id = Column(Integer, primary_key=True)
-      gen = Column(String(50), nullable=False)
-      tipo_mutacion = Column(String(100), nullable=False)
-      mecanismo = Column(Text, nullable=False)
-      antibioticos_afectados = Column(Text, nullable=False)  # JSON array
-      incremento_mic_factor = Column(Integer, nullable=False)
-      fitness_cost = Column(String(20), nullable=False)  # 'Baja', 'Media', 'Alta'
-      fuente = Column(Text, nullable=False)
-      
-      def __repr__(self):
-          return f"<Mutation {self.gen} ({self.tipo_mutacion})>"
-  ```
+- [x] Agregar clase `Breakpoint` con método `interpret_mic()`
+- [x] Agregar clase `GeneClassMultiplier` para matriz gen×clase
+- [x] Agregar clase `AntibioticClass` para mapeo antibiótico→clase
+- [x] Agregar clase `BacteriaProfile` para perfiles generados
+- [x] Agregar clase `PanelLayout` para configuración de panel 96-wells
+- [x] Verificar sintaxis y compilación
 
-### 💡 INTEGRACIÓN
-Este modelo es usado por `bacteria_profile_generator.py` (ITEM 0.4) para aplicar mutaciones científicas.
+### Resultados
+- Archivo actualizado: `src/data/models.py` (+120 líneas)
+- 5 modelos nuevos agregados
+- Total modelos en archivo: 16 (11 previos + 5 nuevos)
+- Sintaxis validada: ✅ Sin errores
+- Tablas correspondientes: Ya creadas en FASE 0 (migraciones 015-019)
+
+### Modelos implementados
+
+**1. Breakpoint** - Puntos de corte S/R
+- Campos: antibiotico, organismo, s_mic, r_mic, standard, fuente, familia, mecanismo
+- Método: `interpret_mic(mic_value)` retorna 'S' o 'R'
+- Uso: Interpretación de resultados AST según EUCAST/CLSI
+
+**2. GeneClassMultiplier** - Multiplicadores gen×clase
+- Campos: gen, clase_antibiotica, multiplicador
+- Uso: Cálculo de MICs mediante regla multiplicativa
+
+**3. AntibioticClass** - Mapeo antibiótico→clase
+- Campos: antibiotico, clase
+- Uso: Determinar qué multiplicadores aplicar a cada antibiótico
+
+**4. BacteriaProfile** - Perfiles bacterianos generados
+- Campos: organismo, escenario, origen_muestra, antibioticos_previos, genotipo, mics_calculated, mutaciones_aplicadas, created_at
+- Uso: Almacenar estado inicial de bacteria antes de AST
+
+**5. PanelLayout** - Layout de panel 96-wells
+- Campos: panel_name, well_position, antibiotico, concentracion, tipo
+- Uso: Definir distribución de antibióticos y concentraciones en placa
 
 ---
 
-## 📌 ITEM 1.2: Modelo Breakpoint (Puntos de Corte)
-**Archivo**: `src/data/models.py` (agregar a archivo existente)  
-**Estado**: 🔴 Pendiente  
-**Prioridad**: 🔥 CRÍTICA (Interpretación S/R)  
-**Estimación**: 0.5 horas
+**ESTIMACIÓN TOTAL FASE 1:** 1.5 horas (5 modelos SQLAlchemy)
 
-### Tareas
-- [ ] Agregar clase `Breakpoint` a `models.py`:
-  ```python
-  from sqlalchemy import Column, Integer, String, Float, Text
-  
-  class Breakpoint(Base):
-      __tablename__ = 'breakpoints'
-      
-      id = Column(Integer, primary_key=True)
-      antibiotico = Column(String(100), nullable=False)
-      organismo = Column(String(100), nullable=False, default='Pseudomonas aeruginosa')
-      s_mic = Column(Float, nullable=False)
-      r_mic = Column(Float, nullable=False)
-      standard = Column(String(20), nullable=False)  # 'EUCAST' o 'CLSI'
-      fuente = Column(Text, nullable=False)
-      familia = Column(String(100))
-      mecanismo = Column(Text)
-      
-      def interpret_mic(self, mic_value):
-          """Retorna 'S' o 'R' según MIC."""
-          if mic_value <= self.s_mic:
-              return 'S'
-          elif mic_value > self.r_mic:
-              return 'R'
-          else:
-              # EUCAST no tiene 'I', pero por si acaso
-              return 'R'  # Conservador
-      
-      def __repr__(self):
-          return f"<Breakpoint {self.antibiotico} S≤{self.s_mic} R>{self.r_mic}>"
-  ```
-
----
-
-## 📌 ITEM 1.3: Modelo BacteriaProfile (Perfiles Bacterianos)
-**Archivo**: `src/data/models.py` (agregar a archivo existente)  
-**Estado**: 🔴 Pendiente  
-**Prioridad**: ⚠️ MEDIA  
-**Estimación**: 0.5 horas
-
-### Tareas
-- [ ] Agregar clase `BacteriaProfile` a `models.py`:
-  ```python
-  from sqlalchemy import Column, Integer, String, Text, DateTime
-  from datetime import datetime
-  
-  class BacteriaProfile(Base):
-      __tablename__ = 'bacteria_profiles'
-      
-      id = Column(Integer, primary_key=True)
-      organismo = Column(String(100), nullable=False, default='Pseudomonas aeruginosa')
-      escenario = Column(String(50), nullable=False)  # 'comunitario', 'hospitalizado'
-      origen_muestra = Column(String(50))  # 'hemocultivo', 'esputo', 'orina'
-      antibioticos_previos = Column(Text)  # JSON array
-      genotipo = Column(Text, nullable=False)  # JSON dict
-      mics_base = Column(Text, nullable=False)  # JSON dict
-      mutaciones_aplicadas = Column(Text)  # JSON array
-      created_at = Column(DateTime, default=datetime.utcnow)
-      
-      def __repr__(self):
-          return f"<BacteriaProfile {self.organismo} ({self.escenario})>"
-  ```
-
----
-
-**ESTIMACIÓN TOTAL FASE 1:** 1.5 horas (3 modelos nuevos en models.py)
-
-**NOTA**: Las tablas SQL correspondientes ya fueron creadas en FASE 0 (migraciones 016, 015, 020).
+**NOTA**: Las tablas SQL correspondientes ya fueron creadas en FASE 0 (migraciones 015-019).
 
 ---
 
@@ -767,10 +711,19 @@ ORGANISM_GRAM = "negativo"
 ---
 
 ## 📌 ITEM 1.2: Migración SQL - Breakpoints CLSI/EUCAST
-**Archivo**: `src/migrations/016_seed_breakpoints.sql`  
-**Estado**: 🔴 Pendiente  
+**Archivo**: `src/migrations/015_seed_breakpoints.sql`  
+**Estado**: ✅ COMPLETADO EN FASE 0 (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
-**Estimación**: 1-2 horas (SIMPLIFICADO - solo P. aeruginosa)
+**Estimación**: 1-2 horas  
+**Tiempo real**: 2 horas (ITEM 0.0)
+
+### Nota
+Este item fue completado como **ITEM 0.0** en FASE 0.
+- Migración generada: `015_seed_breakpoints.sql`
+- 31 breakpoints (17 EUCAST + 14 CLSI)
+- Cobertura: 15/15 antibióticos del panel
+
+**Ver ITEM 0.0 para detalles completos.**
 
 ### ⚠️ ACLARACIÓN IMPORTANTE
 **Breakpoints NO son visibles para el usuario final en MVP**.
@@ -843,9 +796,18 @@ INSERT INTO breakpoints (antibiotico_id, guideline, version, breakpoint_s, break
 
 ## 📌 ITEM 1.3: Migración SQL - Paneles Predefinidos
 **Archivo**: `src/migrations/017_seed_panel_layouts.sql`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO EN FASE 0 (11-nov-2025)  
 **Prioridad**: ⚠️ MEDIA  
-**Estimación**: 1 hora (SIMPLIFICADO)
+**Estimación**: 1 hora  
+**Tiempo real**: 1 hora (ITEM 0.2)
+
+### Nota
+Este item fue completado como **ITEM 0.2** en FASE 0.
+- Migración generada: `017_seed_panel_layouts.sql`
+- 93 wells (91 test + 2 QC)
+- Panel: Pseudomonas Standard Panel
+
+**Ver ITEM 0.2 para detalles completos.**
 
 ### ⚠️ RESTRICCIÓN IMPORTANTE
 **Panel único**: "Pseudomonas Standard Panel"  
@@ -886,9 +848,17 @@ Si falta alguno (ej: Ceftolozano-Tazobactam), agregarlo primero.
 
 ## 📌 ITEM 1.4: Actualizar Modelos SQLAlchemy
 **Archivo**: `src/data/models.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
-**Estimación**: 1 hora (SIMPLIFICADO - sin clase Organism)
+**Estimación**: 1 hora  
+**Tiempo real**: 0.5 horas (parte de ITEM 1.1)
+
+### Nota
+Este item fue completado como parte de **ITEM 1.1**.
+- 5 modelos agregados: Breakpoint, GeneClassMultiplier, AntibioticClass, BacteriaProfile, PanelLayout
+- Sin clase Organism (organismo fijo: P. aeruginosa)
+
+**Ver ITEM 1.1 para detalles completos.**
 
 ### Tareas
 - [x] ~~Crear clase `Organism`~~ **OMITIDO** (organismo fijo)
