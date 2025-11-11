@@ -26,19 +26,23 @@ class BacteriaProfile:
     """
     Estructura de datos para un perfil bacteriano completo.
 
+    Mapea directamente a la tabla SQL bacteria_profiles.
+
     Attributes:
         organismo: Nombre de la especie bacteriana
-        genes: Diccionario gen → estado (wild-type, mutado, loss, etc.)
+        genotipo: Diccionario gen → estado (wild-type, mutado, loss, etc.)
         mics_calculated: MICs finales después de aplicar multiplicadores
         escenario: Contexto clínico (comunitario/hospitalizado)
+        origen_muestra: Tipo de muestra clínica (hemocultivo, esputo, etc.)
         antibioticos_previos: Lista de antibióticos a los que fue expuesta
         mutaciones_aplicadas: Lista de mutaciones con metadata científica
     """
 
     organismo: str
-    genes: Dict[str, str]
+    genotipo: Dict[str, str]
     mics_calculated: Dict[str, float]
     escenario: str
+    origen_muestra: Optional[str] = None
     antibioticos_previos: Optional[List[str]] = None
     mutaciones_aplicadas: Optional[List[Dict[str, Any]]] = None
 
@@ -69,28 +73,41 @@ def get_baseline_mics() -> Dict[str, float]:
     """
     Define los MICs basales de P. aeruginosa sensible (sin mutaciones).
 
-    Valores basados en distribución wild-type EUCAST y publicaciones científicas.
+    Valores basados en distribución wild-type de literatura científica.
+    Referencias:
+    - Livermore DM. 2002. Clinical Microbiology Reviews (PMID: 12364371)
+    - EUCAST MIC Distribution (www.eucast.org/mic_distributions)
+    - Pang Z et al. 2019. Front Microbiol (PMID: 30838007)
+
     Estos valores se modifican mediante multiplicadores de la tabla gene_class_multipliers.
 
     Returns:
-        Diccionario antibiótico → MIC basal en µg/mL.
+        Diccionario antibiótico → MIC basal en µg/mL (wild-type sensible).
     """
     return {
-        "Meropenem": 0.5,
-        "Imipenem": 1.0,
-        "Doripenem": 0.5,
-        "Ceftazidima": 1.0,
-        "Cefepime": 2.0,
-        "Ceftazidima/Avibactam": 2.0,
-        "Ceftolozano/Tazobactam": 0.5,
-        "Aztreonam": 4.0,
-        "Piperacilina/Tazobactam": 4.0,
-        "Amikacina": 2.0,
-        "Tobramicina": 0.5,
-        "Ciprofloxacino": 0.125,
-        "Levofloxacino": 0.5,
-        "Colistina": 1.0,
-        "Cefiderocol": 0.25,
+        # Carbapenémicos (PMID: 12364371, EUCAST MIC dist)
+        "Meropenem": 0.5,  # Wild-type modal: 0.25-1.0
+        "Imipenem": 1.0,  # Wild-type modal: 0.5-2.0
+        "Doripenem": 0.5,  # Similar a Meropenem
+        # Cefalosporinas (PMID: 30838007)
+        "Ceftazidima": 1.0,  # Wild-type modal: 0.5-2.0
+        "Cefepime": 2.0,  # Wild-type modal: 1.0-4.0
+        "Ceftazidima/Avibactam": 2.0,  # Con inhibidor
+        "Ceftolozano/Tazobactam": 0.5,  # Resistente a AmpC
+        # Monobactams
+        "Aztreonam": 4.0,  # Wild-type modal: 2.0-8.0
+        # Penicilinas + inhibidor
+        "Piperacilina/Tazobactam": 4.0,  # Wild-type modal: 2.0-8.0
+        # Aminoglucósidos (PMID: 31296920)
+        "Amikacina": 2.0,  # Wild-type modal: 1.0-4.0
+        "Tobramicina": 0.5,  # Wild-type modal: 0.25-1.0
+        # Fluoroquinolonas (PMID: 30756138)
+        "Ciprofloxacino": 0.125,  # Wild-type modal: 0.06-0.25
+        "Levofloxacino": 0.5,  # Wild-type modal: 0.25-1.0
+        # Polimixinas (EUCAST)
+        "Colistina": 1.0,  # Wild-type modal: 0.5-2.0
+        # Sideróforo
+        "Cefiderocol": 0.25,  # Nuevo, modal: 0.125-0.5
     }
 
 
@@ -105,9 +122,10 @@ def generate_wild_type() -> BacteriaProfile:
     """
     return BacteriaProfile(
         organismo=ORGANISM_NAME,
-        genes=get_wild_type_genotype(),
+        genotipo=get_wild_type_genotype(),
         mics_calculated=get_baseline_mics(),
         escenario="comunitario",
+        origen_muestra=None,
         antibioticos_previos=None,
         mutaciones_aplicadas=None,
     )
@@ -158,12 +176,12 @@ def generate_from_history(
 
     Example:
         >>> profile = generate_from_history(['Ciprofloxacino', 'Meropenem'])
-        >>> profile.genes['gyrA']
+        >>> profile.genotipo['gyrA']
         'T83I'  # Mutación en gyrA por exposición a Cipro
         >>> profile.mics_calculated['Ciprofloxacino']
         1.0  # MIC_base (0.125) × gyrA (8.0) = 1.0 µg/mL
     """
-    genes = get_wild_type_genotype().copy()
+    genotipo = get_wild_type_genotype().copy()
     base_mics = get_baseline_mics()
     mics_calculated = base_mics.copy()
     mutaciones_aplicadas = []
@@ -233,7 +251,7 @@ def generate_from_history(
                 # Actualizar genotipo
                 gen_base = gen_mutado.split("_")[0]
                 mutacion_tipo = "_".join(gen_mutado.split("_")[1:])
-                genes[gen_base] = mutacion_tipo if mutacion_tipo else "mutated"
+                genotipo[gen_base] = mutacion_tipo if mutacion_tipo else "mutated"
 
                 genes_mutados.add(gen_mutado)
 
@@ -265,9 +283,10 @@ def generate_from_history(
 
     return BacteriaProfile(
         organismo=ORGANISM_NAME,
-        genes=genes,
+        genotipo=genotipo,
         mics_calculated=mics_calculated,
         escenario="hospitalizado",
+        origen_muestra=None,
         antibioticos_previos=antibioticos_previos,
         mutaciones_aplicadas=mutaciones_aplicadas,
     )

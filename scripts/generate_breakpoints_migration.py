@@ -87,7 +87,24 @@ def parse_eucast():
 
 
 def parse_clsi_fallbacks(eucast_antibiotics):
-    """Parse CLSI CSV solo para antibióticos NO en EUCAST."""
+    """Parse CLSI CSV para antibióticos del panel de 15."""
+    panel_antibiotics = {
+        "Meropenem",
+        "Imipenem",
+        "Doripenem",
+        "Ceftazidime",
+        "Cefepime",
+        "Ceftazidime-Avibactam",
+        "Ceftolozane-Tazobactam",
+        "Aztreonam",
+        "Piperacillin-Tazobactam",
+        "Amikacin",
+        "Tobramycin",
+        "Ciprofloxacin",
+        "Levofloxacin",
+        "Colistin",
+    }
+
     breakpoints = []
     familias = load_familias()
 
@@ -95,14 +112,10 @@ def parse_clsi_fallbacks(eucast_antibiotics):
         reader = csv.DictReader(f)
         for row in reader:
             antibiotico = row["Antibiotic"].strip()
-
-            # Normalizar nombre para comparación
             normalized = normalize_antibiotic_name(antibiotico)
 
-            # Skip si ya está en EUCAST
-            if any(
-                normalize_antibiotic_name(ab) == normalized for ab in eucast_antibiotics
-            ):
+            # Solo incluir si está en el panel de 15
+            if normalized not in panel_antibiotics:
                 continue
 
             # Skip si no tiene breakpoints definidos
@@ -119,12 +132,10 @@ def parse_clsi_fallbacks(eucast_antibiotics):
             bp = {
                 "antibiotico": antibiotico,
                 "organismo": "Pseudomonas aeruginosa",
-                "s_mic": float(s_mic)
-                if "/" not in s_mic
-                else None,  # Skip combinaciones
+                "s_mic": float(s_mic) if "/" not in s_mic else None,
                 "r_mic": float(r_mic) if "/" not in r_mic else None,
                 "standard": "CLSI",
-                "fuente": row["Fuente"].strip(),
+                "fuente": "pseudomonas_aeruginosa_clsi_breakpoints_extracted.csv",
                 "familia": familia_info["familia"],
                 "mecanismo": familia_info["mecanismo"],
             }
@@ -142,8 +153,20 @@ def generate_sql(breakpoints):
 
     # Header
     sql_lines.append("-- Migración 015: Seed de Breakpoints (EUCAST v15.0 + CLSI M07)")
-    sql_lines.append("-- Fecha de generación: 10 de noviembre de 2025")
-    sql_lines.append("-- Fuentes: EUCAST v_15.0_Breakpoint_Tables.pdf, CLSI M07 (2023)")
+    sql_lines.append("-- Fecha de generación: 11 de noviembre de 2025")
+    sql_lines.append("-- Fuentes: ")
+    sql_lines.append(
+        "--   - eucast_pseudomonas_aeruginosa_v15_2025.csv (17 breakpoints EUCAST)"
+    )
+    sql_lines.append(
+        "--   - pseudomonas_aeruginosa_clsi_breakpoints_extracted.csv (14 breakpoints CLSI)"
+    )
+    sql_lines.append(
+        "-- Total: 31 breakpoints (17 EUCAST primarios + 14 CLSI fallbacks)"
+    )
+    sql_lines.append(
+        "-- Nota: Colistina solo tiene breakpoint CLSI (EUCAST no define para P. aeruginosa)"
+    )
     sql_lines.append("-- Organismo: Pseudomonas aeruginosa (hardcoded)")
     sql_lines.append("")
 
@@ -236,10 +259,10 @@ def main():
     print(f"  {len(eucast_breakpoints)} antibioticos EUCAST")
 
     # Parse CLSI (fallbacks)
-    print("Parseando CLSI M07 (solo fallbacks)...")
+    print("Parseando CLSI M07 (panel de 15 antibióticos)...")
     eucast_antibiotics = [bp["antibiotico"] for bp in eucast_breakpoints]
     clsi_fallbacks = parse_clsi_fallbacks(eucast_antibiotics)
-    print(f"  {len(clsi_fallbacks)} antibioticos CLSI adicionales")
+    print(f"  {len(clsi_fallbacks)} antibioticos CLSI del panel")
 
     # Combinar
     all_breakpoints = eucast_breakpoints + clsi_fallbacks

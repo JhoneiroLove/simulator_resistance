@@ -4,7 +4,7 @@
 **Fecha de creación**: 9 de noviembre de 2025  
 **Última actualización**: 11 de noviembre de 2025  
 **Objetivo**: Refactorizar aplicación + Implementar workflow AST completo para microbiólogos  
-**Estado**: 🟡 EN PROGRESO (21% completado - 6/28 items)
+**Estado**: 🟡 EN PROGRESO (25% completado - 7/28 items)
 
 ---
 
@@ -135,44 +135,48 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 | Fase | Total Items | Completados | Progreso | Estado |
 |------|-------------|-------------|----------|--------|
-| **FASE 0**: Datos + Hardware Reemplazo | 8 | 6 | 75% | 🟡 En Progreso |
+| **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | � Casi Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 2**: Motor AST Core | 4 | 0 | 0% | 🔴 Pendiente |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **28** | **6** | **21%** | 🟡 INICIADO |
+| **TOTAL** | **28** | **7** | **25%** | 🟡 INICIADO |
 
 ---
 
 # FASE 0: DATOS FUNDACIONALES + HARDWARE VIRTUAL (INNOVACIÓN)
 
-## 📌 ITEM 0.0: Migración de Breakpoints (EUCAST)
+## 📌 ITEM 0.0: Migración de Breakpoints (EUCAST + CLSI)
 **Archivo**: `src/migrations/015_seed_breakpoints.sql`  
-**Estado**: ✅ COMPLETADO (10-nov-2025)  
+**Estado**: ✅ COMPLETADO (11-nov-2025, actualizado con CLSI completo)  
 **Prioridad**: 🔥 CRÍTICA (Fundamento de interpretación S/R)  
 **Estimación**: 1.5 horas  
-**Tiempo real**: 1.5 horas
+**Tiempo real**: 2 horas
 
 ### ⚠️ CONTEXTO - DECISIÓN DE ESTÁNDAR
 **Estándar primario:** EUCAST v15.0 (2025) - más reciente, simplificado (sin categoría "I")  
-**Estándar fallback:** CLSI M07 (2023) - solo si antibiótico no está en EUCAST  
-**Fuente de datos:** `docs/eucast_pseudomonas_aeruginosa_v15_2025.csv` (17 antibióticos)
+**Estándar fallback:** CLSI M07 (2023) - para validación cruzada y antibióticos sin EUCAST  
+**Fuentes de datos:** 
+- `docs/eucast_pseudomonas_aeruginosa_v15_2025.csv` (17 antibióticos EUCAST)
+- `docs/pseudomonas_aeruginosa_clsi_breakpoints_extracted.csv` (14 antibióticos CLSI)
 
-**Razón**: EUCAST es binario (S/R), elimina complejidad de "Intermedio". MicroScan usa ambos, pero nosotros no somos clon.
+**Razón**: Doble estándar permite validación cruzada y cobertura completa del panel de 15 antibióticos.
 
 ### Tareas
 - [x] Crear script `scripts/generate_breakpoints_migration.py`
-- [x] Crear tabla `breakpoints` con 8 columnas (antibiotico, organismo, s_mic, r_mic, standard, fuente, familia, mecanismo)
+- [x] Crear tabla `breakpoints` con 9 columnas (antibiotico, organismo, s_mic, r_mic, standard, fuente, familia, mecanismo, UNIQUE constraint)
 - [x] Insertar 17 antibióticos desde EUCAST CSV
-- [x] Agregar 6 fallbacks desde CLSI para antibióticos no cubiertos por EUCAST
+- [x] Insertar 14 antibióticos CLSI (13 del panel + Colistina exclusiva CLSI)
 - [x] Incluir queries de validación en migración SQL
-- [x] Total: 23 breakpoints generados (17 EUCAST + 6 CLSI)
+- [x] Total: 31 breakpoints generados (17 EUCAST + 14 CLSI)
 
 ### Resultados
-- Archivo generado: `src/migrations/015_seed_breakpoints.sql` (7615 caracteres, 88 líneas)
-- Validación incluida: 3 queries SQL comentadas para verificar integridad
+- Archivo generado: `src/migrations/015_seed_breakpoints.sql` (actualizado 11-nov-2025)
+- Cobertura: 15/15 antibióticos del panel tienen breakpoints
+- Nota técnica: Colistina solo tiene CLSI (EUCAST no define para P. aeruginosa)
+- Validación incluida: 4 queries SQL comentadas para verificar integridad
 - Script reusable: `scripts/generate_breakpoints_migration.py` (274 líneas)
 
 ---
@@ -515,48 +519,38 @@ Este módulo ahora consulta la tabla `mutations` (ITEM 0.1) para:
 ---
 
 ## 📌 ITEM 0.6: Migración de Familias Antibióticas
-**Archivo**: `src/migrations/019_update_antibioticos_familias.sql`  
-**Estado**: 🔴 Pendiente  
+**Archivo**: `src/migrations/018_update_antibioticos_familias.sql` (YA COMPLETADO EN ITEM 0.3)  
+**Estado**: ✅ DUPLICADO - Ver ITEM 0.3  
 **Prioridad**: ⚠️ MEDIA (Metadatos educativos)  
 **Estimación**: 0.5 horas
 
-### Tareas
-- [ ] Agregar columnas a tabla `antibioticos` existente:
-  ```sql
-  ALTER TABLE antibioticos ADD COLUMN familia TEXT;
-  ALTER TABLE antibioticos ADD COLUMN mecanismo_accion TEXT;
-  ```
-
-- [ ] Seed desde `familias_antibioticas_y_especies_base_utf8_bom.csv`:
-  ```sql
-  UPDATE antibioticos SET familia='Carbapenémico', mecanismo_accion='Inhibe síntesis de pared bacteriana' WHERE nombre='Meropenem';
-  UPDATE antibioticos SET familia='Carbapenémico', mecanismo_accion='Inhibe síntesis de pared bacteriana' WHERE nombre='Imipenem';
-  -- ... (13 antibióticos)
-  ```
+### Nota
+Este item es un duplicado del ITEM 0.3 que ya fue completado.
+La migración 018_update_antibioticos_familias.sql ya existe y contiene:
+- ALTER TABLE antibioticos ADD COLUMN familia, mecanismo_accion
+- 13 UPDATE statements con familias y mecanismos
 
 ---
 
 ## 📌 ITEM 0.7: Tabla bacteria_profiles
-**Archivo**: `src/migrations/020_create_bacteria_profiles.sql`  
-**Estado**: 🔴 Pendiente  
+**Archivo**: `src/migrations/019_create_bacteria_profiles.sql`  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: ⚠️ MEDIA  
-**Estimación**: 0.5 horas
+**Estimación**: 0.5 horas  
+**Tiempo real**: 0.5 horas
 
 ### Tareas
-- [ ] Crear tabla para almacenar perfiles generados:
-  ```sql
-  CREATE TABLE IF NOT EXISTS bacteria_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      organismo TEXT NOT NULL DEFAULT 'Pseudomonas aeruginosa',
-      escenario TEXT NOT NULL,           -- 'comunitario' o 'hospitalizado'
-      origen_muestra TEXT,                -- 'hemocultivo', 'esputo', 'orina'
-      antibioticos_previos TEXT,          -- JSON: ['Ciprofloxacino', 'Meropenem']
-      genotipo TEXT NOT NULL,             -- JSON: {'gyrA': 'Sustitución T83I', 'oprD': 'Deleción'}
-      mics_base TEXT NOT NULL,            -- JSON: {'Meropenem': 16.0, 'Cipro': 32.0}
-      mutaciones_aplicadas TEXT,          -- JSON: [{'gen': 'gyrA', 'fitness_cost': 'Media'}]
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
+- [x] Crear tabla para almacenar perfiles generados
+- [x] Definir columnas: organismo, escenario, origen_muestra, antibioticos_previos, genotipo, mics_calculated, mutaciones_aplicadas
+- [x] Crear indices para optimizacion (escenario, created_at)
+- [x] Incluir queries de validacion
+
+### Resultados
+- Archivo generado: `src/migrations/019_create_bacteria_profiles.sql` (61 lineas)
+- Tabla: bacteria_profiles con 9 columnas
+- Indices: 2 indices (escenario, created_at DESC)
+- Campos JSON: antibioticos_previos, genotipo, mics_calculated, mutaciones_aplicadas
+- Validacion: 4 queries SQL comentadas para testing
 
 ### 💡 NOTA
 Esta tabla guarda el "punto de partida" bacteriano antes de AST. Útil para auditoría y análisis educativo.
