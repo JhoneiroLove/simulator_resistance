@@ -2,9 +2,9 @@
 ## Simulador de Resistencia Bacteriana (SRB)
 
 **Fecha de creación**: 9 de noviembre de 2025  
-**Última actualización**: 10 de noviembre de 2025  
+**Última actualización**: 11 de noviembre de 2025  
 **Objetivo**: Refactorizar aplicación + Implementar workflow AST completo para microbiólogos  
-**Estado**: � EN PROGRESO (7% completado - 2/28 items)
+**Estado**: 🟡 EN PROGRESO (11% completado - 3/28 items)
 
 ---
 
@@ -135,14 +135,14 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 | Fase | Total Items | Completados | Progreso | Estado |
 |------|-------------|-------------|----------|--------|
-| **FASE 0**: Datos + Hardware Reemplazo | 8 | 2 | 25% | � En Progreso |
+| **FASE 0**: Datos + Hardware Reemplazo | 8 | 3 | 38% | 🟡 En Progreso |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 2**: Motor AST Core | 4 | 0 | 0% | 🔴 Pendiente |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **28** | **2** | **7%** | � INICIADO |
+| **TOTAL** | **28** | **3** | **11%** | 🟡 INICIADO |
 
 ---
 
@@ -338,60 +338,37 @@ ORDER BY multiplicador_mic DESC;
 
 ## 📌 ITEM 0.2: Migración de Panel Layouts
 **Archivo**: `src/migrations/017_seed_panel_layouts.sql`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (Define concentraciones del panel AST)  
-**Estimación**: 1 hora
+**Estimación**: 1 hora  
+**Tiempo real**: 1 hora
 
 ### ⚠️ CONTEXTO
 **Fuente:** `docs/pseudomonas_aeruginosa_concentraciones_simuladas.csv` (13 antibióticos)  
-**Serie log₂:** Cada antibiótico tiene 7-9 pozos con concentraciones duplicadas (0.25 → 0.5 → 1 → 2 → 4 → 8 → 16)  
-**Total pozos estimados:** ~100-120 pozos (13 antibióticos × promedio 8 concentraciones)
+**Serie log₂:** Cada antibiótico tiene 6-9 wells con concentraciones duplicadas  
+**Total wells:** 91 test + 2 QC = 93 wells
 
 ### Tareas
-- [ ] Script Python temporal para generar INSERTs desde CSV:
-  ```python
-  # scripts/generate_panel_inserts.py (ejecutar manualmente, luego borrar)
-  import csv
-  
-  panel_name = 'PA_Standard_Panel_v1'
-  row_letter = 'A'
-  
-  with open('docs/pseudomonas_aeruginosa_concentraciones_simuladas.csv') as f:
-      reader = csv.DictReader(f)
-      for row in reader:
-          min_c = float(row['Rango_Min'])
-          max_c = float(row['Rango_Max'])
-          
-          # Generar serie log₂
-          concentrations = []
-          conc = min_c
-          while conc <= max_c:
-              concentrations.append(conc)
-              conc *= 2
-          
-          # Generar INSERTs
-          for i, conc in enumerate(concentrations):
-              well_pos = f"{row_letter}{i+1}"
-              print(f"('{panel_name}', '{row['Antibiotico']}', '{well_pos}', {conc}),")
-          
-          row_letter = chr(ord(row_letter) + 1)
-  ```
 
-- [ ] Pegar output en migración 016:
-  ```sql
-  INSERT INTO panel_layouts (panel_name, antibiotico, well_position, concentration_ug_ml) VALUES
-  ('PA_Standard_Panel_v1', 'Meropenem', 'A1', 0.25),
-  ('PA_Standard_Panel_v1', 'Meropenem', 'A2', 0.5),
-  -- ... (~100 filas más)
-  ```
+- [x] Crear script `scripts/generate_panel_layouts_migration.py`
+- [x] Crear tabla `panel_layouts` (panel_name, well_position, antibiotico, concentracion, tipo)
+- [x] Generar series log2 automaticamente (0.25 → 0.5 → 1 → 2 → 4 → 8 → 16 → ...)
+- [x] Asignar 91 wells test en posiciones A1-H10 (saltar H11, H12)
+- [x] Insertar 2 controles QC: H11 (control_positivo), H12 (control_negativo)
 
-### 💡 VALIDACIÓN
-`SELECT antibiotico, COUNT(*) FROM panel_layouts GROUP BY antibiotico;` → Cada antibiótico debe tener 7-9 pozos
+### Resultados
+
+- Archivo generado: `src/migrations/017_seed_panel_layouts.sql` (10305 caracteres, 136 líneas)
+- Wells test: 91 (distribuidos en 13 antibioticos)
+- Wells QC: 2 (H11 positivo, H12 negativo)
+- Total: 93 wells
+- Script reusable: `scripts/generate_panel_layouts_migration.py` (200 lineas)
+- Optimizacion: Ordenamiento por numero de concentraciones (descendente) para maximizar uso del panel
 
 ---
 
-## 📌 ITEM 0.2: Migración de Familias Antibióticas
-**Archivo**: `src/migrations/017_update_antibioticos_familias.sql`  
+## 📌 ITEM 0.3: Migración de Familias Antibióticas
+**Archivo**: `src/migrations/018_update_antibioticos_familias.sql`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: ⚠️ MEDIA (Metadatos educativos)  
 **Estimación**: 0.5 horas
