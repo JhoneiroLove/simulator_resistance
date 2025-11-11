@@ -4,7 +4,7 @@
 **Fecha de creación**: 9 de noviembre de 2025  
 **Última actualización**: 11 de noviembre de 2025  
 **Objetivo**: Refactorizar aplicación + Implementar workflow AST completo para microbiólogos  
-**Estado**: 🟡 EN PROGRESO (14% completado - 4/28 items)
+**Estado**: 🟡 EN PROGRESO (18% completado - 5/28 items)
 
 ---
 
@@ -135,14 +135,14 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 | Fase | Total Items | Completados | Progreso | Estado |
 |------|-------------|-------------|----------|--------|
-| **FASE 0**: Datos + Hardware Reemplazo | 8 | 4 | 50% | 🟡 En Progreso |
+| **FASE 0**: Datos + Hardware Reemplazo | 8 | 5 | 63% | 🟡 En Progreso |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 2**: Motor AST Core | 4 | 0 | 0% | 🔴 Pendiente |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **28** | **4** | **14%** | 🟡 INICIADO |
+| **TOTAL** | **28** | **5** | **18%** | 🟡 INICIADO |
 
 ---
 
@@ -304,9 +304,10 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 ## 📌 ITEM 0.4: Generador de Perfiles Bacterianos (CIENTÍFICO)
 **Archivo**: `src/core/bacteria_profile_generator.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (Reemplaza MALDI-TOF + preparación física)  
-**Estimación**: 3 horas (aumentado por integración con tabla mutations)
+**Estimación**: 3 horas  
+**Tiempo real**: 3 horas
 
 ### ⚠️ CONTEXTO IMPORTANTE
 **En MicroScan real**: Técnico toma muestra física → MALDI-TOF identifica bacteria → Prepara inóculo  
@@ -319,9 +320,27 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 ### Tareas
 
-- [ ] Constante global: `ORGANISM_NAME = "Pseudomonas aeruginosa"`
+- [x] Constante global: `ORGANISM_NAME = "Pseudomonas aeruginosa"`
+- [x] Dataclass `BacteriaProfile` para estructura de datos tipada
+- [x] Funciones auxiliares: `get_wild_type_genotype()`, `get_baseline_mics()`
+- [x] Método `generate_wild_type()` - Bacteria comunitaria sensible
+- [x] Método `generate_from_history()` - Bacteria hospitalaria con mutaciones
+- [x] Método `calculate_mic_with_multipliers()` - Regla multiplicativa
+- [x] Método `get_multipliers_from_db()` - Consulta gene_class_multipliers
+- [x] Método `format_profile_summary()` - Formato para GUI
 
-- [ ] Método `generate_wild_type()` - Bacteria comunitaria sensible
+### Resultados
+
+- Archivo implementado: `src/core/bacteria_profile_generator.py` (387 líneas)
+- Estructura: BacteriaProfile dataclass con type hints completos
+- Genes documentados: 11 (gyrA, parC, oprD, mexR, ampC, ampD, ftsI, mexZ, nalC, blaVIM, pmrB)
+- Antibióticos: 15 con MICs basales científicos
+- Algoritmo: Regla multiplicativa MIC_final = MIC_base × ∏(multiplicadores)
+- Integración: Consulta directa a gene_class_multipliers + antibiotic_classes
+- Probabilidad de mutación: 70% por defecto (ajustable)
+- Funcionalidad educativa: Genera perfiles determinísticos basados en exposición previa
+
+### Método `generate_wild_type()` - Bacteria comunitaria sensible
   ```python
   def generate_wild_type():
       """Bacteria sensible estándar, sin exposición previa a antibióticos."""
