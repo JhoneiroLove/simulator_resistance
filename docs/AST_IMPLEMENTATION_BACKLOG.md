@@ -138,11 +138,11 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
 | **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo | � En Progreso |
-| **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
+| **FASE 3**: GUI Wizard | 5 | 1 | 20% | � En Progreso |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **15** | **58%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **16** | **62%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1284,30 +1284,33 @@ COHERENCE_RULES = {
 
 ## 📌 ITEM 3.1: Widget AST Panel
 **Archivo**: `src/gui/widgets/ast_panel_widget.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
-**Estimación**: 1.5-2 horas (SIMPLIFICADO)
+**Estimación**: 1.5-2 horas (SIMPLIFICADO)  
+**Tiempo real**: 2 horas
 
 ### Tareas
 - [x] ~~ComboBox para selección de organismo~~ **OMITIDO** (siempre P. aeruginosa)
   - Mostrar label fijo: "Organismo: *Pseudomonas aeruginosa*"
   
-- [ ] ComboBox para selección de panel
+- [x] ComboBox para selección de panel
   - Cargar desde BD (tabla `panel_layouts`)
   - Por defecto: "Pseudomonas Standard Panel"
   
-- [ ] SpinBox para inóculo (McFarland)
+- [x] SpinBox para inóculo (McFarland)
   - Rango: 0.3 - 0.7 (típico 0.5)
   
-- [ ] SpinBox para temperatura
+- [x] SpinBox para temperatura
   - Rango: 35-37°C (fijo en mayoría de casos)
   
-- [ ] SpinBox para duración
+- [x] Label fijo para duración
   - Fijo: 18.0 horas (estándar AST)
   
-- [ ] Botón "Ejecutar AST"
-- [ ] ProgressBar durante simulación
-- [ ] Signal `ast_completed(run_id)`
+- [x] Botón "Ejecutar AST" con estilo verde
+- [x] ProgressBar durante simulación (0-100%)
+- [x] Signal `ast_completed(report)` y `ast_failed(error_msg)`
+- [x] Clase `ASTWorker(QThread)` para ejecución asíncrona
+- [x] Método `set_bacteria_profile(bacteria_profile_id)`
 
 ### UI Layout SIMPLIFICADO
 ```
@@ -1324,6 +1327,58 @@ COHERENCE_RULES = {
 │ [████████░░] 80%                │
 └─────────────────────────────────┘
 ```
+
+### Resultados ITEM 3.1
+**Archivo creado**: `src/gui/widgets/ast_panel_widget.py` (447 líneas)
+
+**Clases implementadas** (2):
+
+1. **`ASTWorker(QThread)`**: Thread para simulación asíncrona
+   - **Signals**: progress(int), finished(dict), error(str)
+   - **Pasos**: Simulación (40%) → Cálculo MICs (30%) → QC (20%) → Reporte (10%)
+   - **run()**: Ejecuta ASTSimulator completo sin bloquear UI
+
+2. **`ASTPanelWidget(QWidget)`**: Widget principal
+   - **Signals**: ast_completed(dict), ast_failed(str)
+   - **Métodos públicos**:
+     - `set_bacteria_profile(bacteria_profile_id)`: Establece perfil para simulación
+   - **Métodos privados**:
+     - `_init_ui()`: Construye interfaz con QFormLayout
+     - `_load_panels()`: Carga paneles desde BD (PanelLayout.panel_name distinct)
+     - `_on_run_clicked()`: Validación y confirmación pre-simulación
+     - `_start_simulation(panel_layout_id)`: Inicializa worker thread
+     - `_on_progress(value)`: Actualiza barra y mensajes (incubación/MICs/QC/reporte)
+     - `_on_finished(report)`: Rehabilita UI, emite signal, muestra resumen
+     - `_on_error(error_msg)`: Maneja errores con QMessageBox.critical
+
+**Componentes UI** (10):
+1. **QLabel**: Organismo fijo (P. aeruginosa en negrita)
+2. **QComboBox**: Selector de panel (carga desde BD)
+3. **QDoubleSpinBox**: Inóculo (0.3-0.7 McF, step 0.1)
+4. **QDoubleSpinBox**: Temperatura (35-37°C, step 0.5)
+5. **QLabel**: Duración fija (18.0h estándar)
+6. **QPushButton**: Ejecutar AST (verde, bold, con hover)
+7. **QProgressBar**: Barra de progreso (oculta por defecto)
+8. **QLabel**: Status (italic, gris)
+9. **QGroupBox**: Contenedor "Configuración AST"
+10. **QFormLayout**: Layout de formulario para alineación
+
+**Características**:
+- ✅ Ejecución asíncrona (no bloquea UI)
+- ✅ Validación pre-simulación (bacteria profile, panel)
+- ✅ Diálogo de confirmación con resumen
+- ✅ Mensajes de progreso contextuales
+- ✅ Manejo robusto de errores con QMessageBox
+- ✅ Estilos CSS para botón y progress bar
+- ✅ Tooltips informativos
+- ✅ Auto-deshabilitación de controles durante simulación
+
+**Integración**:
+- Requiere `bacteria_profile_id` vía `set_bacteria_profile()`
+- Emite `ast_completed(report)` al finalizar → conectar con ResultsTable
+- Usa `ASTSimulator` completo (incubation → MICs → QC → report)
+
+
 
 ### 💡 NOTA PARA EL AGENTE (YO)
 En el código del widget:
