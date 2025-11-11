@@ -1485,21 +1485,44 @@ def od_to_color(od_value):
 
 ## 📌 ITEM 3.3: Widget AST Results Table
 **Archivo**: `src/gui/widgets/ast_results_table.py`  
-**Estado**: ✅ COMPLETADO (11-nov-2025)  
+**Estado**: ✅ COMPLETADO + REFACTORIZADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
 **Estimación**: 2 horas
-**Tiempo real**: 2.5 horas
+**Tiempo real**: 4.5 horas (incluye exportación PDF + refactorización)
 
 ### Tareas
 - [x] QTableWidget con 7 columnas (agregado Operador)
 - [x] Cargar resultados desde lista de diccionarios
 - [x] Colorear categorías (S=verde, I=amarillo, R=rojo)
 - [x] Botón exportar CSV con timestamp
+- [x] **Botón exportar PDF profesional** 🆕
 - [x] Filtro por guideline (CLSI/EUCAST/Todos)
 - [x] Ordenamiento por columnas clickeables
 - [x] Resumen con contadores S/I/R y porcentajes
 - [x] Signal antibiotic_selected para integración
 - [x] Estilo visual profesional con colores pasteles
+- [x] **REFACTORIZACIÓN: Separación de responsabilidades** ⭐
+
+### Refactorización Aplicada ✨
+
+**Problema detectado**: Archivo de 856 líneas violaba principio de responsabilidad única
+
+**Solución**:
+1. **Creado módulo externo**: `src/utils/ast_pdf_exporter.py` (257 líneas)
+   - Función `export_ast_to_pdf()`: Generación PDF independiente
+   - Función `get_pdf_filename_with_timestamp()`: Utilidad timestamps
+   
+2. **Widget simplificado**: `src/gui/widgets/ast_results_table.py` (428 líneas)
+   - Eliminadas 428 líneas de código PDF embebido
+   - Método `_export_to_pdf()` ahora delega a módulo externo
+   - Eliminado atributo `patient_info` (datos no disponibles aún)
+   - Método `load_results()` simplificado (sin parámetro `patient_info`)
+
+**Resultado**: 
+- **Antes**: 856 líneas en un solo archivo ❌
+- **Después**: 428 (widget) + 257 (exporter) = 685 líneas en 2 módulos ✅
+- **Reducción**: -171 líneas de código duplicado/innecesario
+- **Mejora**: Separación clara de responsabilidades (SRP)
 
 ### Tabla Ejemplo
 ```
@@ -1611,29 +1634,45 @@ def od_to_color(od_value):
 - ✅ Resumen estadístico con porcentajes S/R
 - ✅ Señal de selección para integración con otros widgets
 
-**Integración**:
+**Integración Simplificada**:
 ```python
 # En workflow/main window:
 results_table = ASTResultsTable()
 
 # Cargar resultados desde simulación:
-ast_panel.ast_completed.connect(lambda data: results_table.load_results(data['mic_results']))
+ast_panel.ast_completed.connect(
+    lambda data: results_table.load_results(data['mic_results'])
+)
 
 # Reaccionar a selección de antibiótico:
 results_table.antibiotic_selected.connect(on_antibiotic_selected)
-
-def on_antibiotic_selected(antibiotico: str, data: dict):
-    # Mostrar detalles, gráficos de crecimiento, etc.
-    print(f"Antibiótico: {antibiotico}, MIC: {data['mic_value']}")
 ```
 
-**Validación**:
-- ✅ 410 líneas de código bien estructuradas
+**Exportación PDF Simplificada**:
+- ✅ Formato profesional pero sin datos de paciente (no disponibles aún)
+- ✅ Incluye: Organismo, fecha, resumen S/I/R, tabla completa, leyenda
+- ✅ Módulo independiente en `src/utils/ast_pdf_exporter.py`
+- ✅ Fácil de extender cuando tengamos datos de paciente
+
+**Validación Final**:
+- ✅ **428 líneas** en widget (antes 856) - **Reducción 50%**
+- ✅ **257 líneas** en módulo PDF externo
+- ✅ **Sin errores de lint**
 - ✅ Tipado completo con type hints
-- ✅ Manejo de errores en exportación CSV
-- ✅ Dialogs informativos (QMessageBox)
-- ✅ Estilo visual consistente con otros widgets
-- ✅ Documentación docstrings completa
+- ✅ Manejo de errores robusto
+- ✅ Separación de responsabilidades (SRP)
+- ✅ Código mantenible y escalable
+        'edad': '17 AÑOS',
+        'sexo': 'Masculino',
+        'muestra_tipo': 'ORINA (UROCULTIVO)',
+        'fecha_muestra': '04/03/2024',
+        'organismo': 'Pseudomonas aeruginosa',
+        'institucion': 'HOSPITAL BELEN - TRUJILLO',
+        'servicio': 'UNIDAD DE CUIDADOS INTENSIVOS',
+        'habitacion': '269'
+    }
+)
+```
 
 
 

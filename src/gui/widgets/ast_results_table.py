@@ -4,7 +4,7 @@ Widget AST Results Table - Tabla de Resultados MIC
 Tabla interactiva de resultados AST con:
 - Columnas: Antibiótico, MIC, Operador, Interpretación, Guideline, Breakpoints
 - Colores por categoría: S (verde), I (amarillo), R (rojo)
-- Exportación a CSV
+- Exportación a CSV y PDF
 - Filtro por guideline (CLSI/EUCAST)
 
 Autor: Sistema AST Simulator
@@ -31,6 +31,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 
+from src.utils.ast_pdf_exporter import export_ast_to_pdf
+
 
 class ASTResultsTable(QWidget):
     """
@@ -39,7 +41,7 @@ class ASTResultsTable(QWidget):
     Características:
     - 7 columnas: Antibiótico, MIC, Operador, Interpretación, Guideline, BP_S, BP_R
     - Colores por categoría S/I/R
-    - Exportación a CSV
+    - Exportación a CSV y PDF
     - Filtro por guideline
     - Ordenamiento por columnas
 
@@ -78,9 +80,30 @@ class ASTResultsTable(QWidget):
         self.guideline_combo.currentTextChanged.connect(self._on_guideline_changed)
         toolbar.addWidget(self.guideline_combo)
 
+        # Botón exportar PDF
+        self.export_pdf_button = QPushButton("📄 Exportar PDF")
+        self.export_pdf_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                font-weight: bold;
+                padding: 8px 15px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+            QPushButton:disabled {
+                background-color: #95a5a6;
+            }
+        """)
+        self.export_pdf_button.clicked.connect(self._export_to_pdf)
+        self.export_pdf_button.setEnabled(False)
+        toolbar.addWidget(self.export_pdf_button)
+
         # Botón exportar CSV
-        self.export_button = QPushButton(" Exportar CSV")
-        self.export_button.setStyleSheet("""
+        self.export_csv_button = QPushButton(" Exportar CSV")
+        self.export_csv_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
                 color: white;
@@ -95,9 +118,9 @@ class ASTResultsTable(QWidget):
                 background-color: #95a5a6;
             }
         """)
-        self.export_button.clicked.connect(self._export_to_csv)
-        self.export_button.setEnabled(False)
-        toolbar.addWidget(self.export_button)
+        self.export_csv_button.clicked.connect(self._export_to_csv)
+        self.export_csv_button.setEnabled(False)
+        toolbar.addWidget(self.export_csv_button)
 
         layout.addLayout(toolbar)
 
@@ -141,7 +164,9 @@ class ASTResultsTable(QWidget):
         )
         layout.addWidget(self.summary_label)
 
-    def load_results(self, mic_results: List[Dict]):
+    def load_results(
+        self, mic_results: List[Dict], patient_info: Optional[Dict] = None
+    ):
         """
         Carga resultados MIC en la tabla.
 
@@ -156,15 +181,28 @@ class ASTResultsTable(QWidget):
                 - breakpoint_s: float
                 - breakpoint_r: float
                 - confianza: str (opcional)
+            patient_info: Información del paciente/simulación para PDF (opcional)
+                - nombre_paciente: str
+                - id_paciente: str
+                - edad: int
+                - sexo: str
+                - muestra_tipo: str
+                - fecha_muestra: str
+                - organismo: str
+                - institucion: str
+                - servicio: str
         """
         self.current_results = mic_results
+        self.patient_info = patient_info or {}
         self.current_guideline_filter = "Todos"
         self.guideline_combo.setCurrentText("Todos")
 
         self._populate_table()
 
         # Habilitar exportación
-        self.export_button.setEnabled(len(mic_results) > 0)
+        has_results = len(mic_results) > 0
+        self.export_csv_button.setEnabled(has_results)
+        self.export_pdf_button.setEnabled(has_results)
 
     def _populate_table(self):
         """Puebla la tabla con los resultados actuales aplicando filtros."""
@@ -400,10 +438,69 @@ class ASTResultsTable(QWidget):
                 self, "Error al exportar", f"No se pudo exportar el archivo:\n{str(e)}"
             )
 
+    def _export_to_pdf(self):
+        """Exporta la tabla actual a archivo PDF simplificado."""
+        if not self.current_results:
+            QMessageBox.warning(self, "Sin datos", "No hay resultados para exportar.")
+            return
+
+        # Diálogo para guardar archivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"antibiograma_{timestamp}.pdf"
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar antibiograma como PDF",
+            default_filename,
+            "PDF Files (*.pdf);;All Files (*)",
+        )
+
+        if not filename:
+            return  # Usuario canceló
+
+        try:
+            # Filtrar resultados según guideline actual
+            if self.current_guideline_filter == "Todos":
+                results_to_export = self.current_results
+            else:
+                results_to_export = [
+                    r
+                    for r in self.current_results
+                    if r.get("guideline", "").upper()
+                    == self.current_guideline_filter.upper()
+                ]
+
+            # Usar módulo externo para generar PDF
+            export_ast_to_pdf(
+                filename=filename,
+                mic_results=results_to_export,
+                organism="Pseudomonas aeruginosa",  # TODO: Obtener de simulación
+                sample_date=datetime.now().strftime("%d/%m/%Y"),
+            )
+
+            QMessageBox.information(
+                self,
+                "Exportación exitosa",
+                f"Antibiograma generado correctamente:\n{filename}\n\n"
+                f"Antibióticos: {len(results_to_export)}",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error al exportar PDF",
+                f"No se pudo generar el antibiograma:\n{str(e)}",
+            )
+
     def clear(self):
         """Limpia la tabla y reinicia el widget."""
         self.current_results = []
         self.table.setRowCount(0)
         self.summary_label.setText("Sin resultados cargados")
-        self.export_button.setEnabled(False)
+        self.export_csv_button.setEnabled(False)
+        self.export_pdf_button.setEnabled(False)
+        self.guideline_combo.setCurrentText("Todos")
+        self.summary_label.setText("Sin resultados cargados")
+        self.export_csv_button.setEnabled(False)
+        self.export_pdf_button.setEnabled(False)
         self.guideline_combo.setCurrentText("Todos")
