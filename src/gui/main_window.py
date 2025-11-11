@@ -19,7 +19,7 @@ from src.gui.widgets.detailed_results import DetailedResults
 from src.gui.widgets.expand_window import ExpandWindow
 from src.gui.workflows.ast_workflow import ASTWorkflow
 from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.reporting import save_simulation_report, save_generation_metrics
+from src.core.reporting import save_simulation_report
 from src.data.database import get_session
 from src.data.models import Gen, Antibiotico, Recomendacion, Simulacion
 from PyQt5.QtGui import QIcon
@@ -304,7 +304,6 @@ class MainWindow(QMainWindow):
                 "reproduction_rate": self.saved_repro_rate,
             }
             save_simulation_report(self.ga, saved_params)
-            save_generation_metrics(self.ga, self.ga.current_simulation_id)
 
             # Añadir marcadores de antibióticos al gráfico de resistencia
             schedule = self._optimized_schedule or self._manual_schedule or []

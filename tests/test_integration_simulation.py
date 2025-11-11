@@ -4,11 +4,11 @@ from src.data.models import (
     Antibiotico,
     Simulacion,
     ReporteSimulacion,
-    MetricaGeneracion,
 )
 from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.reporting import save_simulation_report, save_generation_metrics
+from src.core.reporting import save_simulation_report
 import math
+
 
 def get_basic_genes():
     session = get_session()
@@ -38,6 +38,7 @@ def get_antibiotic_schedule():
             0.5,
         )
     ]
+
 
 def test_full_simulation_and_reporting():
     genes = get_basic_genes()
@@ -77,19 +78,13 @@ def test_full_simulation_and_reporting():
         "environmental_factors": {"temperature": 37.0, "pH": 7.4},
     }
     save_simulation_report(ga, params)
-    save_generation_metrics(ga, sim_id)
 
-    # Verifica reporte y métricas por generación
+    # Verifica reporte
     session = get_session()
     reporte = session.query(ReporteSimulacion).filter_by(simulacion_id=sim_id).first()
     assert reporte is not None, "No se creó el reporte de simulación"
-    metricas = session.query(MetricaGeneracion).filter_by(simulacion_id=sim_id).all()
-    assert metricas, "No se guardaron métricas de la simulación"
-    nombres_metricas = set(m.nombre_indicador for m in metricas)
-    assert "avg_fitness" in nombres_metricas
-    assert "diversidad_genetica" in nombres_metricas
-    assert "tasa_convergencia" in nombres_metricas
     session.close()
+
 
 def test_flujo_completo_simulacion_usuario():
     session = get_session()
@@ -150,6 +145,7 @@ def test_flujo_completo_simulacion_usuario():
     assert all(val is not None and not math.isnan(val) for val in ga.avg_hist)
     assert all(val is not None and not math.isnan(val) for val in ga.population_hist)
 
+
 def test_simulacion_con_id_gen_inexistente():
     session = get_session()
     session.query(Gen).delete()
@@ -206,6 +202,7 @@ def test_simulacion_con_id_gen_inexistente():
         assert "index" in str(e) or "list" in str(e)
     else:
         assert len(ga.avg_hist) == 3
+
 
 def test_simulacion_con_id_antibiotico_inexistente():
     session = get_session()

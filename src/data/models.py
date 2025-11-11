@@ -83,17 +83,6 @@ class ReporteSimulacion(Base):
     simulacion = relationship("Simulacion")
 
 
-class MetricaGeneracion(Base):
-    __tablename__ = "metricas_generacion"
-    id = Column(Integer, primary_key=True)
-    simulacion_id = Column(Integer, ForeignKey("simulaciones.id"), nullable=False)
-    generacion = Column(Integer, nullable=False)
-    nombre_indicador = Column(String, nullable=False)
-    valor = Column(Float, nullable=False)
-
-    simulacion = relationship("Simulacion", backref="metricas_generacion")
-
-
 class Guest(Base):
     """
     Modelo de paciente/huésped para simulaciones de resistencia bacteriana.
