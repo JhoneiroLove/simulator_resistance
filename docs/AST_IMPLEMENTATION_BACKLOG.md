@@ -138,11 +138,11 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 | **FASE 0**: Datos + Hardware Reemplazo | 8 | 7 | 88% | ✅ Completo |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
 | **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo | � En Progreso |
-| **FASE 3**: GUI Wizard | 5 | 1 | 20% | � En Progreso |
+| **FASE 3**: GUI Wizard | 5 | 2 | 40% | � En Progreso |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **16** | **62%** | 🟡 EN PROGRESO |
+| **TOTAL** | **26** | **17** | **65%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1392,17 +1392,21 @@ self.organism_label.setEnabled(False)  # No editable
 
 ## 📌 ITEM 3.2: Widget AST Plate Viewer
 **Archivo**: `src/gui/widgets/ast_plate_viewer.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: ⚠️ MEDIA  
-**Estimación**: 3-4 horas
+**Estimación**: 3-4 horas  
+**Tiempo real**: 3 horas
 
 ### Tareas
-- [ ] Grid 8×12 (96 pocillos)
-- [ ] Labels para filas (A-H) y columnas (1-12)
-- [ ] Color por turbidez (blanco→amarillo→naranja)
-- [ ] Tooltip con datos (antibiótico, conc, OD)
-- [ ] Slider para ver evolución temporal
-- [ ] Marcador de controles +/−
+- [x] Grid 8×12 (96 pocillos)
+- [x] Labels para filas (A-H) y columnas (1-12)
+- [x] Color por turbidez (blanco→amarillo→naranja)
+- [x] Tooltip con datos (antibiótico, conc, OD)
+- [x] Slider para ver evolución temporal (0-18h)
+- [x] Marcador de controles +/− con borde especial
+- [x] Funciones helper: `od_to_color()`, `od_to_description()`
+- [x] Clase `WellWidget` para pocillos individuales
+- [x] Leyenda de colores visual
 
 ### Código de Colores
 ```python
@@ -1416,6 +1420,66 @@ def od_to_color(od_value):
     else:
         return "#cc9900"  # Naranja/turbio
 ```
+
+### Resultados ITEM 3.2
+**Archivo creado**: `src/gui/widgets/ast_plate_viewer.py` (499 líneas)
+
+**Funciones helper** (2):
+1. **`od_to_color(od_value)`**: Convierte OD a código HTML (4 niveles)
+2. **`od_to_description(od_value)`**: Convierte OD a texto ("Claro", "Ligero", "Moderado", "Turbio")
+
+**Clases implementadas** (2):
+
+1. **`WellWidget(QFrame)`**: Pocillo individual (50×50px)
+   - **Signal**: `clicked(str)` - posición al hacer clic
+   - **Métodos**:
+     - `set_empty()`: Pocillo vacío (gris)
+     - `set_control(control_type, od_value)`: Control QC con borde verde/rojo
+     - `set_test_well(antibiotico, concentracion, od_value, crecimiento)`: Pocillo test
+     - `update_od(od_value)`: Actualiza color por nuevo OD (para slider)
+     - `mousePressEvent()`: Emite señal al clic
+   - **Características**:
+     - Color de fondo según OD (4 niveles)
+     - Borde especial para controles (3px verde/rojo vs 2px gris)
+     - Tooltip detallado con antibiótico, concentración, OD, turbidez, estado
+     - Símbolos visuales: ✓ (control +), ✗ (control -)
+
+2. **`ASTPlateViewer(QWidget)`**: Visualizador principal
+   - **Signal**: `well_clicked(str, dict)` - posición, datos del pocillo
+   - **Métodos públicos**:
+     - `load_well_data(well_data_list)`: Carga datos desde ASTSimulator
+     - `clear()`: Limpia todos los pocillos
+   - **Métodos privados**:
+     - `_init_ui()`: Construye interfaz con grid 8×12
+     - `_on_time_changed(value)`: Actualiza ODs según slider temporal
+     - `_on_well_clicked(position)`: Emite señal con datos del pocillo
+   - **Componentes**:
+     - Grid 8×12 con labels de filas (A-H) y columnas (1-12)
+     - QSlider horizontal (0-18h, ticks cada 3h)
+     - Leyenda de colores (4 niveles con descripción)
+     - Label de tiempo actual
+
+**Características técnicas**:
+- ✅ Grid interactivo con 96 pocillos (WellWidget)
+- ✅ Escala de colores científica (OD: blanco→amarillo→naranja)
+- ✅ Slider temporal con 19 puntos (0-18h cada hora)
+- ✅ Actualización dinámica de ODs según tiempo seleccionado
+- ✅ Tooltips contextuales (test vs control)
+- ✅ Bordes diferenciados:
+  - Controles: 3px verde (positivo) / rojo (negativo)
+  - Tests: 2px gris oscuro
+  - Vacíos: 2px gris claro
+- ✅ Leyenda visual de colores
+- ✅ Detección de crecimiento (OD ≥ 0.3)
+- ✅ Series temporales desde `well_data.readings`
+
+**Integración**:
+- Recibe `well_data_list` desde `ASTSimulator.simulate_incubation()`
+- Conectar `ast_completed` de ASTPanelWidget → `load_well_data()`
+- Slider accede a `well_data.readings` (lista de WellReading con tiempo_minutos, od_600)
+- Emite `well_clicked` para detalles de pocillo individual
+
+
 
 ---
 
