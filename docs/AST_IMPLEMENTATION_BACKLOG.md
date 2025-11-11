@@ -4,7 +4,7 @@
 **Fecha de creación**: 9 de noviembre de 2025  
 **Última actualización**: 11 de noviembre de 2025  
 **Objetivo**: Refactorizar aplicación + Implementar workflow AST completo para microbiólogos  
-**Estado**: 🟡 EN PROGRESO (18% completado - 5/28 items)
+**Estado**: 🟡 EN PROGRESO (21% completado - 6/28 items)
 
 ---
 
@@ -135,14 +135,14 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 
 | Fase | Total Items | Completados | Progreso | Estado |
 |------|-------------|-------------|----------|--------|
-| **FASE 0**: Datos + Hardware Reemplazo | 8 | 5 | 63% | 🟡 En Progreso |
+| **FASE 0**: Datos + Hardware Reemplazo | 8 | 6 | 75% | 🟡 En Progreso |
 | **FASE 1**: Modelo de Datos SQLAlchemy | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 2**: Motor AST Core | 4 | 0 | 0% | 🔴 Pendiente |
 | **FASE 3**: GUI Wizard | 5 | 0 | 0% | 🔴 Pendiente |
 | **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
 | **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
 | **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **28** | **5** | **18%** | 🟡 INICIADO |
+| **TOTAL** | **28** | **6** | **21%** | 🟡 INICIADO |
 
 ---
 
@@ -460,17 +460,26 @@ Este módulo ahora consulta la tabla `mutations` (ITEM 0.1) para:
 
 ## 📌 ITEM 0.5: GUI - Página Escenario Clínico
 **Archivo**: `src/gui/workflows/clinical_scenario_page.py`  
-**Estado**: 🔴 Pendiente  
+**Estado**: ✅ COMPLETADO (11-nov-2025)  
 **Prioridad**: 🔥 CRÍTICA  
-**Estimación**: 2 horas
+**Estimación**: 2 horas  
+**Tiempo real**: 2 horas
 
 ### Tareas
-- [ ] Clase `ClinicalScenarioPage(QWizardPage)`
-- [ ] Dropdown: Origen de muestra (Hemocultivo/Esputo/Orina)
-- [ ] RadioButton: Comunitario vs Hospitalizado
-- [ ] CheckList (solo si Hospitalizado): Antibióticos previos
-- [ ] Botón: "Generar Bacteria" → Llama a `bacteria_profile_generator`
-- [ ] Label: Mostrar genotipo generado (educativo)
+- [x] Clase `ClinicalScenarioPage(QWizardPage)`
+- [x] Dropdown: Origen de muestra (Hemocultivo/Esputo/Orina/Herida/Cateter)
+- [x] RadioButton: Comunitario vs Hospitalizado
+- [x] CheckList (solo si Hospitalizado): Antibioticos previos (10 antibioticos)
+- [x] Boton: "Generar Bacteria" → Llama a `bacteria_profile_generator`
+- [x] Label: Mostrar genotipo generado (educativo) usando `format_profile_summary()`
+
+### Resultados
+- Archivo implementado: `src/gui/workflows/clinical_scenario_page.py` (310 lineas)
+- Componentes: QWizardPage con 4 secciones (origen, contexto, historial, resultado)
+- Integracion: Llama directamente a `generate_wild_type()` y `generate_from_history()`
+- Validacion: No permite avanzar hasta generar perfil bacteriano
+- UX: Deshabilita seccion de antibioticos previos para contexto comunitario
+- Senales: Emite `profile_generated` para integracion con wizard completo
 
 ### UI Mockup
 ```
