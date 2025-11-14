@@ -7,6 +7,7 @@ from src.data.database import get_session
 from src.data.models import SimulacionAtributos
 from deap import base, creator, tools
 
+
 class BacteriaIndividual(list):
     """Individuo: genes (bits) + atributos biológicos."""
 
@@ -188,6 +189,203 @@ class GeneticAlgorithm:
 
         self.fitness_hist = []
 
+        # Sistema de cálculo MIC
+        self._mic_calculator = None  # Lazy loading
+        self._use_mic_based_fitness = False  # Flag para activar fitness basado en MICs
+
+    @classmethod
+    def from_ast_results(
+        cls,
+        ast_mic_results: dict,
+        genes: list,
+        target_antibiotic: str,
+        target_concentration: float,
+        **kwargs,
+    ):
+        """
+        Crea una instancia de GeneticAlgorithm inicializada desde resultados AST.
+
+        Este método permite simular evolución futura después de un antibiograma:
+        1. Toma MICs del AST como punto de partida
+        2. Infiere genes mutados probables (basado en qué MICs están elevados)
+        3. Inicializa población con esas mutaciones
+        4. Configura presión antibiótica para simular tratamiento
+
+        Args:
+            ast_mic_results: Dict de resultados AST {antibiotico: MIC_µg/mL}
+                Example: {'Meropenem': 4.0, 'Ciprofloxacino': 8.0, ...}
+            genes: Lista de genes disponibles (mismo formato que __init__)
+            target_antibiotic: Antibiótico a simular como presión selectiva
+            target_concentration: Concentración del antibiótico (µg/mL)
+            **kwargs: Parámetros adicionales para __init__ (generations, pop_size, etc.)
+
+        Returns:
+            Instancia de GeneticAlgorithm configurada con:
+            - Fitness basado en MICs activado
+            - Población inicial con genes inferidos del AST
+            - Schedule antibiótico configurado
+
+        Example:
+            >>> # Después de ejecutar AST
+            >>> ast_results = {'Meropenem': 64.0, 'Ciprofloxacino': 4.0, ...}
+            >>> ga = GeneticAlgorithm.from_ast_results(
+            ...     ast_mic_results=ast_results,
+            ...     genes=genes_list,
+            ...     target_antibiotic='Meropenem',
+            ...     target_concentration=16.0,  # Dosis terapéutica
+            ...     generations=100
+            ... )
+            >>> ga.initialize(selected_gene_ids=[...])
+            >>> ga.step()  # Evoluciona población bajo presión de Meropenem
+        """
+        from src.data.database import get_session
+        from src.data.models import Antibiotico
+
+        logging.info(f"🧬 Creando GA desde resultados AST para {target_antibiotic}")
+        logging.info(f"   MICs del AST: {list(ast_mic_results.keys())[:5]}...")
+
+        # 1. Cargar objeto antibiótico desde DB
+        session = get_session()
+        antibiotic_obj = (
+            session.query(Antibiotico)
+            .filter(Antibiotico.nombre == target_antibiotic)
+            .first()
+        )
+        session.close()
+
+        if not antibiotic_obj:
+            raise ValueError(f"Antibiótico '{target_antibiotic}' no encontrado en DB")
+
+        # Convertir a dict para schedule
+        ab_dict = {
+            "nombre": antibiotic_obj.nombre,
+            "concentracion_minima": antibiotic_obj.concentracion_minima,
+            "concentracion_maxima": antibiotic_obj.concentracion_maxima,
+            "tipo": antibiotic_obj.tipo or "desconocido",
+        }
+
+        # 2. Configurar schedule antibiótico (presión constante)
+        antibiotic_schedule = [
+            (0, ab_dict, target_concentration)  # t=0, aplicar inmediatamente
+        ]
+
+        # 3. Inferir genes mutados probables basados en MICs elevados
+        inferred_mutations = cls._infer_mutations_from_mics(ast_mic_results, genes)
+        logging.info(f"   Genes inferidos del AST: {inferred_mutations}")
+
+        # 4. Crear instancia con parámetros
+        ga_instance = cls(
+            genes=genes, antibiotic_schedule=antibiotic_schedule, **kwargs
+        )
+
+        # 5. Activar fitness basado en MICs
+        ga_instance.enable_mic_based_fitness()
+
+        # 6. Guardar MICs iniciales para referencia
+        ga_instance._initial_ast_mics = ast_mic_results
+        ga_instance._inferred_mutations = inferred_mutations
+
+        logging.info("✅ GA configurado desde AST (fitness=MIC-based)")
+
+        return ga_instance
+
+    @staticmethod
+    def _infer_mutations_from_mics(mic_results: dict, genes: list) -> list:
+        """
+        Infiere genes mutados probables basados en MICs elevados.
+
+        Heurística simple:
+        - Si MIC de fluoroquinolonas alto → probablemente gyrA, parC
+        - Si MIC de carbapenem alto → probablemente oprD, blaVIM
+        - etc.
+
+        Args:
+            mic_results: Dict {antibiotico: MIC}
+            genes: Lista de genes disponibles
+
+        Returns:
+            Lista de nombres de genes probablemente mutados
+        """
+        from src.core.bacteria_profile_generator import get_baseline_mics
+
+        baseline = get_baseline_mics()
+        inferred = []
+
+        # Mapeo antibiótico → genes probables
+        gene_candidates = {
+            "Ciprofloxacino": ["gyrA_T83I", "parC_S87L"],
+            "Levofloxacino": ["gyrA_T83I", "parC_S87L"],
+            "Meropenem": ["oprD_loss", "blaVIM_or_blaIMP"],
+            "Imipenem": ["oprD_loss", "blaVIM_or_blaIMP"],
+            "Colistina": ["pmrB_mut"],
+            "Ceftazidima": ["ampC_promoter_-32C_T", "blaVIM_or_blaIMP"],
+        }
+
+        # Comparar MICs: si está 4x por encima del baseline, inferir mutación
+        for ab, mic in mic_results.items():
+            if ab in baseline:
+                fold_increase = mic / baseline[ab]
+                if fold_increase >= 4.0 and ab in gene_candidates:
+                    # Agregar genes candidatos si no están ya
+                    for gene in gene_candidates[ab]:
+                        if gene not in inferred:
+                            inferred.append(gene)
+                            logging.debug(
+                                f"   Inferido: {gene} (por {ab} MIC={mic:.2f}, {fold_increase:.1f}x)"
+                            )
+
+        return inferred
+
+    def _get_mic_calculator(self):
+        """Obtiene la instancia del calculador MIC (lazy loading)."""
+        if self._mic_calculator is None:
+            from src.core.genotype_phenotype_calculator import (
+                GenotypePhenotypeCalculator,
+            )
+
+            self._mic_calculator = GenotypePhenotypeCalculator()
+        return self._mic_calculator
+
+    def enable_mic_based_fitness(self):
+        """
+        Activa el cálculo de fitness basado en MICs reales.
+
+        Cuando está activado, el fitness se calcula usando:
+        - GenotypePhenotypeCalculator para obtener MICs del individuo
+        - Comparación MIC vs concentración del antibiótico actual
+        - Supervivencia si MIC > concentración (bacteria resistente)
+        """
+        self._use_mic_based_fitness = True
+        logging.info("✅ Fitness basado en MICs activado (FASE 4)")
+
+    def disable_mic_based_fitness(self):
+        """Desactiva el cálculo de fitness basado en MICs (vuelve al modelo simple)."""
+        self._use_mic_based_fitness = False
+        logging.info("⚠️ Fitness basado en pesos de resistencia (modo legacy)")
+
+    def individual_to_mutated_genes(self, individual) -> list:
+        """
+        Convierte un individuo del GA a lista de genes mutados.
+
+        Args:
+            individual: Individuo con bits de genes (0 o 1)
+
+        Returns:
+            Lista de nombres de genes mutados (formato usado en tabla gene_class_multipliers)
+
+        Example:
+            >>> individual = [1, 0, 1, 0, ...]  # genes activos en posiciones 0 y 2
+            >>> genes = [{"nombre": "gyrA_T83I"}, {"nombre": "parC_S87L"}, {"nombre": "oprD_loss"}, ...]
+            >>> self.individual_to_mutated_genes(individual)
+            ['gyrA_T83I', 'oprD_loss']
+        """
+        genes_mutados = []
+        for i, bit in enumerate(individual):
+            if bit == 1:
+                gene_name = self.genes[i].get("nombre", f"gen_{i}")
+                genes_mutados.append(gene_name)
+        return genes_mutados
+
     def init_individual(self):
         genes_bits = [random.randint(0, 1) for _ in self.genes]
         recubrimiento = random.uniform(0.5, 1.0)
@@ -263,26 +461,28 @@ class GeneticAlgorithm:
 
     def get_environmental_factor(self, key: str) -> float:
         return self.environmental_factors.get(key)
-    
-    def calcular_dosis_ajustada(self, dosis_estandar: float, antibiotico_tipo: str) -> float:
+
+    def calcular_dosis_ajustada(
+        self, dosis_estandar: float, antibiotico_tipo: str
+    ) -> float:
         """
         Calcula la dosis ajustada según la función renal del huésped.
-        
+
         Args:
             dosis_estandar: Dosis estándar del antibiótico (mg)
             antibiotico_tipo: Tipo de antibiótico
-            
+
         Returns:
             float: Dosis ajustada según clearance de creatinina
         """
         if not self.huesped or not self.huesped.clearance_creatinina:
             return dosis_estandar
-        
+
         from src.core.guest_service import GuestService
-        
+
         clearance = self.huesped.clearance_creatinina
         kidney_status = GuestService.get_kidney_function_status(clearance)
-        
+
         # Factores de ajuste según función renal y tipo de antibiótico
         # Antibióticos con excreción renal requieren mayor ajuste
         ajuste_renal = {
@@ -290,31 +490,31 @@ class GeneticAlgorithm:
             "leve_disminucion": 1.0,
             "moderada_disminucion": 0.75,
             "severa_disminucion": 0.5,
-            "fallo_renal": 0.25
+            "fallo_renal": 0.25,
         }
-        
+
         # Algunos antibióticos requieren ajuste más agresivo
         antibioticos_alta_excrecion_renal = [
-            "aminoglucósido", 
-            "carbapenémico", 
+            "aminoglucósido",
+            "carbapenémico",
             "cefalosporina",
-            "polimixina"
+            "polimixina",
         ]
-        
+
         factor_base = ajuste_renal.get(kidney_status, 1.0)
-        
+
         # Ajuste adicional para antibióticos de alta excreción renal
         if antibiotico_tipo.lower() in antibioticos_alta_excrecion_renal:
             if kidney_status in ["severa_disminucion", "fallo_renal"]:
                 factor_base *= 0.8  # Reducción adicional del 20%
-        
+
         dosis_ajustada = dosis_estandar * factor_base
-        
+
         logging.info(
             f"Dosis ajustada: {dosis_estandar:.2f} mg → {dosis_ajustada:.2f} mg "
             f"(kidney_status={kidney_status}, clearance={clearance:.2f} mL/min)"
         )
-        
+
         return dosis_ajustada
 
     def _sigmoid_survival(self, concentration, lo, hi):
@@ -329,6 +529,129 @@ class GeneticAlgorithm:
         return survival
 
     def evaluate(self, individual):
+        """
+        Evalúa fitness del individuo.
+
+        Puede usar dos modos:
+        1. Legacy: fitness basado en peso_resistencia (sistema antiguo)
+        2. MIC-based: fitness basado en MICs calculados vs concentración (FASE 4)
+        """
+        if self._use_mic_based_fitness:
+            return self.evaluate_with_mics(individual)
+        else:
+            return self.evaluate_legacy(individual)
+
+    def evaluate_with_mics(self, individual):
+        """
+        Evalúa fitness usando MICs calculados del genotipo del individuo.
+
+        Flujo:
+        1. Convierte individuo → lista de genes mutados
+        2. Calcula MICs usando GenotypePhenotypeCalculator
+        3. Compara MIC del antibiótico actual vs concentración
+        4. Fitness alto si MIC > concentración (bacteria sobrevive)
+        5. Fitness bajo si MIC < concentración (bacteria muere)
+
+        Args:
+            individual: Individuo del GA con genes (bits)
+
+        Returns:
+            Tuple con valor de fitness (0.0 - 1.0+)
+        """
+        # 1. Obtener genes mutados del individuo
+        genes_mutados = self.individual_to_mutated_genes(individual)
+
+        # 2. Calcular MICs usando el sistema genotipo→fenotipo
+        calc = self._get_mic_calculator()
+
+        try:
+            # Obtener MICs para todos los antibióticos
+            mic_results = calc.calculate_all_mics(genes_mutados)
+        except Exception as e:
+            logging.error(f"Error calculando MICs: {e}")
+            # Fallback a fitness bajo si hay error
+            return (0.01,)
+
+        # 3. Evaluar supervivencia basada en antibiótico actual
+        base_fitness = 0.5  # Fitness basal sin presión antibiótica
+
+        if self.current_ab:
+            # Obtener nombre del antibiótico actual
+            ab_name = self.current_ab.get("nombre", "")
+
+            if ab_name in mic_results:
+                mic_result = mic_results[ab_name]
+                mic_calculado = mic_result.mic_calculado
+
+                # Concentración efectiva (ajustada por penetración tisular si hay sitio de infección)
+                effective_conc = self.current_conc
+                if self.sitio_infeccion:
+                    from src.core.infection_site_service import InfectionSiteService
+
+                    penetration_factor = (
+                        InfectionSiteService.calcular_penetracion_antibiotico(
+                            self.sitio_infeccion, self.current_ab
+                        )
+                    )
+                    effective_conc = self.current_conc * penetration_factor
+
+                # Calcular ratio MIC/Concentración
+                # Si MIC > concentración → bacteria sobrevive (fitness alto)
+                # Si MIC < concentración → bacteria muere (fitness bajo)
+                if effective_conc > 0:
+                    mic_ratio = mic_calculado / effective_conc
+
+                    # Función sigmoidal suave para fitness
+                    # mic_ratio = 1.0 → concentración = MIC (50% supervivencia)
+                    # mic_ratio > 1.0 → resistente (supervivencia alta)
+                    # mic_ratio < 1.0 → sensible (supervivencia baja)
+                    survival_prob = 1.0 / (1.0 + np.exp(-5 * (mic_ratio - 1.0)))
+
+                    base_fitness = survival_prob
+
+                    logging.debug(
+                        f"MIC evaluation: {ab_name} MIC={mic_calculado:.3f} µg/mL, "
+                        f"conc={effective_conc:.3f} µg/mL, ratio={mic_ratio:.2f}, "
+                        f"survival={survival_prob:.3f}"
+                    )
+                else:
+                    # Sin antibiótico, fitness basal
+                    base_fitness = 0.8
+            else:
+                logging.warning(
+                    f"Antibiótico '{ab_name}' no encontrado en resultados MIC"
+                )
+                base_fitness = 0.5
+
+        # 4. Aplicar costos adaptativos (fenotipo)
+        adaptive_cost = (individual.recubrimiento + individual.enzimas) / 2.0
+        fitness = base_fitness * (
+            1.0 - 0.3 * adaptive_cost
+        )  # Penalización del 30% máximo
+
+        # 5. Aplicar modificadores de huésped y sitio de infección
+        if self.huesped:
+            from src.core.guest_service import GuestService
+
+            factor_inmune = GuestService.obtener_factor_inmune(
+                self.huesped.estado_inmune
+            )
+            # Sistema inmune débil (factor bajo) = mayor supervivencia bacteriana
+            fitness *= 2.0 - factor_inmune
+
+        # 6. Tasa de muerte ajustada
+        death_rate_adj = self.death_rate * self.death_modifier()
+        fitness *= 1.0 - death_rate_adj
+
+        return (max(0.0, min(fitness, 2.0)),)  # Clamp entre 0.0 y 2.0
+
+    def evaluate_legacy(self, individual):
+        """
+        Evalúa fitness usando el sistema legacy (peso_resistencia).
+
+        Este es el método original antes de la integración FASE 4.
+        Se mantiene para compatibilidad con simulaciones existentes.
+        """
         raw_resistance = sum(
             g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual)
         )
@@ -356,15 +679,18 @@ class GeneticAlgorithm:
                 effective_conc = self.current_conc * penetration_factor
 
             surv = self._sigmoid_survival(effective_conc, lo, hi)
-            
+
             # Aplicar factor inmune del huésped
             if self.huesped:
                 from src.core.guest_service import GuestService
-                factor_inmune = GuestService.obtener_factor_inmune(self.huesped.estado_inmune)
+
+                factor_inmune = GuestService.obtener_factor_inmune(
+                    self.huesped.estado_inmune
+                )
                 # Factor inmune bajo = sistema inmune débil = mayor supervivencia bacteriana
                 # Invertir el factor: si factor_inmune=0.1 (débil), bacterias sobreviven más
-                surv *= (2.0 - factor_inmune)
-            
+                surv *= 2.0 - factor_inmune
+
             N *= surv
 
         death_rate_adj = self.death_rate * self.death_modifier()
