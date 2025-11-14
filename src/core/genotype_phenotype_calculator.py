@@ -374,6 +374,106 @@ class GenotypePhenotypeCalculator:
         closest_idx = np.argmin(np.abs(np.array(standard_dilutions) - mic_value))
         return standard_dilutions[closest_idx]
 
+    def calculate_mic_distribution(
+        self,
+        antibiotico: str,
+        genes_mutados: List[str],
+        n_samples: int = 1000,
+    ) -> Dict[str, any]:
+        """
+        Calcula distribución de MICs para modelar heteroresistencia.
+
+        Simula variabilidad poblacional mediante distribución log-normal basada en
+        datos experimentales de heteroresistencia (tabla heteroresistance_distributions).
+
+        Args:
+            antibiotico: Nombre del antibiótico
+            genes_mutados: Lista de genes mutados
+            n_samples: Número de muestras a generar (default: 1000 = población bacteriana típica)
+
+        Returns:
+            Dict con:
+                - 'mean_mic': MIC medio poblacional
+                - 'median_mic': MIC mediana
+                - 'std_mic': Desviación estándar
+                - 'samples': Array de MICs simulados
+                - 'heteroresistant': Bool indicando si hay heteroresistencia documentada
+                - 'prevalence': Prevalencia de subpoblación resistente (si aplica)
+
+        Example:
+            >>> calc = GenotypePhenotypeCalculator()
+            >>> dist = calc.calculate_mic_distribution('Meropenem', ['oprD_loss'], n_samples=1000)
+            >>> dist['mean_mic']
+            4.2  # Promedio considerando heteroresistencia
+            >>> dist['heteroresistant']
+            True  # Heteroresistencia documentada para oprD_loss + Meropenem
+        """
+        import numpy as np
+        from src.data.database import get_session
+        from src.data.models import HeteroresistanceDistribution
+
+        # Calcular MIC base determinístico
+        base_result = self.calculate_mic(antibiotico, genes_mutados, stochastic=False)
+        base_mic = base_result.mic_calculado
+
+        # Buscar distribución heteroresistente en BD
+        session = get_session()
+        genotype_sig = "+".join(sorted(genes_mutados)) if genes_mutados else "wildtype"
+
+        hetero_record = (
+            session.query(HeteroresistanceDistribution)
+            .filter_by(antibiotico=antibiotico, genotype_signature=genotype_sig)
+            .first()
+        )
+        session.close()
+
+        if hetero_record:
+            # Usar parámetros documentados de heteroresistencia
+            mean_log = hetero_record.mean_log_mic
+            std_log = hetero_record.std_log_mic
+            prevalence = hetero_record.prevalence
+
+            # Generar muestras log-normal
+            log_mics = np.random.normal(mean_log, std_log, n_samples)
+            samples = np.power(10, log_mics)
+
+            # Redondear a diluciones estándar
+            samples = np.array(
+                [self._round_to_standard_dilution(mic) for mic in samples]
+            )
+
+            return {
+                "mean_mic": float(np.mean(samples)),
+                "median_mic": float(np.median(samples)),
+                "std_mic": float(np.std(samples)),
+                "samples": samples,
+                "heteroresistant": True,
+                "prevalence": prevalence,
+                "base_mic": base_mic,
+                "pmid_reference": hetero_record.pmid_reference,
+            }
+
+        else:
+            # Sin datos de heteroresistencia: distribución estrecha alrededor del MIC base
+            # Variabilidad técnica típica (σ ≈ 0.3 en log10)
+            log_base = np.log10(base_mic)
+            log_mics = np.random.normal(log_base, 0.3, n_samples)
+            samples = np.power(10, log_mics)
+            samples = np.array(
+                [self._round_to_standard_dilution(mic) for mic in samples]
+            )
+
+            return {
+                "mean_mic": float(np.mean(samples)),
+                "median_mic": float(np.median(samples)),
+                "std_mic": float(np.std(samples)),
+                "samples": samples,
+                "heteroresistant": False,
+                "prevalence": None,
+                "base_mic": base_mic,
+                "pmid_reference": None,
+            }
+
 
 def calculate_mics_from_genotype(genes_mutados: List[str]) -> Dict[str, float]:
     """

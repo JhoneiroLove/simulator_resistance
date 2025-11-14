@@ -157,3 +157,68 @@ class BaselineMIC(Base):
 
     def __repr__(self):
         return f"<BaselineMIC {self.antibiotico}: {self.mic_wt} µg/mL (WT)>"
+
+
+class HeteroresistanceDistribution(Base):
+    """
+    Modelo de distribuciones de heteroresistencia.
+
+    Representa subpoblaciones bacterianas con MICs diferentes dentro de la misma cepa.
+    Fundamental para modelar resistencia heterogénea común en P. aeruginosa.
+
+    Fuente: Migración 020 (PMID:25691624 - Heteroresistance to carbapenems)
+    """
+
+    __tablename__ = "heteroresistance_distributions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    antibiotico = Column(String(100), nullable=False)
+    genotype_signature = Column(String(200), nullable=False)
+    mean_log_mic = Column(Float, nullable=False)
+    std_log_mic = Column(Float, nullable=False, default=0.3)
+    prevalence = Column(Float, nullable=False, default=0.01)
+    detection_frequency = Column(Float)
+    pmid_reference = Column(String(50))
+    study_conditions = Column(String)
+    notes = Column(String)
+    created_at = Column(DateTime, server_default=func.now())
+
+    def __repr__(self):
+        return (
+            f"<HeteroresistanceDistribution {self.antibiotico} "
+            f"({self.genotype_signature}): μ={self.mean_log_mic:.2f}, "
+            f"σ={self.std_log_mic:.2f}, prev={self.prevalence * 100:.1f}%>"
+        )
+
+
+class FitnessCost(Base):
+    """
+    Modelo de costos de fitness asociados a mecanismos de resistencia.
+
+    Representa el costo biológico (reducción en tasa de crecimiento, virulencia, etc.)
+    de cada gen de resistencia. Crítico para modelar evolución y transmisión.
+
+    Fuente: Migración 021 (PMID:19258524 - Fitness costs in P. aeruginosa)
+    """
+
+    __tablename__ = "fitness_costs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    gen = Column(String(100), nullable=False, unique=True)
+    fitness_cost = Column(Float, nullable=False, default=0.0)
+    growth_rate_penalty = Column(Float, default=0.0)
+    doubling_time_increase = Column(Float, default=0.0)
+    competitive_index = Column(Float, default=1.0)
+    context_dependent = Column(Integer, default=0)  # SQLite no tiene BOOLEAN nativo
+    compensatory_mutations = Column(String)
+    pmid_reference = Column(String(50))
+    measurement_method = Column(String(100))
+    study_conditions = Column(String)
+    notes = Column(String)
+    created_at = Column(DateTime, server_default=func.now())
+
+    def __repr__(self):
+        return (
+            f"<FitnessCost {self.gen}: cost={self.fitness_cost:.3f}, "
+            f"CI={self.competitive_index:.2f}>"
+        )
