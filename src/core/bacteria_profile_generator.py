@@ -131,29 +131,6 @@ def generate_wild_type() -> BacteriaProfile:
     )
 
 
-def calculate_mic_with_multipliers(base_mic: float, multipliers: List[float]) -> float:
-    """
-    Calcula MIC final aplicando la regla multiplicativa.
-
-    Formula: MIC_final = MIC_base × ∏(multiplicadores)
-
-    Args:
-        base_mic: Valor MIC basal (bacteria wild-type)
-        multipliers: Lista de multiplicadores de genes mutados
-
-    Returns:
-        MIC calculado, redondeado a 2 decimales.
-
-    Example:
-        >>> calculate_mic_with_multipliers(0.5, [8.0, 16.0])
-        64.0  # Meropenem con oprD_loss (×8) + blaVIM (×16)
-    """
-    result = base_mic
-    for mult in multipliers:
-        result *= mult
-    return round(result, 2)
-
-
 def generate_from_history(
     antibioticos_previos: List[str], probabilidad_mutacion: float = 0.7
 ) -> BacteriaProfile:
@@ -162,10 +139,9 @@ def generate_from_history(
 
     Algoritmo:
     1. Parte de genotipo wild-type
-    2. Consulta tabla gene_class_multipliers (via get_multipliers_from_db)
-    3. Selecciona mutaciones relevantes según antibióticos previos
-    4. Aplica mutaciones probabilísticamente
-    5. Calcula MICs finales usando regla multiplicativa
+    2. Selecciona mutaciones relevantes según antibióticos previos
+    3. Aplica mutaciones probabilísticamente
+    4. Calcula MICs finales usando GenotypePhenotypeCalculator
 
     Args:
         antibioticos_previos: Lista de antibióticos usados previamente
@@ -182,14 +158,7 @@ def generate_from_history(
         1.0  # MIC_base (0.125) × gyrA (8.0) = 1.0 µg/mL
     """
     genotipo = get_wild_type_genotype().copy()
-    base_mics = get_baseline_mics()
-    mics_calculated = base_mics.copy()
     mutaciones_aplicadas = []
-
-    # Obtener multiplicadores desde la base de datos
-    from src.core.bacteria_profile_generator import get_multipliers_from_db
-
-    antibiotic_multipliers = get_multipliers_from_db()
 
     # Genes candidatos a mutar según antibióticos previos
     genes_candidatos = {
@@ -236,7 +205,7 @@ def generate_from_history(
     }
 
     # Aplicar mutaciones probabilísticamente
-    genes_mutados = set()
+    genes_mutados = []
     for antibiotico in antibioticos_previos:
         if antibiotico not in genes_candidatos:
             continue
@@ -253,7 +222,7 @@ def generate_from_history(
                 mutacion_tipo = "_".join(gen_mutado.split("_")[1:])
                 genotipo[gen_base] = mutacion_tipo if mutacion_tipo else "mutated"
 
-                genes_mutados.add(gen_mutado)
+                genes_mutados.append(gen_mutado)
 
                 # Registrar mutación aplicada
                 mutaciones_aplicadas.append(
@@ -264,22 +233,18 @@ def generate_from_history(
                     }
                 )
 
-    # Calcular MICs finales usando multiplicadores
-    for antibiotico, base_mic in base_mics.items():
-        if antibiotico not in antibiotic_multipliers:
-            continue
+    # Calcular MICs finales usando el nuevo sistema genotipo→fenotipo
+    try:
+        from src.core.genotype_phenotype_calculator import calculate_mics_from_genotype
+    except ImportError:
+        # Fallback para ejecución directa del script
+        import sys
+        import os
 
-        # Obtener multiplicadores de genes mutados
-        multiplicadores = []
-        for gen_mutado in genes_mutados:
-            if gen_mutado in antibiotic_multipliers[antibiotico]:
-                multiplicadores.append(antibiotic_multipliers[antibiotico][gen_mutado])
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+        from src.core.genotype_phenotype_calculator import calculate_mics_from_genotype
 
-        # Aplicar regla multiplicativa
-        if multiplicadores:
-            mics_calculated[antibiotico] = calculate_mic_with_multipliers(
-                base_mic, multiplicadores
-            )
+    mics_calculated = calculate_mics_from_genotype(genes_mutados)
 
     return BacteriaProfile(
         organismo=ORGANISM_NAME,
@@ -290,56 +255,6 @@ def generate_from_history(
         antibioticos_previos=antibioticos_previos,
         mutaciones_aplicadas=mutaciones_aplicadas,
     )
-
-
-def get_multipliers_from_db() -> Dict[str, Dict[str, float]]:
-    """
-    Consulta la base de datos para obtener multiplicadores MIC.
-
-    Estructura:
-        {
-            'Meropenem': {
-                'oprD_loss': 8.0,
-                'blaVIM_or_blaIMP': 16.0,
-                'ftsI_PBP3_insertion_YRIN': 2.0
-            },
-            'Ciprofloxacino': {
-                'gyrA_T83I': 8.0,
-                'parC_S87L': 4.0,
-                ...
-            },
-            ...
-        }
-
-    Returns:
-        Diccionario anidado: antibiotico → gen → multiplicador
-    """
-    from src.data.database import get_session
-    from sqlalchemy import text
-
-    session = get_session()
-
-    query = text("""
-        SELECT 
-            ac.antibiotico,
-            gcm.gen,
-            gcm.multiplicador_mic
-        FROM gene_class_multipliers gcm
-        JOIN antibiotic_classes ac ON ac.clase = gcm.clase_antibiotico
-        WHERE gcm.multiplicador_mic > 1.0
-        ORDER BY ac.antibiotico, gcm.multiplicador_mic DESC
-    """)
-
-    result = {}
-    rows = session.execute(query).fetchall()
-
-    for antibiotico, gen, multiplicador in rows:
-        if antibiotico not in result:
-            result[antibiotico] = {}
-        result[antibiotico][gen] = multiplicador
-
-    session.close()
-    return result
 
 
 def format_profile_summary(profile: BacteriaProfile) -> str:
@@ -390,16 +305,3 @@ def format_profile_summary(profile: BacteriaProfile) -> str:
             lines.append(f"  {ab}: {profile.mics_calculated[ab]} ug/mL")
 
     return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    # Prueba básica del módulo
-    print("Generando bacteria wild-type...")
-    wt_profile = generate_wild_type()
-    print(format_profile_summary(wt_profile))
-
-    print("\n" + "=" * 60 + "\n")
-
-    print("Generando bacteria con historial de Cipro + Meropenem...")
-    resistant_profile = generate_from_history(["Ciprofloxacino", "Meropenem"])
-    print(format_profile_summary(resistant_profile))

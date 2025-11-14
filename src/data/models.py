@@ -182,10 +182,10 @@ class GeneClassMultiplier(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     gen = Column(String(100), nullable=False)
     clase_antibiotica = Column(String(100), nullable=False)
-    multiplicador = Column(Float, nullable=False, default=1.0)
+    multiplicador_mic = Column(Float, nullable=False, default=1.0)
 
     def __repr__(self):
-        return f"<GeneClassMultiplier {self.gen} × {self.clase_antibiotica} = ×{self.multiplicador}>"
+        return f"<GeneClassMultiplier {self.gen} × {self.clase_antibiotica} = ×{self.multiplicador_mic}>"
 
 
 class AntibioticClass(Base):
