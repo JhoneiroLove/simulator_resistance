@@ -43,18 +43,15 @@ try:
     print("=" * 60)
 
     # Verificar datos cargados
-    print("\n📊 VERIFICANDO DATOS CARGADOS:\n")
+    print("\n📊 VERIFICANDO DATOS CIENTÍFICOS CARGADOS:\n")
     session = get_session()
 
     tables_to_check = [
-        ("genes", "Genes de resistencia"),
-        ("antibioticos", "Antibióticos"),
         ("breakpoints", "Breakpoints CLSI/EUCAST"),
         ("gene_class_multipliers", "Multiplicadores MIC"),
         ("panel_layouts", "Layouts de paneles AST"),
         ("antibiotic_classes", "Clases de antibióticos"),
         ("bacteria_profiles", "Perfiles bacterianos"),
-        ("sites_of_infection", "Sitios de infección"),
     ]
 
     for table_name, description in tables_to_check:

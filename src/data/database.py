@@ -66,7 +66,7 @@ def init_db():
 
         print(f"ℹ️ Versión actual de la BD: {current_version}")
 
-        # 2. Aplicar migraciones pendientes
+        # 2. Aplicar migraciones pendientes (solo científicas: 001, 014-018)
         migration_files = sorted(os.listdir(migrations_folder))
         for fname in migration_files:
             match = re.match(r"(\d+)_.*\.sql", fname)
@@ -74,20 +74,6 @@ def init_db():
                 continue
 
             file_version = int(match.group(1))
-
-            # ⚠️ SKIP migración 002 - Contiene datos legacy sin fuentes científicas
-            if file_version == 2:
-                print(
-                    f"⏭️  Saltando migración v{file_version} (DEPRECATED - datos legacy)"
-                )
-                # Actualizar versión para marcar como "aplicada" pero sin ejecutar
-                if file_version > current_version:
-                    cursor.execute(
-                        "UPDATE db_version SET version_num = ? WHERE id = 1",
-                        (file_version,),
-                    )
-                    raw_conn.commit()
-                continue
 
             if file_version > current_version:
                 path = os.path.join(migrations_folder, fname)

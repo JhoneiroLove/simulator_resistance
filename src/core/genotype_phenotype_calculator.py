@@ -70,25 +70,53 @@ class GenotypePhenotypeCalculator:
 
     def get_baseline_mics(self) -> Dict[str, float]:
         """
-        Obtiene MICs basales de P. aeruginosa wild-type.
+        Obtiene MICs basales de P. aeruginosa wild-type desde la base de datos.
+
+        Los valores se cargan una sola vez y se cachean en memoria.
+        Todos los valores tienen referencias PMID verificadas (ver tabla baseline_mics).
 
         Returns:
             Diccionario antibiótico → MIC basal (µg/mL)
+
+        Raises:
+            RuntimeError: Si no hay datos en baseline_mics (migración no ejecutada).
         """
         if self._baseline_mics is None:
-            # Importar localmente para evitar circular import
+            from src.data.database import get_session
+            from src.data.models import BaselineMIC
+
             try:
-                from src.core.bacteria_profile_generator import get_baseline_mics
-            except ImportError:
-                # Fallback para ejecución directa del script
-                import sys
-                import os
+                session = get_session()
+                baseline_records = session.query(BaselineMIC).all()
+                session.close()
 
-                sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+                if not baseline_records:
+                    raise RuntimeError(
+                        "No baseline MICs found in database. "
+                        "Run migration 019_baseline_mics.sql first."
+                    )
+
+                self._baseline_mics = {
+                    record.antibiotico: record.mic_wt for record in baseline_records
+                }
+                logger.debug(
+                    f"Loaded {len(self._baseline_mics)} baseline MICs from database"
+                )
+
+            except Exception as e:
+                # Fallback temporal: delegar a bacteria_profile_generator
+                import warnings
                 from src.core.bacteria_profile_generator import get_baseline_mics
 
-            self._baseline_mics = get_baseline_mics()
-            logger.debug(f"Loaded {len(self._baseline_mics)} baseline MICs")
+                warnings.warn(
+                    f"Could not load baseline MICs from database: {e}. "
+                    "Using fallback function. Please run migration 019.",
+                    UserWarning,
+                )
+                self._baseline_mics = get_baseline_mics()
+                logger.debug(
+                    f"Loaded {len(self._baseline_mics)} baseline MICs (fallback)"
+                )
 
         return self._baseline_mics
 
@@ -150,17 +178,21 @@ class GenotypePhenotypeCalculator:
         return result
 
     def calculate_mic(
-        self, antibiotico: str, genes_mutados: List[str]
+        self, antibiotico: str, genes_mutados: List[str], stochastic: bool = False
     ) -> MICCalculationResult:
         """
         Calcula MIC para un antibiótico dado un genotipo.
 
         Formula:
-            MIC_final = MIC_base × ∏(multiplicadores de genes mutados)
+            MIC_determinístico = MIC_base × ∏(multiplicadores de genes mutados)
+            MIC_estocástico = MIC_determinístico × factor_aleatorio
+
+        donde factor_aleatorio ~ LogNormal(μ=0, σ=0.3), equivalente a variabilidad ±1 dilución.
 
         Args:
             antibiotico: Nombre del antibiótico (ej: 'Meropenem')
             genes_mutados: Lista de genes mutados (ej: ['oprD_loss', 'blaVIM_or_blaIMP'])
+            stochastic: Si True, aplica variabilidad biológica estocástica (default: False)
 
         Returns:
             MICCalculationResult con detalles del cálculo
@@ -169,9 +201,10 @@ class GenotypePhenotypeCalculator:
             >>> calc = GenotypePhenotypeCalculator()
             >>> result = calc.calculate_mic('Meropenem', ['oprD_loss', 'blaVIM_or_blaIMP'])
             >>> result.mic_calculado
-            64.0  # 0.5 × 8.0 × 16.0 = 64.0
-            >>> result.fold_change
-            128.0  # 64.0 / 0.5 = 128x increase
+            64.0  # 0.5 × 8.0 × 16.0 = 64.0 (determinístico)
+            >>> result_stoch = calc.calculate_mic('Meropenem', ['oprD_loss'], stochastic=True)
+            >>> result_stoch.mic_calculado
+            3.2  # Podría variar: 2.0-8.0 (±1 dilución respecto a 4.0 base)
         """
         baseline_mics = self.get_baseline_mics()
         multipliers_db = self.load_multipliers_from_db()
@@ -198,11 +231,26 @@ class GenotypePhenotypeCalculator:
         for mult in multiplicadores:
             mic_calculado *= mult
 
-        mic_calculado = round(mic_calculado, 3)
+        # Aplicar variabilidad estocástica si se requiere
+        if stochastic:
+            import numpy as np
+
+            # Log-normal con σ=0.3 → rango típico ±1 dilución (0.5x - 2x)
+            # PMID:29021270 (CLSI M07): variabilidad biológica ±1 dilución es aceptable
+            random_factor = np.random.lognormal(mean=0, sigma=0.3)
+            mic_calculado *= random_factor
+
+            # Redondear al nearest standard dilution (serie de 2x)
+            mic_calculado = self._round_to_standard_dilution(mic_calculado)
+            logger.debug(
+                f"Applied stochastic factor {random_factor:.3f} → {mic_calculado}"
+            )
+        else:
+            mic_calculado = round(mic_calculado, 3)
 
         logger.debug(
             f"{antibiotico}: MIC_base={mic_base} × {multiplicadores} = {mic_calculado} "
-            f"(genes: {genes_aplicados})"
+            f"(genes: {genes_aplicados}, stochastic={stochastic})"
         )
 
         return MICCalculationResult(
@@ -214,13 +262,14 @@ class GenotypePhenotypeCalculator:
         )
 
     def calculate_all_mics(
-        self, genes_mutados: List[str]
+        self, genes_mutados: List[str], stochastic: bool = False
     ) -> Dict[str, MICCalculationResult]:
         """
         Calcula MICs para TODOS los antibióticos del panel dado un genotipo.
 
         Args:
             genes_mutados: Lista de genes mutados (ej: ['gyrA_T83I', 'oprD_loss'])
+            stochastic: Si True, aplica variabilidad biológica estocástica (default: False)
 
         Returns:
             Diccionario antibiótico → MICCalculationResult
@@ -239,16 +288,20 @@ class GenotypePhenotypeCalculator:
         results = {}
 
         for antibiotico in baseline_mics.keys():
-            results[antibiotico] = self.calculate_mic(antibiotico, genes_mutados)
+            results[antibiotico] = self.calculate_mic(
+                antibiotico, genes_mutados, stochastic
+            )
 
         logger.info(
             f"Calculated MICs for {len(results)} antibiotics "
-            f"with {len(genes_mutados)} mutations"
+            f"with {len(genes_mutados)} mutations (stochastic={stochastic})"
         )
 
         return results
 
-    def get_mics_as_dict(self, genes_mutados: List[str]) -> Dict[str, float]:
+    def get_mics_as_dict(
+        self, genes_mutados: List[str], stochastic: bool = False
+    ) -> Dict[str, float]:
         """
         Versión simplificada que retorna solo el diccionario MIC.
 
@@ -256,6 +309,7 @@ class GenotypePhenotypeCalculator:
 
         Args:
             genes_mutados: Lista de genes mutados
+            stochastic: Si True, aplica variabilidad biológica estocástica (default: False)
 
         Returns:
             Diccionario antibiótico → MIC calculado
@@ -266,7 +320,7 @@ class GenotypePhenotypeCalculator:
             >>> mics['Meropenem']
             64.0
         """
-        results = self.calculate_all_mics(genes_mutados)
+        results = self.calculate_all_mics(genes_mutados, stochastic)
         return {ab: result.mic_calculado for ab, result in results.items()}
 
     def clear_cache(self):
@@ -274,6 +328,51 @@ class GenotypePhenotypeCalculator:
         self._multipliers_cache = None
         self._baseline_mics = None
         logger.info("Cache cleared")
+
+    def _round_to_standard_dilution(self, mic_value: float) -> float:
+        """
+        Redondea MIC al nearest standard dilution en serie de 2x.
+
+        La serie estándar CLSI/EUCAST es: 0.03, 0.06, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256...
+
+        Args:
+            mic_value: MIC calculado (puede ser cualquier valor)
+
+        Returns:
+            MIC redondeado al valor estándar más cercano
+
+        Example:
+            >>> calc._round_to_standard_dilution(3.7)
+            4.0
+            >>> calc._round_to_standard_dilution(0.18)
+            0.25
+        """
+        import numpy as np
+
+        # Serie estándar de diluciones (CLSI M07-A11, EUCAST)
+        standard_dilutions = [
+            0.015,
+            0.03,
+            0.06,
+            0.125,
+            0.25,
+            0.5,
+            1.0,
+            2.0,
+            4.0,
+            8.0,
+            16.0,
+            32.0,
+            64.0,
+            128.0,
+            256.0,
+            512.0,
+            1024.0,
+        ]
+
+        # Encontrar el valor más cercano
+        closest_idx = np.argmin(np.abs(np.array(standard_dilutions) - mic_value))
+        return standard_dilutions[closest_idx]
 
 
 def calculate_mics_from_genotype(genes_mutados: List[str]) -> Dict[str, float]:

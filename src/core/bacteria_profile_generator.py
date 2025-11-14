@@ -71,44 +71,62 @@ def get_wild_type_genotype() -> Dict[str, str]:
 
 def get_baseline_mics() -> Dict[str, float]:
     """
-    Define los MICs basales de P. aeruginosa sensible (sin mutaciones).
+    Obtiene MICs basales de P. aeruginosa wild-type desde la base de datos.
 
-    Valores basados en distribución wild-type de literatura científica.
-    Referencias:
-    - Livermore DM. 2002. Clinical Microbiology Reviews (PMID: 12364371)
-    - EUCAST MIC Distribution (www.eucast.org/mic_distributions)
-    - Pang Z et al. 2019. Front Microbiol (PMID: 30838007)
-
-    Estos valores se modifican mediante multiplicadores de la tabla gene_class_multipliers.
+    Valores basados en distribución wild-type de literatura científica (EUCAST ECOFFs, CLSI).
+    Todos los valores tienen referencias PMID verificadas en la tabla baseline_mics.
 
     Returns:
         Diccionario antibiótico → MIC basal en µg/mL (wild-type sensible).
+
+    Raises:
+        RuntimeError: Si no se pueden cargar los datos de la BD
     """
-    return {
-        # Carbapenémicos (PMID: 12364371, EUCAST MIC dist)
-        "Meropenem": 0.5,  # Wild-type modal: 0.25-1.0
-        "Imipenem": 1.0,  # Wild-type modal: 0.5-2.0
-        "Doripenem": 0.5,  # Similar a Meropenem
-        # Cefalosporinas (PMID: 30838007)
-        "Ceftazidima": 1.0,  # Wild-type modal: 0.5-2.0
-        "Cefepime": 2.0,  # Wild-type modal: 1.0-4.0
-        "Ceftazidima/Avibactam": 2.0,  # Con inhibidor
-        "Ceftolozano/Tazobactam": 0.5,  # Resistente a AmpC
-        # Monobactams
-        "Aztreonam": 4.0,  # Wild-type modal: 2.0-8.0
-        # Penicilinas + inhibidor
-        "Piperacilina/Tazobactam": 4.0,  # Wild-type modal: 2.0-8.0
-        # Aminoglucósidos (PMID: 31296920)
-        "Amikacina": 2.0,  # Wild-type modal: 1.0-4.0
-        "Tobramicina": 0.5,  # Wild-type modal: 0.25-1.0
-        # Fluoroquinolonas (PMID: 30756138)
-        "Ciprofloxacino": 0.125,  # Wild-type modal: 0.06-0.25
-        "Levofloxacino": 0.5,  # Wild-type modal: 0.25-1.0
-        # Polimixinas (EUCAST)
-        "Colistina": 1.0,  # Wild-type modal: 0.5-2.0
-        # Sideróforo
-        "Cefiderocol": 0.25,  # Nuevo, modal: 0.125-0.5
-    }
+    from src.data.database import get_session
+    from src.data.models import BaselineMIC
+
+    try:
+        session = get_session()
+        baseline_records = session.query(BaselineMIC).all()
+        session.close()
+
+        if not baseline_records:
+            raise RuntimeError(
+                "No baseline MICs found in database. "
+                "Run migration 019_baseline_mics.sql first."
+            )
+
+        baseline_dict = {
+            record.antibiotico: record.mic_wt for record in baseline_records
+        }
+
+        return baseline_dict
+
+    except Exception as e:
+        # Fallback temporal para compatibilidad (se eliminará en futuro)
+        import warnings
+
+        warnings.warn(
+            f"Could not load baseline MICs from database: {e}. "
+            "Using hardcoded fallback values. Please run migration 019.",
+            UserWarning,
+        )
+
+        # Valores fallback (mantenidos por compatibilidad temporal)
+        return {
+            "Meropenem": 0.5,
+            "Imipenem": 1.0,
+            "Doripenem": 0.5,
+            "Ciprofloxacino": 0.125,
+            "Levofloxacino": 0.5,
+            "Amikacina": 2.0,
+            "Tobramicina": 0.5,
+            "Gentamicina": 1.0,
+            "Piperacilina-Tazobactam": 8.0,
+            "Ceftazidima": 1.0,
+            "Cefepime": 2.0,
+            "Colistina": 1.0,
+        }
 
 
 def generate_wild_type() -> BacteriaProfile:

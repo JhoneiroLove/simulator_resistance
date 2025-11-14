@@ -18,14 +18,14 @@ Fecha: 11 de noviembre de 2025
 
 from typing import Optional, Dict, List, Tuple
 from src.data.database import get_session
-from src.data.models import Breakpoint, Antibiotico, PanelLayout
+from src.data.models import Breakpoint, PanelLayout
 
 
 # Constante global del organismo
 ORGANISM_NAME = "Pseudomonas aeruginosa"
 
 # Cache de breakpoints para optimización
-_breakpoint_cache: Dict[Tuple[int, str], Breakpoint] = {}
+_breakpoint_cache: Dict[Tuple[str, str], Breakpoint] = {}
 
 
 class BreakpointService:
@@ -48,9 +48,8 @@ class BreakpointService:
 
     def get_breakpoint(
         self,
-        antibiotico_id: int,
+        antibiotico_nombre: str,
         guideline: str = "EUCAST",
-        version: Optional[str] = None,
     ) -> Optional[Breakpoint]:
         """
         Obtiene el breakpoint para un antibiótico específico.
@@ -59,90 +58,50 @@ class BreakpointService:
         intenta con la alternativa (fallback automático).
 
         Args:
-            antibiotico_id: ID del antibiótico en la tabla antibioticos
+            antibiotico_nombre: Nombre del antibiótico (ej: 'Meropenem')
             guideline: 'EUCAST' (por defecto) o 'CLSI'
-            version: Versión específica (opcional). Ej: 'v15.0', 'M100-2025'
-                    Si no se especifica, toma la más reciente
 
         Returns:
             Objeto Breakpoint o None si no se encuentra
 
         Ejemplo:
             >>> service = BreakpointService()
-            >>> bp = service.get_breakpoint(antibiotico_id=1, guideline='EUCAST')
-            >>> print(f"MIC S≤{bp.breakpoint_s}, R≥{bp.breakpoint_r}")
-            MIC S≤2.0, R≥8.0
+            >>> bp = service.get_breakpoint('Meropenem', 'EUCAST')
+            >>> print(f"MIC S≤{bp.s_mic}, R>{bp.r_mic}")
+            MIC S≤2.0, R>8.0
         """
         # Verificar cache primero
-        cache_key = (antibiotico_id, guideline)
+        cache_key = (antibiotico_nombre, guideline)
         if self.use_cache and cache_key in _breakpoint_cache:
             return _breakpoint_cache[cache_key]
 
         # Query base
-        query = self.session.query(Breakpoint).filter(
-            Breakpoint.antibiotico_id == antibiotico_id,
-            Breakpoint.guideline == guideline,
+        breakpoint = (
+            self.session.query(Breakpoint)
+            .filter(
+                Breakpoint.antibiotico == antibiotico_nombre,
+                Breakpoint.standard == guideline,
+            )
+            .first()
         )
-
-        # Filtrar por versión si se especifica
-        if version:
-            query = query.filter(Breakpoint.version == version)
-
-        # Ordenar por versión descendente (más reciente primero)
-        query = query.order_by(Breakpoint.version.desc())
-
-        breakpoint = query.first()
 
         # Fallback: Si no encontró con guideline solicitado, intentar con el otro
         if breakpoint is None:
             alternative_guideline = "CLSI" if guideline == "EUCAST" else "EUCAST"
-            query_fallback = (
+            breakpoint = (
                 self.session.query(Breakpoint)
                 .filter(
-                    Breakpoint.antibiotico_id == antibiotico_id,
-                    Breakpoint.guideline == alternative_guideline,
+                    Breakpoint.antibiotico == antibiotico_nombre,
+                    Breakpoint.standard == alternative_guideline,
                 )
-                .order_by(Breakpoint.version.desc())
+                .first()
             )
-
-            breakpoint = query_fallback.first()
 
         # Guardar en cache
         if breakpoint and self.use_cache:
             _breakpoint_cache[cache_key] = breakpoint
 
         return breakpoint
-
-    def get_breakpoint_by_name(
-        self, antibiotico_nombre: str, guideline: str = "EUCAST"
-    ) -> Optional[Breakpoint]:
-        """
-        Obtiene breakpoint usando el nombre del antibiótico en lugar de ID.
-
-        Args:
-            antibiotico_nombre: Nombre del antibiótico (ej: 'Meropenem')
-            guideline: 'EUCAST' o 'CLSI'
-
-        Returns:
-            Objeto Breakpoint o None
-
-        Ejemplo:
-            >>> service = BreakpointService()
-            >>> bp = service.get_breakpoint_by_name('Ciprofloxacino', 'CLSI')
-            >>> print(f"Guideline: {bp.guideline}")
-            Guideline: CLSI
-        """
-        # Buscar antibiótico por nombre
-        antibiotico = (
-            self.session.query(Antibiotico)
-            .filter(Antibiotico.nombre == antibiotico_nombre)
-            .first()
-        )
-
-        if antibiotico is None:
-            return None
-
-        return self.get_breakpoint(antibiotico.id, guideline)
 
     def interpret_mic(
         self,
@@ -219,7 +178,7 @@ class BreakpointService:
         self,
         mic_value: float,
         mic_operator: str,
-        antibiotico_id: int,
+        antibiotico_nombre: str,
         guideline: str = "EUCAST",
     ) -> Tuple[str, Optional[Breakpoint]]:
         """
@@ -230,7 +189,7 @@ class BreakpointService:
         Args:
             mic_value: Valor del MIC
             mic_operator: Operador ('=', '<=', '>=')
-            antibiotico_id: ID del antibiótico
+            antibiotico_nombre: Nombre del antibiótico (ej: 'Meropenem')
             guideline: 'EUCAST' o 'CLSI'
 
         Returns:
@@ -240,11 +199,11 @@ class BreakpointService:
 
         Ejemplo:
             >>> service = BreakpointService()
-            >>> interp, bp = service.interpret_with_breakpoint(16.0, '=', 1, 'CLSI')
-            >>> print(f"{interp} usando {bp.guideline} {bp.version}")
-            R usando CLSI M100-2025
+            >>> interp, bp = service.interpret_with_breakpoint(16.0, '=', 'Meropenem', 'CLSI')
+            >>> print(f"{interp} usando {bp.standard}")
+            R usando CLSI
         """
-        breakpoint = self.get_breakpoint(antibiotico_id, guideline)
+        breakpoint = self.get_breakpoint(antibiotico_nombre, guideline)
 
         if breakpoint is None:
             return "UNKNOWN", None
@@ -256,7 +215,7 @@ class BreakpointService:
         return interpretation, breakpoint
 
     def check_breakpoint_coverage(
-        self, panel_layout_id: int, antibiotico_id: int, guideline: str = "EUCAST"
+        self, panel_name: str, antibiotico_nombre: str, guideline: str = "EUCAST"
     ) -> Dict[str, any]:
         """
         Verifica si el panel cubre adecuadamente los breakpoints.
@@ -265,8 +224,8 @@ class BreakpointService:
         de los breakpoints S y R (típicamente ±1 dilución).
 
         Args:
-            panel_layout_id: ID del panel layout
-            antibiotico_id: ID del antibiótico a verificar
+            panel_name: Nombre del panel (ej: 'EUCAST_PA_v2025')
+            antibiotico_nombre: Nombre del antibiótico (ej: 'Meropenem')
             guideline: Guía de breakpoints a usar
 
         Returns:
@@ -275,15 +234,9 @@ class BreakpointService:
             - 'covers_r': bool, si cubre breakpoint R
             - 'missing_concentrations': list de concentraciones recomendadas
             - 'panel_concentrations': list de concentraciones en el panel
-
-        Ejemplo:
-            >>> service = BreakpointService()
-            >>> coverage = service.check_breakpoint_coverage(1, 5, 'CLSI')
-            >>> print(f"Cubre S: {coverage['covers_s']}, Cubre R: {coverage['covers_r']}")
-            Cubre S: True, Cubre R: True
         """
         # Obtener breakpoint
-        breakpoint = self.get_breakpoint(antibiotico_id, guideline)
+        breakpoint = self.get_breakpoint(antibiotico_nombre, guideline)
 
         if breakpoint is None:
             return {
@@ -298,8 +251,8 @@ class BreakpointService:
         panel_wells = (
             self.session.query(PanelLayout)
             .filter(
-                PanelLayout.panel_name == f"panel_{panel_layout_id}",
-                PanelLayout.antibiotico_id == antibiotico_id,
+                PanelLayout.panel_name == panel_name,
+                PanelLayout.antibiotico == antibiotico_nombre,
                 PanelLayout.tipo == "test",
             )
             .all()
@@ -311,10 +264,7 @@ class BreakpointService:
             return {
                 "covers_s": False,
                 "covers_r": False,
-                "missing_concentrations": [
-                    breakpoint.breakpoint_s,
-                    breakpoint.breakpoint_r,
-                ],
+                "missing_concentrations": [breakpoint.s_mic, breakpoint.r_mic],
                 "panel_concentrations": [],
                 "error": "Antibiótico no encontrado en el panel",
             }
@@ -322,58 +272,59 @@ class BreakpointService:
         # Verificar cobertura (necesitamos ±1 dilución alrededor de cada breakpoint)
         # Dilución típica = factor 2 (serie log2)
         covers_s = any(
-            breakpoint.breakpoint_s / 2 <= conc <= breakpoint.breakpoint_s * 2
+            breakpoint.s_mic / 2 <= conc <= breakpoint.s_mic * 2
             for conc in panel_concentrations
         )
 
         covers_r = any(
-            breakpoint.breakpoint_r / 2 <= conc <= breakpoint.breakpoint_r * 2
+            breakpoint.r_mic / 2 <= conc <= breakpoint.r_mic * 2
             for conc in panel_concentrations
         )
 
         # Identificar concentraciones faltantes
         missing = []
         if not covers_s:
-            missing.append(breakpoint.breakpoint_s)
+            missing.append(breakpoint.s_mic)
         if not covers_r:
-            missing.append(breakpoint.breakpoint_r)
+            missing.append(breakpoint.r_mic)
 
         return {
             "covers_s": covers_s,
             "covers_r": covers_r,
             "missing_concentrations": missing,
             "panel_concentrations": panel_concentrations,
-            "breakpoint_s": breakpoint.breakpoint_s,
-            "breakpoint_r": breakpoint.breakpoint_r,
-            "guideline": breakpoint.guideline,
-            "version": breakpoint.version,
+            "breakpoint_s": breakpoint.s_mic,
+            "breakpoint_r": breakpoint.r_mic,
+            "guideline": breakpoint.standard,
         }
 
     def get_all_breakpoints_for_panel(
-        self, antibiotico_ids: List[int], guideline: str = "EUCAST"
-    ) -> Dict[int, Optional[Breakpoint]]:
+        self, antibiotico_nombres: List[str], guideline: str = "EUCAST"
+    ) -> Dict[str, Optional[Breakpoint]]:
         """
         Obtiene breakpoints para múltiples antibióticos de un panel.
 
         Útil para cargar todos los breakpoints al inicio de una simulación.
 
         Args:
-            antibiotico_ids: Lista de IDs de antibióticos
+            antibiotico_nombres: Lista de nombres de antibióticos
             guideline: Guía a usar
 
         Returns:
-            Diccionario {antibiotico_id: Breakpoint}
+            Diccionario {antibiotico_nombre: Breakpoint}
 
         Ejemplo:
             >>> service = BreakpointService()
-            >>> breakpoints = service.get_all_breakpoints_for_panel([1, 2, 3], 'EUCAST')
+            >>> breakpoints = service.get_all_breakpoints_for_panel(
+            ...     ['Meropenem', 'Ciprofloxacino'], 'EUCAST'
+            ... )
             >>> print(f"Breakpoints cargados: {len(breakpoints)}")
-            Breakpoints cargados: 3
+            Breakpoints cargados: 2
         """
         breakpoints = {}
-        for antibiotico_id in antibiotico_ids:
-            bp = self.get_breakpoint(antibiotico_id, guideline)
-            breakpoints[antibiotico_id] = bp
+        for antibiotico_nombre in antibiotico_nombres:
+            bp = self.get_breakpoint(antibiotico_nombre, guideline)
+            breakpoints[antibiotico_nombre] = bp
 
         return breakpoints
 
