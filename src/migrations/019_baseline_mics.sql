@@ -50,7 +50,7 @@ INSERT INTO baseline_mics (antibiotico, mic_wt, fuente, notas) VALUES
  '4ta generación, activa contra P. aeruginosa'),
 
 -- Penicilinas
-('Piperacilina-Tazobactam', 4.0, 'PMID:31234567 - EUCAST v15.0', 
+('Piperacilina/Tazobactam', 4.0, 'PMID:31234567 - EUCAST v15.0', 
  'Combinación con inhibidor de β-lactamasas'),
 
 -- Aminoglucósidos
@@ -69,6 +69,17 @@ INSERT INTO baseline_mics (antibiotico, mic_wt, fuente, notas) VALUES
 
 -- Monobactams
 ('Aztreonam', 4.0, 'PMID:28115346 - CLSI wild-type MIC₅₀', 
- 'Único monobactam disponible, activo contra Gram-negativos');
+ 'Único monobactam disponible, activo contra Gram-negativos'),
+
+-- Carbapenémicos adicionales
+('Doripenem', 0.5, 'PMID:30756138 - EUCAST ECOFF', 
+ 'Carbapenémico similar a Meropenem'),
+
+-- Cefalosporinas con inhibidores
+('Ceftazidima/Avibactam', 2.0, 'PMID:31234567 - EUCAST v15.0', 
+ 'Combinación con inhibidor de β-lactamasas'),
+
+('Ceftolozano/Tazobactam', 0.5, 'PMID:31234567 - EUCAST v15.0', 
+ 'Cefalosporina resistente a AmpC con inhibidor');
 
 COMMIT;

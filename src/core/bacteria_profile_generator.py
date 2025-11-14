@@ -122,7 +122,7 @@ def get_baseline_mics() -> Dict[str, float]:
             "Amikacina": 2.0,
             "Tobramicina": 0.5,
             "Gentamicina": 1.0,
-            "Piperacilina-Tazobactam": 8.0,
+            "Piperacilina/Tazobactam": 8.0,
             "Ceftazidima": 1.0,
             "Cefepime": 2.0,
             "Colistina": 1.0,

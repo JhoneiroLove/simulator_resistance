@@ -28,21 +28,22 @@ CREATE TABLE IF NOT EXISTS antibiotic_classes (
 -- ============================================
 
 INSERT OR REPLACE INTO antibiotic_classes (antibiotico, clase) VALUES
-('Meropenem', 'Carbapenémico'),
-('Imipenem', 'Carbapenémico'),
-('Cefepime', 'Cefalosporina (4ta gen)'),
-('Ceftazidima', 'Cefalosporina (3ra gen)'),
-('Amikacina', 'Aminoglucósido'),
-('Tobramicina', 'Aminoglucósido'),
-('Gentamicina', 'Aminoglucósido'),
-('Ciprofloxacino', 'Fluoroquinolona'),
-('Levofloxacino', 'Fluoroquinolona'),
-('Colistina', 'Polimixina'),
-('Piperacilina/Tazobactam', 'β-lactámico + inhibidor β-lactamasa'),
-('Ceftazidima/Avibactam', 'Cefalosporina + inhibidor β-lactamasa'),
-('Ceftolozano/Tazobactam', 'Cefalosporina + inhibidor β-lactamasa'),
-('Cefiderocol', 'Cefalosporina sideróforo'),
-('Aztreonam', 'Monobactámico');
+('Meropenem', 'carbapenemicos'),
+('Imipenem', 'carbapenemicos'),
+('Doripenem', 'carbapenemicos'),
+('Cefepime', 'cef_4G_cefepime'),
+('Ceftazidima', 'cef_3G_ceftazidima'),
+('Amikacina', 'aminoglucosidos'),
+('Tobramicina', 'aminoglucosidos'),
+('Gentamicina', 'aminoglucosidos'),
+('Ciprofloxacino', 'fluoroquinolonas'),
+('Levofloxacino', 'fluoroquinolonas'),
+('Colistina', 'polimixinas'),
+('Piperacilina/Tazobactam', 'penicilina_inhibidor'),
+('Ceftazidima/Avibactam', 'cef_inhibidor'),
+('Ceftolozano/Tazobactam', 'cef_inhibidor'),
+('Cefiderocol', 'sideroforo_cefiderocol'),
+('Aztreonam', 'monobactam_aztreonam');
 
 COMMIT;
 
