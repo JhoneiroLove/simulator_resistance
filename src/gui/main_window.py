@@ -1,39 +1,13 @@
-import logging
 import sys
-import numpy as np
-import pyqtgraph as pg
 import os
-import time
 from PyQt5.QtWidgets import (
     QMainWindow,
     QTabWidget,
     QStatusBar,
-    QMessageBox,
     QApplication,
 )
-from PyQt5.QtCore import QTimer, Qt
-from src.gui.widgets.map_window import MapWindow
-from src.gui.widgets.input_form import InputForm
-from src.gui.widgets.results_view import ResultsView
-from src.gui.widgets.detailed_results import DetailedResults
-from src.gui.widgets.expand_window import ExpandWindow
 from src.gui.workflows.ast_workflow import ASTWorkflow
-from src.core.genetic_algorithm import GeneticAlgorithm
-from src.core.reporting import save_simulation_report
-from src.data.database import get_session
-from src.data.models import Gen, Antibiotico, Recomendacion, Simulacion
 from PyQt5.QtGui import QIcon
-
-# Mapa de colores por tipo de antibiótico
-ANTIBIOTIC_COLORS = {
-    "Carbapenémico": "#2980B9",
-    "Fluoroquinolona": "#F39C12",
-    "Polimixina": "#E74C3C",
-    "Aminoglucósido": "#27AE60",
-    "Penicilina": "#8E44AD",
-    "Glicilciclina": "#16A085",
-}
-DEFAULT_COLOR = "#7F8C8D"
 
 
 def get_app_icon():
@@ -48,10 +22,18 @@ def get_app_icon():
 
 
 class MainWindow(QMainWindow):
+    """
+    Ventana principal del Simulador Evolutivo de Resistencia Bacteriana.
+
+    VERSIÓN REFACTORIZADA - Solo contiene el workflow AST científico.
+    El código legacy (tabs 1-3 con simulación GA manual) fue deprecado.
+    """
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SRB")
+        self.setWindowTitle("SRB - AST Simulator")
         self.resize(1280, 720)
+
         # Centrar la ventana en la pantalla
         qr = self.frameGeometry()
         cp = QApplication.primaryScreen().availableGeometry().center()
@@ -59,334 +41,20 @@ class MainWindow(QMainWindow):
         self.move(qr.topLeft())
         self.setWindowIcon(get_app_icon())
 
-        # ---- Widgets principales ----
-        self.input_tab = InputForm()
-        session = get_session()
-        abs_q = session.query(
-            Antibiotico.id,
-            Antibiotico.nombre,
-            Antibiotico.concentracion_minima,
-            Antibiotico.concentracion_maxima,
-        ).all()
-        session.close()
-        antibiotics = [
-            {"id": a[0], "nombre": a[1], "conc_min": a[2], "conc_max": a[3]}
-            for a in abs_q
-        ]
-        self.map_window = None
-        self.expand_window = None
-        self.results_tab = ResultsView(antibiotics)
-        self.detail_tab = DetailedResults()
+        # ---- Tab AST (único workflow científico) ----
         self.ast_tab = ASTWorkflow()
-
-        # ---- Conectar señales ----
-        self.input_tab.params_submitted.connect(self.on_params_saved)
-        self.results_tab.simulate_requested.connect(self.handle_simulation)
 
         # ---- Pestañas ----
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.input_tab, "1. Selección y Parámetros")
-        self.tabs.addTab(self.results_tab, "2. Secuencia y Simulación")
-        self.tabs.addTab(self.detail_tab, "3. Resultados Detallados")
-        self.tabs.addTab(self.ast_tab, "4. AST Antibiograma")
+        self.tabs.addTab(self.ast_tab, "🧬 AST Antibiograma")
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
-
-        # ---- Timer para animación ----
-        self.sim_timer = QTimer(self)
-        self.sim_timer.timeout.connect(self._on_sim_step)
-
-        # ---- Parámetros guardados ----
-        self.saved_genes = []
-        self.saved_mut_rate = 0.05
-        self.saved_death_rate = 0.05
-        self.saved_time_horizon = 100
-        self.saved_environmental_factors = {"temperature": 37.0, "pH": 7.4}
-        self.saved_repro_rate = 1.0
-        self.initial_attributes = {}
-
-        # Flags para mostrar alertas solo una vez
-        self.alert_shown_extinction = False
-        self.alert_shown_resistance = False
-
-    def on_params_saved(
-        self,
-        genes,
-        unit,
-        mut_rate,
-        death_rate,
-        time_horizon,
-        environmental_factors,
-        reproduction_rate,
-        age_range,
-        weight,
-        creatinina,
-        estado_inmune,
-        sitio_infeccion_id,
-    ):
-        """Se llama cuando el usuario guarda parámetros en la pestaña 1."""
-        self.saved_genes = genes
-        self.saved_mut_rate = mut_rate
-        self.saved_death_rate = death_rate
-        self.saved_time_horizon = time_horizon
-        self.saved_environmental_factors = environmental_factors
-        self.saved_repro_rate = reproduction_rate
-
-        # Guardar parámetros del paciente y sitio
-        self.saved_age_range = age_range
-        self.saved_weight = weight
-        self.saved_creatinina = creatinina
-        self.saved_estado_inmune = estado_inmune
-        self.saved_sitio_infeccion_id = sitio_infeccion_id
-
-        QMessageBox.information(
-            self,
-            "Éxito",
-            "Parámetros guardados satisfactoriamente",
-            QMessageBox.Ok,
+        self.statusBar().showMessage(
+            "✅ Simulador AST científico - Versión refactorizada"
         )
-        self.tabs.setCurrentWidget(self.results_tab)
-
-    def handle_simulation(self, schedule):
-        if not self.saved_genes:
-            QMessageBox.warning(self, "Error", "Seleccione al menos un gen.")
-            self.tabs.setCurrentWidget(self.input_tab)
-            return
-
-        # Recuperar información de genes desde la base de datos
-        session = get_session()
-        genes_orm = session.query(Gen).all()
-        genes = [
-            {"id": g.id, "nombre": g.nombre, "peso_resistencia": g.peso_resistencia}
-            for g in genes_orm
-        ]
-
-        # Construir la lista de tuplas (tiempo, antibiótico, concentración)
-        sched_objs = []
-        for t, ab_id, conc in schedule:
-            ab_orm = session.query(Antibiotico).get(ab_id)
-            ab = {
-                "id": ab_orm.id,
-                "nombre": ab_orm.nombre,
-                "tipo": ab_orm.tipo,
-                "concentracion_minima": ab_orm.concentracion_minima,
-                "concentracion_maxima": ab_orm.concentracion_maxima,
-            }
-            sched_objs.append((t, ab, conc))
-
-        # Determinar el primer antibiótico y concentración
-        if sched_objs:
-            antibiotico_id = sched_objs[0][1]["id"]
-            concentracion = sched_objs[0][2]
-        else:
-            antibiotico_id = None
-            concentracion = None
-
-        # Crear objeto Guest (huésped)
-        guest = None
-        if hasattr(self, "saved_age_range"):
-            guest = self.input_tab.crear_huesped_desde_form(
-                age_range=self.saved_age_range,
-                weight=self.saved_weight,
-                creatinina=self.saved_creatinina,
-                estado_inmune=self.saved_estado_inmune,
-            )
-            if guest:
-                # Guardar guest en BD
-                session.add(guest)
-                session.commit()
-                session.refresh(guest)
-                logging.info(f"Guest saved to database with id={guest.id}")
-                # Desconectar de la sesión - solo expunge es suficiente
-                session.expunge(guest)
-
-        # Obtener objeto InfectionSite
-        sitio_infeccion = None
-        if hasattr(self, "saved_sitio_infeccion_id") and self.saved_sitio_infeccion_id:
-            sitio_infeccion = self.input_tab.obtener_sitio_seleccionado(
-                self.saved_sitio_infeccion_id
-            )
-            if sitio_infeccion:
-                # Desconectar de la sesión antes de cerrarla
-                session.expunge(sitio_infeccion)
-
-        # Crear registro de Simulación en la base de datos
-        simulacion = Simulacion(
-            antibiotico_id=antibiotico_id,
-            concentracion=concentracion if concentracion is not None else 0.0,
-            resistencia_predicha=0.0,
-            huesped_id=guest.id if guest else None,  # Vincular guest
-        )
-        session.add(simulacion)
-        session.commit()
-        simulation_id = simulacion.id
-        session.close()
-
-        # Guardar horarios manuales
-        self._manual_schedule = sched_objs
-        self._optimized_schedule = None
-        self.sim_start_time = time.time()
-
-        # Instanciar el algoritmo genético con huesped y sitio_infeccion
-        self.ga = GeneticAlgorithm(
-            genes=genes,
-            antibiotic_schedule=sched_objs,
-            mutation_rate=self.saved_mut_rate,
-            generations=self.saved_time_horizon,
-            pop_size=200,
-            death_rate=self.saved_death_rate,
-            environmental_factors=self.saved_environmental_factors,
-            simulation_id=simulation_id,
-            reproduction_rate=self.saved_repro_rate,
-            pressure_factor=0.25,
-            huesped=guest,
-            sitio_infeccion=sitio_infeccion,
-        )
-
-        self.ga.initialize(self.saved_genes)
-        self.initial_attributes = self.ga.get_average_attributes()
-
-        # --- Posicionamiento de ventanas de gráficos ---
-        main_window_geom = self.geometry()
-        screen = QApplication.primaryScreen().geometry()
-        margin = 10
-
-        # Crear/actualizar y posicionar la ventana del mapa de calor a la izquierda
-        if self.map_window is None:
-            self.map_window = MapWindow(self.ga)
-        else:
-            self.map_window.ga = self.ga
-            self.map_window.reset()
-
-        map_geom = self.map_window.frameGeometry()
-        map_x = main_window_geom.x() - map_geom.width() - margin
-        map_x = max(0, map_x)
-        self.map_window.move(map_x, main_window_geom.y())
-        self.map_window.show()
-
-        # Crear/actualizar y posicionar la ventana de expansión a la derecha
-        if self.expand_window is None:
-            self.expand_window = ExpandWindow(self.ga)
-        else:
-            self.expand_window.ga = self.ga
-            self.expand_window.reset()
-
-        expand_geom = self.expand_window.frameGeometry()
-        expand_x = main_window_geom.x() + main_window_geom.width() + margin
-        if expand_x + expand_geom.width() > screen.width():
-            expand_x = screen.width() - expand_geom.width()
-        self.expand_window.move(expand_x, main_window_geom.y())
-        self.expand_window.show()
-
-        # Limpiar gráfica en la pestaña de resultados y arrancar el timer
-        self.results_tab.clear_plot()
-        self.sim_timer.start(100)
-        self.tabs.setCurrentWidget(self.results_tab)
-
-        self.alert_shown_extinction = False
-        self.alert_shown_resistance = False
-
-    def _on_sim_step(self):
-        """Avanza la simulación paso a paso y al final actualiza Resultados Detallados."""
-        if not self.ga.step():
-            self.sim_timer.stop()
-            self._show_threshold_alerts()
-
-            self.ga.save_final_gene_attributes(self.saved_genes)
-
-            # Guardar las métricas de la simulación en la base de datos
-            saved_params = {
-                "genes": self.saved_genes,
-                "mutation_rate": self.saved_mut_rate,
-                "death_rate": self.saved_death_rate,
-                "generations": self.saved_time_horizon,
-                "environmental_factors": self.saved_environmental_factors,
-                "reproduction_rate": self.saved_repro_rate,
-            }
-            save_simulation_report(self.ga, saved_params)
-
-            # Añadir marcadores de antibióticos al gráfico de resistencia
-            schedule = self._optimized_schedule or self._manual_schedule or []
-            self.results_tab.add_antibiotic_markers(schedule)
-
-            session = get_session()
-            antibioticos_results = []
-            for t_evt, ab, _ in schedule:
-                idx = np.searchsorted(self.ga.times, t_evt, side="right") - 1
-                valor = self.ga.avg_hist[idx]
-                reco = (
-                    session.query(Recomendacion)
-                    .filter_by(antibiotico_id=ab["id"])
-                    .first()
-                )
-                texto = reco.texto if reco else ""
-                antibioticos_results.append((ab["nombre"], valor, texto))
-            session.close()
-
-            final_attributes = self.ga.get_average_attributes()
-            self.detail_tab.update_results(
-                antibioticos_results=antibioticos_results,
-                best_hist=self.ga.best_hist,
-                avg_hist=self.ga.avg_hist,
-                div_hist=self.ga.div_hist,
-                initial_attributes=self.initial_attributes,
-                final_attributes=final_attributes,
-            )
-            final_res = self.ga.avg_hist[-1]
-            self.results_tab.show_interpretation(final_res)
-            final_pop = self.ga.population_hist[-1] if self.ga.population_hist else 0.0
-            self.results_tab.show_population_interpretation(final_pop)
-            peak_deg = (
-                max(self.ga.degradation_hist) if self.ga.degradation_hist else 0.0
-            )
-            self.results_tab.show_degradation_interpretation(peak_deg)
-
-            return
-
-        t = np.linspace(0, self.ga.generations, len(self.ga.avg_hist))
-        y = np.array(self.ga.avg_hist)
-
-        # Usar los nuevos métodos de actualización de los widgets
-        self.results_tab.update_resistance_plot(t, y)
-        self.results_tab.update_diversity_plot(t, self.ga.div_hist)
-        self.results_tab.update_population_plot(t, self.ga.population_hist)
-        self.results_tab.update_expansion_plot(t, self.ga.expansion_index_hist)
-        self.results_tab.update_degradation_plot(t, self.ga.degradation_hist)
-
-        # Actualizar ventanas flotantes
-        if getattr(self, "map_window", None) is not None:
-            self.map_window.update_map()
-        if getattr(self, "expand_window", None) is not None:
-            self.expand_window.update_expand()
-
-    def _show_threshold_alerts(self):
-        """Mostrar alertas al alcanzar umbrales críticos solo una vez."""
-        if (
-            not self.alert_shown_extinction
-            and self.ga.population_total <= self.ga.extinction_threshold
-        ):
-            self.alert_shown_extinction = True
-            QMessageBox.warning(
-                self,
-                "Alerta de Extinción",
-                f"La población bacteriana ha caído por debajo del umbral crítico de {self.ga.extinction_threshold}.",
-            )
-        if (
-            not self.alert_shown_resistance
-            and self.ga.avg_hist[-1] >= self.ga.resistance_threshold
-        ):
-            self.alert_shown_resistance = True
-            QMessageBox.warning(
-                self,
-                "Alerta de Resistencia Crítica",
-                f"La resistencia promedio ha superado el umbral crítico de {self.ga.resistance_threshold:.2f}.",
-            )
 
     def closeEvent(self, event):
-        if hasattr(self, "map_window") and self.map_window:
-            self.map_window.close()
-        if hasattr(self, "expand_window") and self.expand_window:
-            self.expand_window.close()
+        """Limpiar recursos al cerrar."""
         event.accept()
 
 

@@ -1,3 +1,29 @@
+-- ============================================================================
+-- MIGRACIÓN 002: SEED DATA - ⚠️ DEPRECATED / LEGACY
+-- ============================================================================
+-- 
+-- ❌ ADVERTENCIA: Esta migración contiene datos INVENTADOS sin fuentes científicas
+--
+-- PROBLEMAS IDENTIFICADOS:
+-- 1. Genes con "peso_resistencia" arbitrario (1.4-2.5) SIN referencias PMID
+-- 2. Antibióticos con rangos de concentración SIN justificación científica
+-- 3. NO usa datos de EUCAST/CLSI oficiales
+-- 4. Reemplazado por migraciones científicas 014-018
+--
+-- ESTADO: Esta migración está DESACTIVADA y NO debe ejecutarse.
+--          Solo se mantiene con fines de documentación histórica.
+--
+-- DATOS CIENTÍFICOS OFICIALES:
+-- - Usar migración 014: breakpoints_clsi_eucast.sql (31 breakpoints con fuentes)
+-- - Usar migración 015: gene_class_matrix.sql (110 multiplicadores con PMID)
+-- - Usar migración 016: panel_layouts.sql (93 layouts EUCAST/CLSI)
+-- - Usar migración 017: antibioticos_familias.sql (15 clases con mecanismos)
+--
+-- ============================================================================
+
+-- TODO contenido comentado para evitar ejecución accidental:
+
+/*
 BEGIN TRANSACTION;
 
 ----------------- Genes --------------
@@ -38,3 +64,4 @@ ON CONFLICT(nombre) DO UPDATE SET
   tipo = excluded.tipo;
 
 COMMIT;
+*/

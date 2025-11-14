@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from .models import Base
 
+
 def get_paths():
     """
     - base_path: ruta donde PyInstaller extrae recursos (migrations).
@@ -26,6 +27,7 @@ def get_paths():
         os.makedirs(data_dir, exist_ok=True)
         return base_path, data_dir
 
+
 base_path, user_data_dir = get_paths()
 
 db_path = os.path.join(user_data_dir, "resistencia.db")
@@ -33,6 +35,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 Session = scoped_session(sessionmaker(bind=engine))
+
 
 def init_db():
     """
@@ -50,7 +53,9 @@ def init_db():
         # 1. Obtener la versión actual de la BD
         current_version = 0
         try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'"
+            )
             if cursor.fetchone():
                 cursor.execute("SELECT version_num FROM db_version WHERE id = 1")
                 version_row = cursor.fetchone()
@@ -58,7 +63,7 @@ def init_db():
                     current_version = version_row[0]
         except Exception:
             current_version = 0
-        
+
         print(f"ℹ️ Versión actual de la BD: {current_version}")
 
         # 2. Aplicar migraciones pendientes
@@ -70,15 +75,32 @@ def init_db():
 
             file_version = int(match.group(1))
 
+            # ⚠️ SKIP migración 002 - Contiene datos legacy sin fuentes científicas
+            if file_version == 2:
+                print(
+                    f"⏭️  Saltando migración v{file_version} (DEPRECATED - datos legacy)"
+                )
+                # Actualizar versión para marcar como "aplicada" pero sin ejecutar
+                if file_version > current_version:
+                    cursor.execute(
+                        "UPDATE db_version SET version_num = ? WHERE id = 1",
+                        (file_version,),
+                    )
+                    raw_conn.commit()
+                continue
+
             if file_version > current_version:
                 path = os.path.join(migrations_folder, fname)
                 print(f"🆙 Aplicando migración v{file_version}: {fname}...")
-                
+
                 with open(path, "r", encoding="utf-8") as f:
                     script_content = f.read()
                     cursor.executescript(script_content)
-                
-                cursor.execute("UPDATE db_version SET version_num = ? WHERE id = 1", (file_version,))
+
+                cursor.execute(
+                    "UPDATE db_version SET version_num = ? WHERE id = 1",
+                    (file_version,),
+                )
                 raw_conn.commit()
                 print(f"✅ Migración v{file_version} aplicada exitosamente.")
 
@@ -91,6 +113,7 @@ def init_db():
         raw_conn.close()
 
     print("✅ Proceso de migración de base de datos completado.")
+
 
 def get_session():
     return Session()

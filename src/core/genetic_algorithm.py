@@ -657,11 +657,28 @@ class GeneticAlgorithm:
 
     def evaluate_legacy(self, individual):
         """
-        Evalúa fitness usando el sistema legacy (peso_resistencia).
+        ⚠️ DEPRECATED: Evalúa fitness usando el sistema legacy (peso_resistencia).
 
-        Este es el método original antes de la integración FASE 4.
-        Se mantiene para compatibilidad con simulaciones existentes.
+        Este método está OBSOLETO y solo se mantiene para compatibilidad con código antiguo.
+
+        PROBLEMAS:
+        - Usa "peso_resistencia" inventado sin fuentes científicas
+        - Parámetros "recubrimiento" y "enzimas" sin validación
+        - NO usa datos EUCAST/CLSI oficiales
+
+        REEMPLAZO: Usar evaluate_with_mics() para fitness basado en MICs científicos
+
+        ⚠️ WARNING: Este método será eliminado en versiones futuras.
         """
+        import warnings
+
+        warnings.warn(
+            "⚠️ evaluate_legacy() está DEPRECATED. "
+            "Usar evaluate_with_mics() para cálculos científicos basados en MICs EUCAST/CLSI.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         raw_resistance = sum(
             g["peso_resistencia"] * bit for g, bit in zip(self.genes, individual)
         )
