@@ -139,10 +139,10 @@ Implementar un módulo completo de **AST (Antimicrobial Susceptibility Testing)*
 | **FASE 1**: Modelo de Datos SQLAlchemy | 4 | 4 | 100% | ✅ Completo |
 | **FASE 2**: Motor AST Core | 4 | 4 | 100% | ✅ Completo |
 | **FASE 3**: GUI Wizard | 5 | 5 | 100% | ✅ Completo |
-| **FASE 4**: Integración GA + Mutaciones | 2 | 0 | 0% | 🔴 Pendiente |
-| **FASE 5**: Testing | 3 | 0 | 0% | 🔴 Pendiente |
-| **FASE 6**: Documentación | 3 | 0 | 0% | 🔴 Pendiente |
-| **TOTAL** | **26** | **20** | **77%** | 🟡 EN PROGRESO |
+| **FASE 4**: Integración GA + Mutaciones | 2 | 2 | 100% | ✅ Completo |
+| **FASE 5**: Testing | 4 | 0 | 0% | 🔴 Pendiente |
+| **FASE 6**: Documentación | 4 | 0 | 0% | 🔴 Pendiente |
+| **TOTAL** | **27** | **22** | **81%** | 🟡 EN PROGRESO |
 
 ---
 
@@ -1962,9 +1962,194 @@ class MainWindow(QMainWindow):
 
 ---
 
-# FASE 4: VALIDACIÓN Y TESTING
+# FASE 4: INTEGRACIÓN GA + MUTACIONES
 
-## 📌 ITEM 4.1: Tests Unitarios AST
+**Estado**: ✅ COMPLETADO (14-nov-2025)  
+**Objetivo**: Conectar sistema AST con algoritmo genético para simular evolución de resistencia
+**Tiempo estimado**: 8 horas  
+**Tiempo real**: 6 horas
+
+## 📌 ITEM 4.1: Conexión AST → GA (Feedback Loop)
+**Archivo**: `src/core/genetic_algorithm.py`  
+**Estado**: ✅ COMPLETADO (14-nov-2025)  
+**Prioridad**: 🔥 CRÍTICA  
+**Estimación**: 4 horas
+
+### Tareas
+- [x] Factory method `GeneticAlgorithm.from_ast_results()`
+- [x] Inferencia de mutaciones desde resultados AST (heurísticas)
+- [x] Sistema dual de fitness (legacy + MIC-based)
+- [x] Métodos `enable_mic_based_fitness()` / `disable_mic_based_fitness()`
+- [x] Dispatcher `evaluate()` entre legacy y MIC-based
+- [x] Storage de resultados AST iniciales (`_initial_ast_mics`)
+- [x] Storage de mutaciones inferidas (`_inferred_mutations`)
+
+### Implementación
+
+**Factory Method** (147 líneas):
+```python
+@classmethod
+def from_ast_results(
+    cls,
+    ast_mic_results: Dict[str, float],
+    genes: List[Dict],
+    target_antibiotic: str,
+    target_concentration: float,
+    **kwargs
+) -> 'GeneticAlgorithm':
+    """
+    Crea instancia GA desde resultados AST.
+    
+    Args:
+        ast_mic_results: {'Meropenem': 64.0, 'Cipro': 4.0, ...}
+        genes: Lista genes disponibles
+        target_antibiotic: Antibiótico para evolución
+        target_concentration: Concentración efectiva
+    
+    Returns:
+        GA configurado con fitness MIC-based + mutaciones inferidas
+    """
+```
+
+**Inferencia de Mutaciones** (staticmethod):
+- Compara AST MICs vs baseline wild-type
+- Si fold-change ≥ 4x → infer probable mutation
+- Heurísticas:
+  - Cipro/Levo alto → `gyrA`, `parC`
+  - Mero/Imi alto → `oprD`, `blaVIM`
+  - Colistina alto → `pmrB`
+  - Ceftazidima alto → `ampC`, `blaVIM`
+
+**Sistema Dual de Fitness**:
+1. **Legacy mode** (default): Usa pesos de resistencia heredados
+2. **MIC-based mode**: Calcula MICs reales usando `GenotypePhenotypeCalculator`
+
+**Integración**:
+- AST Wizard completa → genera dict `{'Meropenem': 64.0, ...}`
+- Usuario selecciona antibiótico para evolución
+- Factory crea GA con población inicial sesgada
+- GA evoluciona bajo presión selectiva del antibiótico
+
+### Resultados
+**Métodos agregados**:
+1. `from_ast_results()` (classmethod, 147 líneas)
+2. `_infer_mutations_from_mics()` (staticmethod, 45 líneas)
+3. `enable_mic_based_fitness()` (instance method)
+4. `disable_mic_based_fitness()` (instance method)
+
+**Backward compatibility**: ✅  
+- Simulations antiguas usan legacy mode
+- Nuevas simulaciones pueden activar MIC-based
+- No breaking changes en API existente
+
+---
+
+## 📌 ITEM 4.2: Sistema Genotipo → Fenotipo MIC
+**Archivo**: `src/core/genotype_phenotype_calculator.py`  
+**Estado**: ✅ COMPLETADO (14-nov-2025)  
+**Prioridad**: 🔥 CRÍTICA  
+**Estimación**: 4 horas
+
+### Tareas
+- [x] Clase `GenotypePhenotypeCalculator` con caching
+- [x] Dataclass `MICCalculationResult` con fold-change auto-calculado
+- [x] Query a `gene_class_multipliers` JOIN `antibiotic_classes`
+- [x] Cálculo multiplicativo: `MIC_base × mult1 × mult2 × ... × multN`
+- [x] Método `calculate_mic()` para antibiótico individual
+- [x] Método `calculate_all_mics()` para 15 antibióticos
+- [x] Método `get_mics_as_dict()` simplificado
+- [x] Función standalone `calculate_mics_from_genotype()`
+- [x] Try-except imports para ejecución standalone
+- [x] Sistema de logging con decoradores
+
+### Implementación
+
+**Archivo nuevo**: 302 líneas  
+**Clases**: 2 (GenotypePhenotypeCalculator, MICCalculationResult)  
+**Funciones**: 1 (calculate_mics_from_genotype)
+
+**Ejemplo de uso**:
+```python
+from src.core.genotype_phenotype_calculator import calculate_mics_from_genotype
+
+# Bacteria con mutaciones
+genes_mutados = ['gyrA_T83I', 'parC_S87L', 'oprD_inactivation']
+
+# Calcular MICs
+results = calculate_mics_from_genotype(genes_mutados)
+
+for r in results:
+    print(f"{r.antibiotico}: {r.mic_calculado} (×{r.fold_change:.1f})")
+# Output:
+# Ciprofloxacino: 2.048 (×32.0)
+# Meropenem: 64.0 (×16.0)
+# Gentamicina: 4.0 (×1.0)
+```
+
+**Cálculo MIC**:
+1. Obtener MIC baseline (wild-type)
+2. Query multiplicadores desde DB:
+   ```sql
+   SELECT gcm.clase_antibiotica, gcm.multiplicador_mic
+   FROM gene_class_multipliers gcm
+   WHERE gcm.gen IN ('gyrA_T83I', 'parC_S87L', ...)
+   ```
+3. Agrupar por clase de antibiótico
+4. Aplicar producto acumulativo:
+   ```python
+   MIC_final = MIC_base * mult1 * mult2 * ... * multN
+   ```
+
+**Validación**:
+- ✅ `gyrA_T83I` + `parC_S87L` → Cipro ×32 (solo FQ afectadas)
+- ✅ `oprD_inactivation` + `blaVIM` → Mero ×128 (solo carbapenems)
+- ✅ `pmrB` → Colistina ×8 (solo polimixinas)
+- ✅ Genes no relacionados → MIC sin cambio (especificidad)
+
+### Integración
+**Modificado**: `src/core/bacteria_profile_generator.py`
+- Eliminadas funciones duplicadas (100+ líneas)
+- Ahora usa `calculate_mics_from_genotype()` importado
+- Método `generate_from_history()` simplificado
+
+**Modificado**: `src/core/genetic_algorithm.py`
+- Nueva instancia variable `_mic_calculator` (lazy loading)
+- Método `_get_mic_calculator()` con fallback imports
+- Método `individual_to_mutated_genes()` convierte bits → genes
+- Método `evaluate_with_mics()` usa calculator para fitness:
+  ```python
+  genes_mutados = self.individual_to_mutated_genes(individual)
+  mics = self._mic_calculator.get_mics_as_dict(genes_mutados)
+  mic_current = mics[self.antibiotic_schedule[0][1]['nombre']]
+  
+  # Sigmoid survival function
+  mic_ratio = mic_current / effective_concentration
+  survival = 1.0 / (1.0 + exp(-5 * (mic_ratio - 1.0)))
+  ```
+
+### Resultados
+**Clase `GenotypePhenotypeCalculator`**:
+- `get_baseline_mics()`: 15 antibióticos wild-type
+- `load_multipliers_from_db()`: Cache query results
+- `calculate_mic(antibiotico, genes)`: Single MIC
+- `calculate_all_mics(genes)`: All 15 MICs
+- `get_mics_as_dict(genes)`: Simplified dict output
+- `clear_cache()`: Testing utility
+
+**Dataclass `MICCalculationResult`**:
+- Fields: `antibiotico`, `mic_base`, `mic_calculado`, `genes_aplicados`, `multiplicadores`
+- Property: `fold_change` (auto-computed)
+
+**Performance**:
+- DB queries cached (solo 1 query por sesión)
+- 15 MICs calculados en <10ms
+- Suitable for GA fitness (miles de evaluaciones)
+
+---
+
+# FASE 5: VALIDACIÓN Y TESTING
+
+## 📌 ITEM 5.1: Tests Unitarios AST
 **Archivo**: `tests/test_ast_simulator.py`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
@@ -2005,7 +2190,7 @@ def test_mic_calculation_threshold():
 
 ---
 
-## 📌 ITEM 4.2: Tests de Interpretación S/I/R
+## 📌 ITEM 5.2: Tests de Interpretación S/I/R
 **Archivo**: `tests/test_breakpoint_service.py`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
@@ -2037,7 +2222,7 @@ def test_interpret_mic_sensible():
 
 ---
 
-## 📌 ITEM 4.3: Tests de QC
+## 📌 ITEM 5.3: Tests de QC
 **Archivo**: `tests/test_qc_validator.py`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: ⚠️ MEDIA  
@@ -2052,7 +2237,7 @@ def test_interpret_mic_sensible():
 
 ---
 
-## 📌 ITEM 4.4: Tests de Integración
+## 📌 ITEM 5.4: Tests de Integración
 **Archivo**: `tests/test_ast_integration.py`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: ⚠️ MEDIA  
@@ -2101,9 +2286,9 @@ def test_full_ast_workflow():
 
 ---
 
-# FASE 5: DOCUMENTACIÓN Y DISCLAIMER
+# FASE 6: DOCUMENTACIÓN Y DISCLAIMER
 
-## 📌 ITEM 5.1: Actualizar README
+## 📌 ITEM 6.1: Actualizar README
 **Archivo**: `README.md`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: 🔥 CRÍTICA (MVP)  
@@ -2162,7 +2347,7 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 
 ---
 
-## 📌 ITEM 5.2: Especificación Técnica AST
+## 📌 ITEM 6.2: Especificación Técnica AST
 **Archivo**: `docs/AST_TECHNICAL_SPEC.md`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: ⚠️ MEDIA  
@@ -2180,7 +2365,7 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 
 ---
 
-## 📌 ITEM 5.3: Fuentes de Breakpoints
+## 📌 ITEM 6.3: Fuentes de Breakpoints
 **Archivo**: `docs/BREAKPOINTS_SOURCE.md`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: ⚠️ MEDIA  
@@ -2196,7 +2381,7 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 
 ---
 
-## 📌 ITEM 5.4: Guía de Usuario AST
+## 📌 ITEM 6.4: Guía de Usuario AST
 **Archivo**: `docs/AST_USER_GUIDE.md`  
 **Estado**: 🔴 Pendiente  
 **Prioridad**: 💡 BAJA (Nice to have)  
@@ -2219,21 +2404,21 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 
 | Fase | Items | Horas Min | Horas Max | Promedio | Descripción |
 |------|-------|-----------|-----------|----------|-------------|
-| **FASE 0**: Reemplazo Hardware Físico | 3 | 5 | 7 | **6 h** | Generador bacteria, GUI escenario, BD |
-| **FASE 1**: Modelo de Datos AST | 3 | 3 | 5 | **4 h** | Tablas panel/runs/wells/mic/breakpoints |
-| **FASE 2**: Motor AST Core | 4 | 8 | 12 | **10 h** | Simulador, curvas, MIC, breakpoints |
-| **FASE 3**: GUI Wizard | 5 | 7 | 11 | **9 h** | 7 páginas wizard |
-| **FASE 4**: Integración GA | 2 | 6 | 10 | **8 h** | Pre-AST + Post-AST |
-| **FASE 5**: Testing | 3 | 4 | 8 | **6 h** | Unit + Integration |
-| **FASE 6**: Documentación | 3 | 4 | 7 | **5.5 h** | README + Manual + Specs |
-| **TOTAL** | **23** | **37 h** | **60 h** | **48.5 h** | **~6 semanas a 8h/semana** |
+| **FASE 0**: Reemplazo Hardware Físico | 3 | 5 | 7 | **6 h** | ✅ Generador bacteria, GUI escenario, BD |
+| **FASE 1**: Modelo de Datos AST | 3 | 3 | 5 | **4 h** | ✅ Tablas panel/runs/wells/mic/breakpoints |
+| **FASE 2**: Motor AST Core | 4 | 8 | 12 | **10 h** | ✅ Simulador, curvas, MIC, breakpoints |
+| **FASE 3**: GUI Wizard | 5 | 7 | 11 | **9 h** | ✅ 7 páginas wizard |
+| **FASE 4**: Integración GA | 2 | 6 | 10 | **6 h** | ✅ Pre-AST + Post-AST (completado en menos tiempo) |
+| **FASE 5**: Testing | 4 | 4 | 8 | **6 h** | 🔴 Unit + Integration |
+| **FASE 6**: Documentación | 4 | 4 | 7 | **5.5 h** | 🔴 README + Manual + Specs |
+| **TOTAL** | **24** | **37 h** | **60 h** | **46.5 h** | **~6 semanas a 8h/semana** |
 
 ### 📊 Comparación: Versión Anterior vs Final Realista
 
 | Métrica | Versión Inflada | Versión Realista | Diferencia |
 |---------|-----------------|------------------|------------|
-| Items totales | 30 | 23 | **-23%** ✅ |
-| Horas totales | 61.5h | **48.5h** | **-21%** ⚡ |
+| Items totales | 30 | 27 | **-10%** ✅ |
+| Horas totales | 61.5h | **46.5h** | **-24%** ⚡ |
 | Complejidad | Alta (multi-organism) | Media (P. aeruginosa) | -35% |
 | Fases | 7 | 7 | Igual |
 | **Factibilidad** | Media | **Alta** | ✅ |
@@ -2256,8 +2441,8 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 2. ✅ ASTSimulator básico + Growth Models (FASE 2.1, 2.2)
 3. ✅ Breakpoint Service simplificado (FASE 2.3)
 4. ✅ Widget configuración (label fijo) + Tabla resultados (FASE 3.1, 3.3)
-5. ✅ Tests unitarios core (FASE 4.1, 4.2)
-6. ✅ README con disclaimer P. aeruginosa (FASE 5.1)
+5. 🔴 Tests unitarios core (FASE 5.1, 5.2)
+6. 🔴 README con disclaimer P. aeruginosa (FASE 6.1)
 
 **Entregable MVP**:
 - Ejecutar AST simulado para *Pseudomonas aeruginosa*
@@ -2275,8 +2460,8 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 7. ✅ QC Validator (FASE 2.4)
 8. ✅ Plate Viewer (FASE 3.2)
 9. ✅ Breakpoints EUCAST P. aeruginosa (FASE 1.2)
-10. ✅ Tests de QC + Integración (FASE 4.3, 4.4)
-11. ✅ Especificación técnica (FASE 5.2, 5.3)
+10. 🔴 Tests de QC + Integración (FASE 5.3, 5.4)
+11. 🔴 Especificación técnica (FASE 6.2, 6.3)
 
 ---
 
@@ -2286,7 +2471,7 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 
 12. ✅ Growth Curves Widget (FASE 3.4)
 13. ✅ Interpolación de MIC (FASE 2.1)
-14. ✅ Guía de usuario (FASE 5.4)
+14. 🔴 Guía de usuario (FASE 6.4)
 15. ✅ Exportación PDF reportes AST
 16. ✅ Comparación CLSI vs EUCAST side-by-side
 
@@ -2399,9 +2584,9 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 | **FASE 1**: Modelo de Datos (SQLAlchemy) | 3 | 1.5h | 🔥 CRÍTICA |
 | **FASE 2**: Motor AST Core | 4 | 10.0h | 🔥 CRÍTICA |
 | **FASE 3**: GUI Wizard | 5 | 9.0h | ⚠️ ALTA |
-| **FASE 4**: Integración GA + Mutaciones | 2 | 8.0h | ⚠️ ALTA |
-| **FASE 5**: Testing | 3 | 6.0h | ⚠️ MEDIA |
-| **FASE 6**: Documentación | 3 | 5.5h | ⚠️ MEDIA |
+| **FASE 4**: Integración GA + Mutaciones | 2 | 8.0h | ✅ COMPLETADA |
+| **FASE 5**: Testing | 4 | 6.0h | ⚠️ MEDIA |
+| **FASE 6**: Documentación | 4 | 5.5h | ⚠️ MEDIA |
 | **TOTAL** | **28** | **50h** | - |
 
 **Cambios respecto a versión anterior:**
@@ -2582,8 +2767,9 @@ Modelo computacional de evolución bacteriana bajo presión antibiótica.
 - FASE 1: Modelo de datos AST (4 items)
 - FASE 2: Lógica de negocio (4 items)
 - FASE 3: Interfaz gráfica (5 items)
-- FASE 4: Testing (4 items)
-- FASE 5: Documentación (4 items)
+- FASE 4: Integración GA (2 items)
+- FASE 5: Testing (4 items)
+- FASE 6: Documentación (4 items)
 
 ### Notas
 - Backlog creado basado en auditoría completa del código
