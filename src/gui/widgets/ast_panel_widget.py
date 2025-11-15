@@ -60,35 +60,48 @@ class ASTWorker(QThread):
     def run(self):
         """Ejecuta la simulación AST."""
         try:
+            # Obtener el panel_name desde el panel_layout_id
+            from src.data.database import get_session
+            from src.data.models import PanelLayout
+
+            session = get_session()
+            panel_layout = (
+                session.query(PanelLayout)
+                .filter(PanelLayout.id == self.panel_layout_id)
+                .first()
+            )
+
+            if not panel_layout:
+                self.error.emit(f"Panel con ID {self.panel_layout_id} no encontrado")
+                return
+
+            panel_name = panel_layout.panel_name
+            session.close()
+
             # Inicializar simulador
             simulator = ASTSimulator(
                 bacteria_profile_id=self.bacteria_profile_id,
-                panel_layout_id=self.panel_layout_id,
+                panel_name=panel_name,
+                inoculo_mcfarland=self.inoculo_mcfarland,
+                temperatura=self.temperatura,
+                duracion_horas=int(self.duracion_horas),
             )
 
             # Paso 1: Simulación de incubación (40% del progreso)
             self.progress.emit(10)
-            well_data_list = simulator.simulate_incubation(
-                duracion_horas=self.duracion_horas,
-                temperatura=self.temperatura,
-                inoculo_mcfarland=self.inoculo_mcfarland,
-            )
+            incubation_summary = simulator.simulate_incubation()
             self.progress.emit(40)
 
             # Paso 2: Cálculo de MICs (30% del progreso)
-            mic_results = simulator.calculate_mics(well_data_list)
+            mic_results = simulator.calculate_mics()
             self.progress.emit(70)
 
             # Paso 3: Validación QC (20% del progreso)
-            qc_report = simulator.apply_qc_checks(well_data_list)
+            qc_report = simulator.apply_qc_checks()
             self.progress.emit(90)
 
             # Paso 4: Generar reporte final (10% del progreso)
-            report = simulator.get_report(
-                well_data_list=well_data_list,
-                mic_results=mic_results,
-                qc_report=qc_report,
-            )
+            report = simulator.get_report()
             self.progress.emit(100)
 
             # Emitir resultado

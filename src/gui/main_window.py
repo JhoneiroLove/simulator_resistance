@@ -49,9 +49,6 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.ast_tab, "🧬 AST Antibiograma")
         self.setCentralWidget(self.tabs)
         self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage(
-            "✅ Simulador AST científico - Versión refactorizada"
-        )
 
     def closeEvent(self, event):
         """Limpiar recursos al cerrar."""
