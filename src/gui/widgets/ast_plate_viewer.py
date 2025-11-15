@@ -373,7 +373,14 @@ class ASTPlateViewer(QWidget):
         Carga datos de pocillos desde ASTSimulator.
 
         Args:
-            well_data_list: Lista de objetos WellData del simulador
+            well_data_list: Lista de diccionarios con datos de pocillos
+                Cada dict debe contener:
+                - well_id: posición del pocillo (ej: 'A1', 'H12')
+                - tipo: 'test', 'control_positivo', 'control_negativo'
+                - antibiotico: nombre del antibiótico (para test)
+                - concentracion: concentración en µg/mL (para test)
+                - od_final: densidad óptica final
+                - growth_curve: lista de puntos temporales (opcional)
         """
         # Limpiar pocillos
         for well in self.wells.values():
@@ -381,23 +388,36 @@ class ASTPlateViewer(QWidget):
 
         # Cargar datos
         for well_data in well_data_list:
-            position = well_data.posicion
+            # Soportar tanto diccionarios como objetos
+            if isinstance(well_data, dict):
+                position = well_data.get("well_id")
+                tipo = well_data.get("tipo")
+                antibiotico = well_data.get("antibiotico", "")
+                concentracion = well_data.get("concentracion", 0.0)
+                od_final = well_data.get("od_final", 0.0)
+            else:
+                # Soporte legacy para objetos WellData
+                position = well_data.posicion
+                tipo = well_data.tipo
+                antibiotico = well_data.antibiotico
+                concentracion = well_data.concentracion
+                od_final = well_data.od_final
 
             if position not in self.wells:
                 continue
 
             well_widget = self.wells[position]
 
-            if well_data.tipo == "control_positivo":
-                well_widget.set_control("positivo", well_data.od_final)
-            elif well_data.tipo == "control_negativo":
-                well_widget.set_control("negativo", well_data.od_final)
+            if tipo == "control_positivo":
+                well_widget.set_control("positivo", od_final)
+            elif tipo == "control_negativo":
+                well_widget.set_control("negativo", od_final)
             else:  # test
                 well_widget.set_test_well(
-                    antibiotico=well_data.antibiotico,
-                    concentracion=well_data.concentracion,
-                    od_value=well_data.od_final,
-                    crecimiento=(well_data.od_final >= 0.3),
+                    antibiotico=antibiotico,
+                    concentracion=concentracion,
+                    od_value=od_final,
+                    crecimiento=(od_final >= 0.3),
                 )
 
         # Guardar serie temporal para slider

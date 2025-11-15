@@ -484,6 +484,53 @@ class ASTSimulator:
         """
         qc_results = self.apply_qc_checks()
 
+        # Convertir well data a formato serializable
+        well_data_list = []
+        for well in self.panel_wells:
+            growth_curve = [
+                {
+                    "time": reading.tiempo_minutos / 60.0,  # Convertir a horas
+                    "od": reading.od_600,
+                }
+                for reading in well.readings
+            ]
+
+            well_data_list.append(
+                {
+                    "well_id": well.posicion,
+                    "antibiotico": well.antibiotico,
+                    "concentracion": well.concentracion,
+                    "tipo": well.tipo,
+                    "od_final": well.od_final,
+                    "growth_curve": growth_curve,
+                }
+            )
+
+        # Formatear resultados MIC con estructura esperada por la tabla
+        mic_results_formatted = []
+        for r in self.mic_results:
+            # Obtener breakpoints de la base de datos
+            breakpoint = (
+                self.session.query(Breakpoint)
+                .filter_by(antibiotico=r.antibiotico, standard="EUCAST")
+                .first()
+            )
+
+            mic_results_formatted.append(
+                {
+                    "antibiotico": r.antibiotico,
+                    "mic_value": r.mic_value,  # Valor numérico
+                    "mic_operador": r.mic_operador,
+                    "interpretacion": r.interpretacion,
+                    "guideline": r.breakpoint_usado,
+                    "version": "v15.0" if r.breakpoint_usado == "EUCAST" else "M07-A11",
+                    "breakpoint_s": breakpoint.s_mic if breakpoint else 0,
+                    "breakpoint_r": breakpoint.r_mic if breakpoint else 0,
+                    "metodo": r.metodo,
+                    "confianza": r.confianza,
+                }
+            )
+
         return {
             "metadata": {
                 "organismo": ORGANISM_NAME,
@@ -497,17 +544,8 @@ class ASTSimulator:
                 "duracion_horas": self.duracion_horas,
             },
             "qc": qc_results,
-            "mic_results": [
-                {
-                    "antibiotico": r.antibiotico,
-                    "mic": f"{r.mic_operador}{r.mic_value}",
-                    "interpretacion": r.interpretacion,
-                    "metodo": r.metodo,
-                    "breakpoint": r.breakpoint_usado,
-                    "confianza": r.confianza,
-                }
-                for r in self.mic_results
-            ],
+            "well_data_list": well_data_list,
+            "mic_results": mic_results_formatted,
             "resumen": {
                 "total_antibioticos": len(self.mic_results),
                 "sensibles": sum(
