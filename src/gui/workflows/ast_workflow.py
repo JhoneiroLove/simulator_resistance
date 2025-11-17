@@ -31,6 +31,11 @@ from src.gui.widgets.growth_curve_widget import GrowthCurveWidget
 from src.gui.widgets.bacteria_profile_widget import BacteriaProfileWidget
 from src.gui.widgets.bacteria_identification_widget import BacteriaIdentificationWidget
 
+# Controladores SOLID
+from src.gui.workflows.tab_navigation_controller import TabNavigationController
+from src.gui.workflows.workflow_event_handler import WorkflowEventHandler
+from src.gui.workflows.workflow_data_manager import WorkflowDataManager
+
 
 class ASTWorkflow(QWidget):
     """
@@ -110,8 +115,14 @@ class ASTWorkflow(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
 
+        # Inicializar controladores SOLID (Dependency Injection)
+        self.nav_controller: Optional[TabNavigationController] = None
+        self.event_handler = WorkflowEventHandler(self)
+        self.data_manager = WorkflowDataManager()
+
         self._init_ui()
         self._connect_signals()
+        self._setup_controllers()
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
@@ -564,6 +575,38 @@ class ASTWorkflow(QWidget):
         self.main_tabs.setTabEnabled(4, False)  # Resultados
         self.main_tabs.setTabEnabled(5, False)  # Curvas
 
+    def _setup_controllers(self):
+        """
+        Configura los controladores SOLID (Dependency Injection).
+
+        Separa responsabilidades siguiendo principios SOLID:
+        - TabNavigationController: Gestión de navegación
+        - WorkflowEventHandler: Procesamiento de eventos
+        - WorkflowDataManager: Gestión de datos
+        """
+        # Inicializar controlador de navegación
+        self.nav_controller = TabNavigationController(self.main_tabs)
+
+        # Registrar botones de navegación
+        self.nav_controller.register_button("next_profile", self.next_profile_btn)
+        self.nav_controller.register_button("next_config", self.next_config_btn)
+        self.nav_controller.register_button("next_plate", self.next_plate_btn)
+
+        # Suscribir event handler a eventos del workflow
+        self.event_handler.subscribe(
+            "identification_completed",
+            lambda **kw: self.nav_controller.enable_workflow_step("identification"),
+        )
+
+        self.event_handler.subscribe(
+            "profile_generated",
+            lambda **kw: self._handle_profile_generated_event(**kw),
+        )
+
+        self.event_handler.subscribe(
+            "ast_completed", lambda **kw: self._handle_ast_completed_event(**kw)
+        )
+
     def _connect_signals(self):
         """Conecta las señales entre widgets."""
         # Cuando se genera un perfil bacteriano
@@ -609,88 +652,61 @@ class ASTWorkflow(QWidget):
         """
         Maneja la generación exitosa de un perfil bacteriano.
 
-        Args:
-            bacteria_profile_id: ID del perfil en la base de datos
-            genotype: Diccionario gen → estado
+        Delegación SOLID: Usa event_handler y data_manager.
         """
-        # Establecer el perfil en el panel AST
+        # Almacenar perfil en data manager
+        self.data_manager.set_bacteria_profile(bacteria_profile_id)
+
+        # Establecer perfil en panel AST
         self.panel_widget.set_bacteria_profile(bacteria_profile_id)
 
-        # Habilitar siguiente tab y botón
-        self.main_tabs.setTabEnabled(2, True)
-        self.next_config_btn.setEnabled(True)
+        # Delegar a event handler
+        self.event_handler.handle_profile_generated(bacteria_profile_id, genotype)
 
-        # Actualizar status bar
-        main_window = self.window()
-        if hasattr(main_window, "statusBar"):
-            mutations_count = len(
-                [
-                    g
-                    for g in genotype.values()
-                    if g not in ["wild-type", "functional", "basal", "absent"]
-                ]
-            )
-            main_window.statusBar().showMessage(
-                f"✓ Perfil bacteriano cargado (ID: {bacteria_profile_id}, {mutations_count} mutaciones) - Puede pasar al Paso 2",
-                8000,
-            )
+    def _handle_profile_generated_event(
+        self, profile_id: int, genotype: dict, mutations: int
+    ):
+        """Maneja evento de perfil generado desde event handler."""
+        self.nav_controller.enable_workflow_step("profile")
 
     def _on_ast_completed(self, results: dict):
         """
         Maneja la finalización exitosa de la simulación AST.
 
-        Args:
-            results: Diccionario con resultados de la simulación
-                - well_data_list: Lista de datos de pocillos
-                - mic_results: Lista de resultados MIC
-                - qc_report: Reporte de control de calidad
+        Delegación SOLID: Usa data_manager para transformar datos.
         """
-        # Cargar datos en el visor de placa
-        well_data_list = results.get("well_data_list", [])
-        self.plate_viewer.load_well_data(well_data_list)
+        # Almacenar resultados en data manager
+        self.data_manager.set_ast_results(results)
 
-        # Cargar resultados MIC en la tabla
-        mic_results = results.get("mic_results", [])
+        # Obtener datos procesados
+        well_data_list = self.data_manager.get_well_data()
+        mic_results = self.data_manager.get_mic_results()
+
+        # Cargar datos en widgets de visualización
+        self.plate_viewer.load_well_data(well_data_list)
         self.results_table.load_results(mic_results)
 
-        # Generar y cargar curvas de crecimiento
-        growth_data = self._generate_growth_curves_from_wells(
+        # Generar y cargar curvas de crecimiento (delegado a data_manager)
+        growth_data = self.data_manager.generate_growth_curves_data(
             well_data_list, mic_results
         )
         if growth_data:
             self.growth_curve_widget.load_growth_data(growth_data)
 
-        # Habilitar todos los tabs de visualización
-        self.main_tabs.setTabEnabled(3, True)  # Placa
-        self.main_tabs.setTabEnabled(4, True)  # Resultados
-        self.main_tabs.setTabEnabled(5, True)  # Curvas
-        self.next_plate_btn.setEnabled(True)
+        # Delegar a event handler
+        self.event_handler.handle_ast_completed(results)
 
-        # Mostrar mensaje de éxito en status bar (si existe)
-        total_wells = len(well_data_list)
-        total_antibiotics = len(mic_results)
-        status_msg = (
-            f" AST completado: {total_wells} pocillos, {total_antibiotics} antibióticos"
-        )
-
-        # Intentar mostrar en status bar del parent (MainWindow)
-        main_window = self.window()
-        if hasattr(main_window, "statusBar"):
-            main_window.statusBar().showMessage(status_msg, 5000)
+    def _handle_ast_completed_event(self, results: dict, wells: int, antibiotics: int):
+        """Maneja evento de AST completado desde event handler."""
+        self.nav_controller.enable_workflow_step("visualization")
 
     def _on_ast_failed(self, error_message: str):
         """
         Maneja el fallo de la simulación AST.
 
-        Args:
-            error_message: Mensaje de error descriptivo
+        Delegación SOLID: Usa event_handler para notificación.
         """
-        # Mostrar mensaje de error en status bar
-        status_msg = f" Error en AST: {error_message}"
-
-        main_window = self.window()
-        if hasattr(main_window, "statusBar"):
-            main_window.statusBar().showMessage(status_msg, 10000)
+        self.event_handler.handle_ast_failed(error_message)
 
     def _on_well_clicked(self, well_id: str, well_data: dict):
         """
@@ -732,103 +748,12 @@ class ASTWorkflow(QWidget):
         if hasattr(main_window, "statusBar"):
             main_window.statusBar().showMessage(status_msg, 3000)
 
-    def _generate_growth_curves_from_wells(
-        self, well_data_list: list, mic_results: list
-    ) -> dict:
-        """
-        Genera datos de curvas de crecimiento a partir de los datos de pocillos.
-
-        Args:
-            well_data_list: Lista de datos de pocillos del AST
-            mic_results: Lista de resultados MIC
-
-        Returns:
-            Diccionario con estructura para GrowthCurveWidget:
-            {
-                'antibiotico1': [
-                    {
-                        'concentracion': float,
-                        'tiempos': List[int],
-                        'ods': List[float],
-                        'mic': bool
-                    },
-                    ...
-                ],
-                ...
-            }
-        """
-        # Agrupar pocillos por antibiótico
-        antibiotics_data = {}
-
-        for well in well_data_list:
-            antibiotico = well.get("antibiotico")
-            if not antibiotico or antibiotico == "Control Negativo":
-                continue
-
-            concentracion = well.get("concentracion", 0)
-            growth_curve = well.get("growth_curve", [])
-
-            if antibiotico not in antibiotics_data:
-                antibiotics_data[antibiotico] = {}
-
-            # Guardar curva por concentración
-            antibiotics_data[antibiotico][concentracion] = growth_curve
-
-        # Crear MIC lookup
-        mic_lookup = {}
-        for mic_result in mic_results:
-            antibiotico = mic_result.get("antibiotico")
-            mic_value = mic_result.get("mic_value", 0)
-            mic_lookup[antibiotico] = mic_value
-
-        # Formatear datos para el widget
-        growth_data = {}
-
-        for antibiotico, concentrations in antibiotics_data.items():
-            curves_list = []
-            mic_value = mic_lookup.get(antibiotico, 0)
-
-            # Ordenar concentraciones
-            sorted_concs = sorted(concentrations.keys())
-
-            for conc in sorted_concs:
-                curve = concentrations[conc]
-
-                # Extraer tiempos y ODs
-                if isinstance(curve, list) and len(curve) > 0:
-                    if isinstance(curve[0], dict):
-                        # Formato: [{'time': 0, 'od': 0.1}, ...]
-                        tiempos = [
-                            point.get("time", idx) for idx, point in enumerate(curve)
-                        ]
-                        ods = [point.get("od", 0.1) for point in curve]
-                    else:
-                        # Formato: [0.1, 0.15, 0.2, ...]
-                        tiempos = list(range(len(curve)))
-                        ods = curve
-                else:
-                    # Sin datos, generar curva plana
-                    tiempos = list(range(19))
-                    ods = [0.1] * 19
-
-                # Determinar si esta concentración es el MIC
-                is_mic = abs(conc - mic_value) < 0.01  # Tolerancia pequeña
-
-                curves_list.append(
-                    {
-                        "concentracion": conc,
-                        "tiempos": tiempos,
-                        "ods": ods,
-                        "mic": is_mic,
-                    }
-                )
-
-            growth_data[antibiotico] = curves_list
-
-        return growth_data
-
     def _restart_workflow(self):
-        """Reinicia el flujo de trabajo completo."""
+        """
+        Reinicia el flujo de trabajo completo.
+
+        Delegación SOLID: Usa nav_controller para resetear navegación.
+        """
         from PyQt5.QtWidgets import QMessageBox
 
         reply = QMessageBox.question(
@@ -840,23 +765,11 @@ class ASTWorkflow(QWidget):
         )
 
         if reply == QMessageBox.Yes:
-            # Limpiar todos los widgets
+            # Limpiar todos los widgets y datos
             self.clear_all()
 
-            # Volver al primer tab
-            self.main_tabs.setCurrentIndex(0)
-
-            # Deshabilitar tabs excepto el primero (Identificación)
-            self.main_tabs.setTabEnabled(1, False)
-            self.main_tabs.setTabEnabled(2, False)
-            self.main_tabs.setTabEnabled(3, False)
-            self.main_tabs.setTabEnabled(4, False)
-            self.main_tabs.setTabEnabled(5, False)
-
-            # Deshabilitar botones siguiente
-            self.next_profile_btn.setEnabled(False)
-            self.next_config_btn.setEnabled(False)
-            self.next_plate_btn.setEnabled(False)
+            # Resetear navegación usando controlador SOLID
+            self.nav_controller.reset_navigation()
 
             # Mensaje status bar
             main_window = self.window()
@@ -866,20 +779,23 @@ class ASTWorkflow(QWidget):
                 )
 
     def clear_all(self):
-        """Limpia todos los widgets y reinicia el workflow."""
-        # Limpiar widget de identificación
+        """
+        Limpia todos los widgets y datos.
+
+        Delegación SOLID: Usa data_manager para limpiar datos.
+        """
+        # Limpiar datos del workflow
+        self.data_manager.clear_all()
+
+        # Limpiar widgets de entrada
         if hasattr(self.identification_widget, "reset"):
             self.identification_widget.reset()
-
-        # Limpiar widget de perfil
         if hasattr(self.profile_widget, "reset"):
             self.profile_widget.reset()
+        if hasattr(self.panel_widget, "reset"):
+            self.panel_widget.reset()
 
-        # Limpiar visualizadores
+        # Limpiar widgets de visualización
         self.plate_viewer.clear()
         self.results_table.clear()
         self.growth_curve_widget.clear()
-
-        # Resetear panel widget (si tiene método reset)
-        if hasattr(self.panel_widget, "reset"):
-            self.panel_widget.reset()
