@@ -161,7 +161,7 @@ class ASTSimulator:
                 )
             )
 
-    def simulate_incubation(self) -> Dict:
+    def simulate_incubation(self, max_hours: int = None) -> Dict:
         """
         Simula el proceso completo de incubacion de 18 horas.
 
@@ -170,19 +170,34 @@ class ASTSimulator:
         de antibiotico y la resistencia de la bacteria.
 
         NUEVO v3.0: Asigna problemas aleatorios a 2-4 pozos antes de simular
+        NUEVO v5.0: Soporta simulacion incremental con max_hours
+
+        Args:
+            max_hours: Limita simulacion hasta esta hora (para modo progresivo).
+                      Si es None, simula todas las horas (modo completo).
 
         Returns:
             Diccionario con resumen de la simulacion
         """
-        # NUEVO v3.0: Asignar problemas aleatorios a pozos
-        well_positions = [w.posicion for w in self.panel_wells]
-        self.well_issues = self.well_issues_simulator.assign_issues_to_panel(
-            well_positions, exclude_controls=True
-        )
+        # NUEVO v3.0: Asignar problemas aleatorios a pozos (solo primera vez)
+        if not hasattr(self, "_issues_assigned"):
+            well_positions = [w.posicion for w in self.panel_wells]
+            self.well_issues = self.well_issues_simulator.assign_issues_to_panel(
+                well_positions, exclude_controls=True
+            )
+            self._issues_assigned = True
 
-        time_points = range(0, self.duracion_minutos + 1, 60)
+        # Determinar rango de tiempo
+        if max_hours is None:
+            final_minutos = self.duracion_minutos
+        else:
+            final_minutos = max_hours * 60
 
+        time_points = range(0, final_minutos + 1, 60)
+
+        # Limpiar lecturas previas y regenerar hasta max_hours
         for well in self.panel_wells:
+            well.readings = []
             for tiempo in time_points:
                 if well.tipo in ["control_positivo", "control_negativo"]:
                     reading = self._simulate_control_well(well, tiempo)
@@ -192,7 +207,7 @@ class ASTSimulator:
                 well.readings.append(reading)
 
         return {
-            "duracion_minutos": self.duracion_minutos,
+            "duracion_minutos": final_minutos,
             "total_wells": len(self.panel_wells),
             "lecturas_por_well": len(time_points),
             "temperatura": self.temperatura,

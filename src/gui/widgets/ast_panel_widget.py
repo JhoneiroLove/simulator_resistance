@@ -23,24 +23,33 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QFormLayout,
     QMessageBox,
+    QCheckBox,
+    QStackedWidget,
 )
 from PyQt5.QtCore import pyqtSignal, QThread
+import time
 
 from src.data.database import get_session
 from src.data.models import PanelLayout
 from src.core.ast_simulator import ASTSimulator
+from src.gui.widgets.incubation_progress_widget import IncubationProgressWidget
 
 
 class ASTWorker(QThread):
     """
-    Worker thread para ejecutar simulación AST en segundo plano.
+    Worker thread para ejecutar simulacion AST en segundo plano.
 
-    Evita bloquear la interfaz durante la simulación (18h simuladas).
+    Evita bloquear la interfaz durante la simulacion (18h simuladas).
+    Soporta modo progresivo (hora por hora) y modo rapido (completo).
     """
 
     progress = pyqtSignal(int)  # Progreso 0-100
+    time_progress = pyqtSignal(int, dict)  # (hora, datos_parciales)
     finished = pyqtSignal(dict)  # Reporte final
     error = pyqtSignal(str)  # Mensaje de error
+
+    # Señal para ajustar velocidad dinámicamente
+    speed_changed = pyqtSignal(int)  # Multiplicador de velocidad (1, 2, 4)
 
     def __init__(
         self,
@@ -49,6 +58,7 @@ class ASTWorker(QThread):
         inoculo_mcfarland: float,
         temperatura: float,
         duracion_horas: float,
+        progressive_mode: bool = False,  # NUEVO: modo progresivo
     ):
         super().__init__()
         self.bacteria_profile_id = bacteria_profile_id
@@ -56,9 +66,14 @@ class ASTWorker(QThread):
         self.inoculo_mcfarland = inoculo_mcfarland
         self.temperatura = temperatura
         self.duracion_horas = duracion_horas
+        self.progressive_mode = progressive_mode
+        self.speed_multiplier = 1  # Velocidad actual (1x, 2x, 4x)
 
     def run(self):
         """Ejecuta la simulación AST."""
+        print(
+            f"[ASTWorker] Iniciando - Modo: {'PROGRESIVO' if self.progressive_mode else 'RÁPIDO'}"
+        )
         try:
             # Obtener el panel_name desde el panel_layout_id
             from src.data.database import get_session
@@ -78,6 +93,10 @@ class ASTWorker(QThread):
             panel_name = panel_layout.panel_name
             session.close()
 
+            print(
+                f"[ASTWorker] Panel: {panel_name}, Bacteria: {self.bacteria_profile_id}"
+            )
+
             # Inicializar simulador
             simulator = ASTSimulator(
                 bacteria_profile_id=self.bacteria_profile_id,
@@ -87,28 +106,67 @@ class ASTWorker(QThread):
                 duracion_horas=int(self.duracion_horas),
             )
 
-            # Paso 1: Simulación de incubación (40% del progreso)
-            self.progress.emit(10)
-            incubation_summary = simulator.simulate_incubation()
-            self.progress.emit(40)
+            if self.progressive_mode:
+                # MODO PROGRESIVO: Simular hora por hora
+                total_hours = int(self.duracion_horas)
+                for hour in range(total_hours + 1):  # 0 a 18
+                    # Simular hasta esta hora
+                    simulator.simulate_incubation(max_hours=hour)
 
-            # Paso 2: Cálculo de MICs (30% del progreso)
-            mic_results = simulator.calculate_mics()
-            self.progress.emit(70)
+                    # Calcular MICs parciales
+                    partial_mics = simulator.calculate_mics()
 
-            # Paso 3: Validación QC (20% del progreso)
-            qc_report = simulator.apply_qc_checks()
-            self.progress.emit(90)
+                    # Emitir datos parciales
+                    partial_data = {
+                        "hour": hour,
+                        "well_data": simulator.panel_wells,  # CORREGIDO: panel_wells en lugar de well_data
+                        "mics": partial_mics,
+                    }
+                    self.time_progress.emit(hour, partial_data)
 
-            # Paso 4: Generar reporte final (10% del progreso)
-            report = simulator.get_report()
-            self.progress.emit(100)
+                    # Actualizar progreso (0-100)
+                    progress_pct = int((hour / total_hours) * 100)
+                    self.progress.emit(progress_pct)
 
-            # Emitir resultado
-            self.finished.emit(report)
+                    # NUEVO v5.0: Delay ajustable según velocidad (0.5s base / multiplier)
+                    if hour < total_hours:
+                        delay = 0.5 / self.speed_multiplier
+                        time.sleep(delay)
+
+                # Al terminar, generar reporte completo
+                simulator.apply_qc_checks()
+                report = simulator.get_report()
+                self.progress.emit(100)
+                self.finished.emit(report)
+
+            else:
+                # MODO RÁPIDO: Simulación completa instantánea
+                self.progress.emit(10)
+                simulator.simulate_incubation()
+                self.progress.emit(40)
+
+                simulator.calculate_mics()
+                self.progress.emit(70)
+
+                simulator.apply_qc_checks()
+                self.progress.emit(90)
+
+                report = simulator.get_report()
+                self.progress.emit(100)
+
+                self.finished.emit(report)
 
         except Exception as e:
             self.error.emit(f"Error en simulación: {str(e)}")
+
+    def set_speed(self, multiplier: int):
+        """
+        Ajusta la velocidad de simulación dinámicamente.
+
+        Args:
+            multiplier: Multiplicador de velocidad (1, 2, 4)
+        """
+        self.speed_multiplier = max(1, min(4, multiplier))
 
 
 class ASTPanelWidget(QWidget):
@@ -136,6 +194,7 @@ class ASTPanelWidget(QWidget):
         self.session = get_session()
         self.worker: Optional[ASTWorker] = None
         self.current_bacteria_profile_id: Optional[int] = None
+        self.incubation_widget: Optional[IncubationProgressWidget] = None
 
         self._init_ui()
         self._load_panels()
@@ -186,6 +245,15 @@ class ASTPanelWidget(QWidget):
         duracion_label.setToolTip("Duración estándar para AST según CLSI M07")
         config_layout.addRow("Duración:", duracion_label)
 
+        # NUEVO v5.0: Modo temporal
+        self.progressive_mode_check = QCheckBox("Simulación temporal (hora por hora)")
+        self.progressive_mode_check.setToolTip(
+            "Simula el crecimiento bacteriano hora por hora (18h reales aceleradas)\n"
+            "Desactivado: simulación instantánea"
+        )
+        self.progressive_mode_check.setChecked(False)
+        config_layout.addRow("Modo:", self.progressive_mode_check)
+
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
 
@@ -210,7 +278,14 @@ class ASTPanelWidget(QWidget):
         self.run_button.clicked.connect(self._on_run_clicked)
         layout.addWidget(self.run_button)
 
-        # Barra de progreso
+        # Contenedor apilado: Barra de progreso simple o Widget visual
+        self.progress_stack = QStackedWidget()
+
+        # Página 0: Barra de progreso simple (modo rápido)
+        simple_progress_widget = QWidget()
+        simple_layout = QVBoxLayout(simple_progress_widget)
+        simple_layout.setContentsMargins(0, 0, 0, 0)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setStyleSheet("""
@@ -224,7 +299,17 @@ class ASTPanelWidget(QWidget):
                 background-color: #3498db;
             }
         """)
-        layout.addWidget(self.progress_bar)
+        simple_layout.addWidget(self.progress_bar)
+
+        # Página 1: Widget de progreso visual (modo progresivo)
+        self.incubation_widget = IncubationProgressWidget()
+        self.incubation_widget.setVisible(False)
+
+        self.progress_stack.addWidget(simple_progress_widget)
+        self.progress_stack.addWidget(self.incubation_widget)
+        self.progress_stack.setCurrentIndex(0)  # Por defecto: barra simple
+
+        layout.addWidget(self.progress_stack)
 
         # Label de estado
         self.status_label = QLabel("")
@@ -334,19 +419,34 @@ class ASTPanelWidget(QWidget):
         self.panel_combo.setEnabled(False)
         self.inoculo_spin.setEnabled(False)
         self.temperatura_spin.setEnabled(False)
+        self.progressive_mode_check.setEnabled(False)
 
-        # Mostrar barra de progreso
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.status_label.setText(" Ejecutando simulación...")
+        # Mostrar widget de progreso apropiado según modo
+        is_progressive = self.progressive_mode_check.isChecked()
 
-        # Crear worker
+        if is_progressive:
+            # Modo progresivo: Mostrar widget visual completo
+            self.progress_stack.setCurrentIndex(1)
+            self.incubation_widget.setVisible(True)
+            self.incubation_widget.reset()
+            self.status_label.setVisible(False)  # Widget visual tiene su propio status
+        else:
+            # Modo rápido: Barra de progreso simple
+            self.progress_stack.setCurrentIndex(0)
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(0)
+            self.status_label.setVisible(True)
+            mode_text = "instantánea"
+            self.status_label.setText(f" Ejecutando simulación {mode_text}...")
+
+        # Crear worker con modo progresivo
         self.worker = ASTWorker(
             bacteria_profile_id=self.current_bacteria_profile_id,
             panel_layout_id=panel_layout_id,
             inoculo_mcfarland=self.inoculo_spin.value(),
             temperatura=self.temperatura_spin.value(),
             duracion_horas=18.0,
+            progressive_mode=self.progressive_mode_check.isChecked(),
         )
 
         # Conectar señales
@@ -354,22 +454,70 @@ class ASTPanelWidget(QWidget):
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)
 
+        # NUEVO v5.0: Conectar señal de progreso temporal
+        if self.progressive_mode_check.isChecked():
+            self.worker.time_progress.connect(self._on_time_progress)
+
+            # Conectar controles de velocidad del widget con el worker
+            def on_widget_speed_changed(multiplier: int):
+                if self.worker and self.worker.isRunning():
+                    self.worker.set_speed(multiplier)
+
+            # Deshabilitar controles automáticos del widget (worker controla el avance)
+            self.incubation_widget.timer.stop()
+            # Conectar cambios de velocidad
+            for button in self.incubation_widget.speed_button_group.buttons():
+                button.toggled.connect(
+                    lambda checked, btn=button: on_widget_speed_changed(
+                        btn.property("multiplier")
+                    )
+                    if checked
+                    else None
+                )
+
         # Iniciar
         self.worker.start()
+
+        # Si es modo progresivo, el widget visual se sincroniza con worker
+        # (no usa su propio timer, solo visualiza)
 
     def _on_progress(self, value: int):
         """Actualiza la barra de progreso."""
         self.progress_bar.setValue(value)
 
         # Actualizar mensaje según progreso
-        if value <= 40:
-            self.status_label.setText(" Simulando incubación (18h)...")
-        elif value <= 70:
-            self.status_label.setText(" Calculando MICs...")
-        elif value <= 90:
-            self.status_label.setText(" Validando controles QC...")
+        if self.progressive_mode_check.isChecked():
+            # En modo temporal, mostrar hora actual
+            hour = int((value / 100) * 18)
+            self.status_label.setText(f" Hora {hour}/18 - Simulando crecimiento...")
         else:
-            self.status_label.setText(" Generando reporte...")
+            # Modo rápido: mensajes por fase
+            if value <= 40:
+                self.status_label.setText(" Simulando incubación (18h)...")
+            elif value <= 70:
+                self.status_label.setText(" Calculando MICs...")
+            elif value <= 90:
+                self.status_label.setText(" Validando controles QC...")
+            else:
+                self.status_label.setText(" Generando reporte...")
+
+    def _on_time_progress(self, hour: int, partial_data: dict):
+        """
+        Maneja actualizaciones hora por hora en modo progresivo.
+        Actualiza el widget visual en tiempo real.
+
+        Args:
+            hour: Hora actual (0-18)
+            partial_data: Datos parciales hasta esta hora
+        """
+        # Actualizar widget de incubación visual
+        if self.incubation_widget and self.incubation_widget.isVisible():
+            # Forzar actualización del widget al tiempo actual
+            while self.incubation_widget.get_current_hour() < hour:
+                self.incubation_widget._advance_time()
+
+        # Emitir señal para que otros componentes se actualicen (ej: plate viewer)
+        # En futuro: self.time_progress_relay.emit(hour, partial_data)
 
     def _on_finished(self, report: dict):
         """Maneja la finalización exitosa de la simulación."""
@@ -378,11 +526,15 @@ class ASTPanelWidget(QWidget):
         self.panel_combo.setEnabled(True)
         self.inoculo_spin.setEnabled(True)
         self.temperatura_spin.setEnabled(True)
+        self.progressive_mode_check.setEnabled(True)
 
-        # Ocultar barra de progreso
+        # Ocultar widget de progreso apropiado
         self.progress_bar.setVisible(False)
+        if self.incubation_widget:
+            self.incubation_widget.setVisible(False)
 
-        # Actualizar estado
+        # Restaurar vista de status
+        self.status_label.setVisible(True)
         self.status_label.setText(" Simulación completada exitosamente")
 
         # Emitir señal
@@ -404,11 +556,15 @@ class ASTPanelWidget(QWidget):
         self.panel_combo.setEnabled(True)
         self.inoculo_spin.setEnabled(True)
         self.temperatura_spin.setEnabled(True)
+        self.progressive_mode_check.setEnabled(True)
 
-        # Ocultar barra de progreso
+        # Ocultar widget de progreso apropiado
         self.progress_bar.setVisible(False)
+        if self.incubation_widget:
+            self.incubation_widget.setVisible(False)
 
-        # Actualizar estado
+        # Restaurar vista de status
+        self.status_label.setVisible(True)
         self.status_label.setText(" Error en simulación")
 
         # Emitir señal
