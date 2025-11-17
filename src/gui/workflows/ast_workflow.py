@@ -29,18 +29,19 @@ from src.gui.widgets.ast_plate_viewer import ASTPlateViewer
 from src.gui.widgets.ast_results_table import ASTResultsTable
 from src.gui.widgets.growth_curve_widget import GrowthCurveWidget
 from src.gui.widgets.bacteria_profile_widget import BacteriaProfileWidget
+from src.gui.widgets.bacteria_identification_widget import BacteriaIdentificationWidget
 
 
 class ASTWorkflow(QWidget):
     """
     Workflow completo para simulación AST con flujo guiado por pestañas.
 
-    Sistema de 5 pestañas secuenciales:
+    Sistema de 6 pestañas secuenciales:
 
     ┌──────────────────────────────────────────────────────────────────┐
     │  🧬 Simulador de Antibiograma (AST)                             │
     ├──────────────────────────────────────────────────────────────────┤
-    │ [1️⃣ Perfil] [2️⃣ Configurar] [3️⃣ Placa] [4️⃣ Resultados] [5️⃣ Curvas] │
+    │ [0️⃣ ID] [1️⃣ Perfil] [2️⃣ Configurar] [3️⃣ Placa] [4️⃣ Resultados] [5️⃣ Curvas] │
     ├──────────────────────────────────────────────────────────────────┤
     │                                                                  │
     │  PASO 1: Perfil Bacteriano                                      │
@@ -62,6 +63,14 @@ class ASTWorkflow(QWidget):
     └──────────────────────────────────────────────────────────────────┘
 
     Flujo de trabajo guiado:
+
+    0️⃣ IDENTIFICACIÓN BACTERIANA (Obligatorio - NUEVO)
+       - Seleccionar origen de muestra clínica
+       - Cultivo en MacConkey
+       - Pruebas bioquímicas (Oxidasa, Lactosa)
+       - Características fenotípicas (Pigmento, Olor, 42°C)
+       - Confirmar identificación de P. aeruginosa
+       - Habilita Tab 1 al completar
 
     1️⃣ PERFIL BACTERIANO (Obligatorio)
        - Generar wild-type o resistente
@@ -160,6 +169,64 @@ class ASTWorkflow(QWidget):
             }
         """)
 
+        # === TAB 0: Identificación Bacteriana ===
+        id_tab = QWidget()
+        id_layout = QVBoxLayout(id_tab)
+        id_layout.setContentsMargins(15, 15, 15, 15)
+        id_layout.setSpacing(15)
+
+        # Instrucciones
+        id_instructions_label = QLabel(
+            "⚕️ <b>PASO 0:</b> Identifique el organismo antes de realizar el AST (flujo clínico real)"
+        )
+        id_instructions_label.setStyleSheet("""
+            QLabel {
+                background-color: #fff3cd;
+                color: #856404;
+                padding: 12px;
+                border-left: 5px solid #ffc107;
+                border-radius: 5px;
+                font-size: 12px;
+            }
+        """)
+        id_layout.addWidget(id_instructions_label)
+
+        # Widget de identificación
+        self.identification_widget = BacteriaIdentificationWidget()
+        self.identification_widget.identification_completed.connect(
+            self._on_identification_completed
+        )
+        id_layout.addWidget(self.identification_widget, stretch=1)
+
+        # Botón siguiente (inicialmente deshabilitado)
+        id_nav_layout = QHBoxLayout()
+        id_nav_layout.addStretch()
+
+        self.next_profile_btn = QPushButton("Siguiente: Generar Perfil ➔")
+        self.next_profile_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 12px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:disabled {
+                background-color: #95a5a6;
+            }
+        """)
+        self.next_profile_btn.setEnabled(False)
+        self.next_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
+        id_nav_layout.addWidget(self.next_profile_btn)
+
+        id_layout.addLayout(id_nav_layout)
+
+        self.main_tabs.addTab(id_tab, "0️⃣ Identificación")
+
         # === TAB 1: Generar Perfil Bacteriano ===
         profile_tab = QWidget()
         profile_layout = QVBoxLayout(profile_tab)
@@ -204,7 +271,7 @@ class ASTWorkflow(QWidget):
             }
         """)
         next_config_btn.setEnabled(False)
-        next_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
+        next_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         profile_layout.addWidget(next_config_btn)
 
         self.main_tabs.addTab(profile_tab, "1️⃣ Perfil Bacteriano")
@@ -253,7 +320,7 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        back_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(0))
+        back_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
         nav_layout.addWidget(back_profile_btn)
 
         nav_layout.addStretch()
@@ -276,7 +343,7 @@ class ASTWorkflow(QWidget):
             }
         """)
         next_plate_btn.setEnabled(False)
-        next_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
+        next_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         nav_layout.addWidget(next_plate_btn)
 
         config_layout.addLayout(nav_layout)
@@ -327,7 +394,7 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        back_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
+        back_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         plate_nav_layout.addWidget(back_config_btn)
 
         plate_nav_layout.addStretch()
@@ -346,7 +413,7 @@ class ASTWorkflow(QWidget):
                 background-color: #229954;
             }
         """)
-        next_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
+        next_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         plate_nav_layout.addWidget(next_results_btn)
 
         plate_layout.addLayout(plate_nav_layout)
@@ -394,7 +461,7 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        back_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
+        back_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         results_nav_layout.addWidget(back_plate_btn)
 
         results_nav_layout.addStretch()
@@ -413,7 +480,7 @@ class ASTWorkflow(QWidget):
                 background-color: #8e44ad;
             }
         """)
-        next_curves_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
+        next_curves_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(5))
         results_nav_layout.addWidget(next_curves_btn)
 
         results_layout.addLayout(results_nav_layout)
@@ -461,7 +528,7 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        back_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
+        back_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         curves_nav_layout.addWidget(back_results_btn)
 
         curves_nav_layout.addStretch()
@@ -491,10 +558,11 @@ class ASTWorkflow(QWidget):
         main_layout.addWidget(self.main_tabs, stretch=1)
 
         # Deshabilitar tabs hasta que se complete el flujo
-        self.main_tabs.setTabEnabled(1, False)  # Configurar AST
-        self.main_tabs.setTabEnabled(2, False)  # Placa
-        self.main_tabs.setTabEnabled(3, False)  # Resultados
-        self.main_tabs.setTabEnabled(4, False)  # Curvas
+        self.main_tabs.setTabEnabled(1, False)  # Perfil Bacteriano
+        self.main_tabs.setTabEnabled(2, False)  # Configurar AST
+        self.main_tabs.setTabEnabled(3, False)  # Placa
+        self.main_tabs.setTabEnabled(4, False)  # Resultados
+        self.main_tabs.setTabEnabled(5, False)  # Curvas
 
     def _connect_signals(self):
         """Conecta las señales entre widgets."""
@@ -513,6 +581,30 @@ class ASTWorkflow(QWidget):
         # Cuando se selecciona un antibiótico en la tabla
         self.results_table.antibiotic_selected.connect(self._on_antibiotic_selected)
 
+    def _on_identification_completed(
+        self, organism: str, sample_origin: str, confidence: float
+    ):
+        """
+        Maneja la identificación completada de la bacteria.
+
+        Args:
+            organism: Organismo identificado (e.g., "Pseudomonas aeruginosa")
+            sample_origin: Origen de la muestra clínica
+            confidence: Confianza en la identificación (0.0-1.0)
+        """
+        # Habilitar siguiente tab y botón
+        self.main_tabs.setTabEnabled(1, True)
+        self.next_profile_btn.setEnabled(True)
+
+        # Actualizar status bar
+        main_window = self.window()
+        if hasattr(main_window, "statusBar"):
+            main_window.statusBar().showMessage(
+                f"✓ Identificación completada: {organism} ({confidence * 100:.1f}% confianza) - "
+                f"Muestra: {sample_origin} - Puede pasar al Paso 1",
+                8000,
+            )
+
     def _on_profile_generated(self, bacteria_profile_id: int, genotype: dict):
         """
         Maneja la generación exitosa de un perfil bacteriano.
@@ -525,7 +617,7 @@ class ASTWorkflow(QWidget):
         self.panel_widget.set_bacteria_profile(bacteria_profile_id)
 
         # Habilitar siguiente tab y botón
-        self.main_tabs.setTabEnabled(1, True)
+        self.main_tabs.setTabEnabled(2, True)
         self.next_config_btn.setEnabled(True)
 
         # Actualizar status bar
@@ -569,9 +661,9 @@ class ASTWorkflow(QWidget):
             self.growth_curve_widget.load_growth_data(growth_data)
 
         # Habilitar todos los tabs de visualización
-        self.main_tabs.setTabEnabled(2, True)  # Placa
-        self.main_tabs.setTabEnabled(3, True)  # Resultados
-        self.main_tabs.setTabEnabled(4, True)  # Curvas
+        self.main_tabs.setTabEnabled(3, True)  # Placa
+        self.main_tabs.setTabEnabled(4, True)  # Resultados
+        self.main_tabs.setTabEnabled(5, True)  # Curvas
         self.next_plate_btn.setEnabled(True)
 
         # Mostrar mensaje de éxito en status bar (si existe)
@@ -754,13 +846,15 @@ class ASTWorkflow(QWidget):
             # Volver al primer tab
             self.main_tabs.setCurrentIndex(0)
 
-            # Deshabilitar tabs excepto el primero
+            # Deshabilitar tabs excepto el primero (Identificación)
             self.main_tabs.setTabEnabled(1, False)
             self.main_tabs.setTabEnabled(2, False)
             self.main_tabs.setTabEnabled(3, False)
             self.main_tabs.setTabEnabled(4, False)
+            self.main_tabs.setTabEnabled(5, False)
 
             # Deshabilitar botones siguiente
+            self.next_profile_btn.setEnabled(False)
             self.next_config_btn.setEnabled(False)
             self.next_plate_btn.setEnabled(False)
 
@@ -773,6 +867,15 @@ class ASTWorkflow(QWidget):
 
     def clear_all(self):
         """Limpia todos los widgets y reinicia el workflow."""
+        # Limpiar widget de identificación
+        if hasattr(self.identification_widget, "reset"):
+            self.identification_widget.reset()
+
+        # Limpiar widget de perfil
+        if hasattr(self.profile_widget, "reset"):
+            self.profile_widget.reset()
+
+        # Limpiar visualizadores
         self.plate_viewer.clear()
         self.results_table.clear()
         self.growth_curve_widget.clear()
