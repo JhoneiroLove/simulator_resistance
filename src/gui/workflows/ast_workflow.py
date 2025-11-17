@@ -690,8 +690,20 @@ class ASTWorkflow(QWidget):
         growth_data = self.data_manager.generate_growth_curves_data(
             well_data_list, mic_results
         )
+
+        # DEBUG: Verificar datos generados
+        print(f"[DEBUG] growth_data type: {type(growth_data)}")
+        print(
+            f"[DEBUG] growth_data keys: {list(growth_data.keys()) if growth_data else 'None'}"
+        )
+        if growth_data:
+            for ab, curves in growth_data.items():
+                print(f"[DEBUG] {ab}: {len(curves)} curves")
+
         if growth_data:
             self.growth_curve_widget.load_growth_data(growth_data)
+        else:
+            print("[WARNING] No growth data generated!")
 
         # Delegar a event handler
         self.event_handler.handle_ast_completed(results)

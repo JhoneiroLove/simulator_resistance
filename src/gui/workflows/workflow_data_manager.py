@@ -98,25 +98,40 @@ class WorkflowDataManager:
                 ...
             }
         """
+        print(f"[DataManager] generate_growth_curves_data called")
+        print(f"[DataManager] Total wells: {len(well_data_list)}")
+        print(f"[DataManager] Total MIC results: {len(mic_results)}")
+
         growth_data = {}
 
         # Agrupar pocillos por antibiótico
         wells_by_antibiotic = {}
         for well in well_data_list:
-            if well.get("tipo") == "muestra":
+            well_tipo = well.get("tipo")
+            print(
+                f"[DataManager] Well {well.get('well_id')}: tipo={well_tipo}, antibiotico={well.get('antibiotico')}"
+            )
+
+            # Filtrar solo pozos de test (no controles)
+            if well_tipo == "test":
                 antibiotico = well.get("antibiotico")
                 if antibiotico:
                     if antibiotico not in wells_by_antibiotic:
                         wells_by_antibiotic[antibiotico] = []
                     wells_by_antibiotic[antibiotico].append(well)
 
+        print(f"[DataManager] Grouped antibiotics: {list(wells_by_antibiotic.keys())}")
+
         # Crear entrada por antibiótico
         for antibiotico, wells in wells_by_antibiotic.items():
+            print(f"[DataManager] Processing {antibiotico}: {len(wells)} wells")
+
             # Buscar MIC correspondiente
             mic_data = next(
                 (m for m in mic_results if m.get("antibiotico") == antibiotico), None
             )
             mic_value = mic_data.get("mic_value") if mic_data else None
+            print(f"[DataManager] {antibiotico} MIC: {mic_value}")
 
             # Ordenar pocillos por concentración
             wells_sorted = sorted(
@@ -130,6 +145,10 @@ class WorkflowDataManager:
             for well in wells_sorted:
                 conc = well.get("concentracion")
                 growth_curve = well.get("growth_curve", [])
+
+                print(
+                    f"[DataManager]   Well conc={conc}, growth_curve length={len(growth_curve)}"
+                )
 
                 if conc is not None and growth_curve:
                     # Extraer tiempos y ODs de la curva
@@ -151,7 +170,11 @@ class WorkflowDataManager:
             # Agregar al diccionario solo si hay curvas
             if curves_list:
                 growth_data[antibiotico] = curves_list
+                print(
+                    f"[DataManager] Added {antibiotico} with {len(curves_list)} curves"
+                )
 
+        print(f"[DataManager] Final growth_data keys: {list(growth_data.keys())}")
         return growth_data
 
     def clear_all(self):

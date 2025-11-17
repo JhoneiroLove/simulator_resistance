@@ -159,6 +159,12 @@ class GrowthCurveWidget(QWidget):
                     ...
                 }
         """
+        print(f"[GrowthCurveWidget] load_growth_data called")
+        print(f"[GrowthCurveWidget] Received data type: {type(growth_data)}")
+        print(
+            f"[GrowthCurveWidget] Antibiotics: {list(growth_data.keys()) if growth_data else 'None'}"
+        )
+
         self.current_data = growth_data
 
         # Actualizar combo de antibióticos
@@ -167,9 +173,14 @@ class GrowthCurveWidget(QWidget):
         self.antibiotic_combo.addItems(sorted(growth_data.keys()))
         self.antibiotic_combo.blockSignals(False)
 
+        print(
+            f"[GrowthCurveWidget] Combo populated with {self.antibiotic_combo.count()} items"
+        )
+
         # Cargar primer antibiótico si existe
         if growth_data:
             first_ab = sorted(growth_data.keys())[0]
+            print(f"[GrowthCurveWidget] Setting first antibiotic: {first_ab}")
             self.antibiotic_combo.setCurrentText(first_ab)
             self._plot_antibiotic(first_ab)
 
