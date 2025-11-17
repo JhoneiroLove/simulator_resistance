@@ -75,7 +75,7 @@ class WorkflowDataManager:
 
     def generate_growth_curves_data(
         self, well_data_list: List[dict], mic_results: List[dict]
-    ) -> List[dict]:
+    ) -> Dict[str, List[Dict]]:
         """
         Genera datos de curvas de crecimiento desde datos de pocillos.
 
@@ -84,9 +84,21 @@ class WorkflowDataManager:
             mic_results: Lista de resultados MIC
 
         Returns:
-            Lista de datos formateados para GrowthCurveWidget
+            Diccionario formateado para GrowthCurveWidget:
+            {
+                'antibiotico1': [
+                    {
+                        'concentracion': 0.0,
+                        'tiempos': [0, 1, 2, ..., 18],
+                        'ods': [0.1, 0.15, ..., 2.5],
+                        'mic': False
+                    },
+                    ...
+                ],
+                ...
+            }
         """
-        growth_data = []
+        growth_data = {}
 
         # Agrupar pocillos por antibiótico
         wells_by_antibiotic = {}
@@ -104,6 +116,7 @@ class WorkflowDataManager:
             mic_data = next(
                 (m for m in mic_results if m.get("antibiotico") == antibiotico), None
             )
+            mic_value = mic_data.get("mic_value") if mic_data else None
 
             # Ordenar pocillos por concentración
             wells_sorted = sorted(
@@ -113,23 +126,31 @@ class WorkflowDataManager:
             )
 
             # Extraer curvas de crecimiento
-            curves_by_concentration = {}
+            curves_list = []
             for well in wells_sorted:
                 conc = well.get("concentracion")
                 growth_curve = well.get("growth_curve", [])
 
                 if conc is not None and growth_curve:
-                    curves_by_concentration[conc] = growth_curve
+                    # Extraer tiempos y ODs de la curva
+                    tiempos = [point.get("time", 0) for point in growth_curve]
+                    ods = [point.get("od", 0) for point in growth_curve]
 
-            # Agregar entrada
-            if curves_by_concentration:
-                entry = {
-                    "antibiotico": antibiotico,
-                    "curves": curves_by_concentration,
-                    "mic_value": mic_data.get("mic_value") if mic_data else None,
-                    "mic_operador": mic_data.get("mic_operador") if mic_data else None,
-                }
-                growth_data.append(entry)
+                    # Determinar si esta concentración es el MIC
+                    is_mic = mic_value is not None and abs(conc - mic_value) < 0.001
+
+                    curves_list.append(
+                        {
+                            "concentracion": conc,
+                            "tiempos": tiempos,
+                            "ods": ods,
+                            "mic": is_mic,
+                        }
+                    )
+
+            # Agregar al diccionario solo si hay curvas
+            if curves_list:
+                growth_data[antibiotico] = curves_list
 
         return growth_data
 
