@@ -8,15 +8,18 @@ para Pseudomonas aeruginosa, incluyendo:
 - Cálculo de MIC por umbral e interpolación
 - Interpretación S/R según breakpoints EUCAST/CLSI
 - Control de calidad de pocillos
+- Variabilidad del inóculo y efecto en MIC aparente (v2.0)
 
 Autor: Sistema AST Simulator
-Fecha: 11 de noviembre de 2025
+Fecha: 17 de noviembre de 2025
+Versión: 2.0 - Variabilidad de Inóculo
 """
 
 from typing import Dict, List
 from dataclasses import dataclass
 from datetime import datetime
 import math
+import random
 
 from src.data.database import get_session
 from src.data.models import PanelLayout, Breakpoint, BacteriaProfile
@@ -109,6 +112,11 @@ class ASTSimulator:
         self.mic_results: List[MICResult] = []
         self.qc_passed = False
 
+        # NUEVO: Variabilidad del inóculo (±0.05 McFarland)
+        # Simula error en preparación de suspensión bacteriana
+        self.inoculo_deviation = random.uniform(-0.05, 0.05)
+        self.inoculo_real = self.inoculo_mcfarland + self.inoculo_deviation
+
         self._load_bacteria_profile()
         self._load_panel_layout()
 
@@ -185,6 +193,8 @@ class ASTSimulator:
         - Si concentración < MIC: crece normalmente
         - Si concentración >= MIC: crecimiento inhibido
 
+        NUEVO v2.0: Inóculo real afecta OD inicial y capacidad de crecimiento
+
         Args:
             well: Datos del pocillo
             tiempo_minutos: Tiempo desde inicio de incubación
@@ -197,8 +207,19 @@ class ASTSimulator:
         mics_calculated = json.loads(self.bacteria_profile.mics_calculated)
         mic_bacteria = mics_calculated.get(well.antibiotico, 1.0)
 
-        od_initial = 0.05 * self.inoculo_mcfarland
-        od_max = 2.0
+        # NUEVO v2.0: Inóculo real afecta OD inicial y parámetros de crecimiento
+        # Inóculo más alto → más células → mayor OD inicial y final
+        od_initial = 0.05 * self.inoculo_real  # Usar inóculo real (con desviación)
+
+        # Ajustar OD máxima con alta sensibilidad al inóculo para efecto visible en MIC
+        # Factor amplificado: 1 + 5 * (desviación / nominal)
+        # Ejemplo: inóculo +10% → od_max +50% → cambia MIC 1-2 diluciones
+        inoculum_deviation_pct = (
+            self.inoculo_real - self.inoculo_mcfarland
+        ) / self.inoculo_mcfarland
+        inoculum_factor = 1.0 + (5.0 * inoculum_deviation_pct)
+        od_max = 2.0 * inoculum_factor
+
         k = 0.02
         t_mid = 480
 
@@ -235,6 +256,8 @@ class ASTSimulator:
         - Control positivo: Crecimiento normal (sin antibiótico)
         - Control negativo: Sin crecimiento (sin bacteria)
 
+        NUEVO v2.0: Control positivo usa inóculo real (afecta OD inicial y final)
+
         Args:
             well: Datos del pocillo de control
             tiempo_minutos: Tiempo desde inicio
@@ -242,10 +265,16 @@ class ASTSimulator:
         Returns:
             Lectura óptica esperada
         """
-        od_initial = 0.05 * self.inoculo_mcfarland
+        od_initial = 0.05 * self.inoculo_real  # Usar inóculo real
 
         if well.tipo == "control_positivo":
-            od_max = 2.0
+            # Ajustar OD máxima con alta sensibilidad al inóculo
+            inoculum_deviation_pct = (
+                self.inoculo_real - self.inoculo_mcfarland
+            ) / self.inoculo_mcfarland
+            inoculum_factor = 1.0 + (5.0 * inoculum_deviation_pct)
+            od_max = 2.0 * inoculum_factor
+
             k = 0.02
             t_mid = 480
             od = od_initial + (od_max - od_initial) / (
@@ -541,6 +570,12 @@ class ASTSimulator:
                 "fecha": datetime.now().isoformat(),
                 "temperatura": self.temperatura,
                 "inoculo_mcfarland": self.inoculo_mcfarland,
+                "inoculo_real": round(
+                    self.inoculo_real, 3
+                ),  # NUEVO: Inóculo con desviación
+                "inoculo_deviation": round(
+                    self.inoculo_deviation, 3
+                ),  # NUEVO: Desviación
                 "duracion_horas": self.duracion_horas,
             },
             "qc": qc_results,
