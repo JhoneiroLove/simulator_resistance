@@ -23,6 +23,7 @@ import random
 
 from src.data.database import get_session
 from src.data.models import PanelLayout, Breakpoint, BacteriaProfile
+from src.core.well_issues_model import WellIssuesSimulator, WellIssue
 
 
 ORGANISM_NAME = "Pseudomonas aeruginosa"
@@ -112,10 +113,17 @@ class ASTSimulator:
         self.mic_results: List[MICResult] = []
         self.qc_passed = False
 
-        # NUEVO: Variabilidad del inóculo (±0.05 McFarland)
+        # NUEVO v2.0: Variabilidad del inóculo (±0.05 McFarland)
         # Simula error en preparación de suspensión bacteriana
         self.inoculo_deviation = random.uniform(-0.05, 0.05)
         self.inoculo_real = self.inoculo_mcfarland + self.inoculo_deviation
+
+        # NUEVO v3.0: Pozos ambiguos (2-4 pozos con problemas por panel)
+        # Simula condiciones realistas de laboratorio
+        self.well_issues_simulator = WellIssuesSimulator(
+            issue_probability=0.03, min_issues_per_panel=2, max_issues_per_panel=4
+        )
+        self.well_issues: Dict[str, WellIssue] = {}
 
         self._load_bacteria_profile()
         self._load_panel_layout()
@@ -155,15 +163,23 @@ class ASTSimulator:
 
     def simulate_incubation(self) -> Dict:
         """
-        Simula el proceso completo de incubación de 18 horas.
+        Simula el proceso completo de incubacion de 18 horas.
 
-        Genera lecturas ópticas cada 60 minutos para cada pocillo,
-        aplicando curvas de crecimiento logísticas según la concentración
-        de antibiótico y la resistencia de la bacteria.
+        Genera lecturas opticas cada 60 minutos para cada pocillo,
+        aplicando curvas de crecimiento logisticas segun la concentracion
+        de antibiotico y la resistencia de la bacteria.
+
+        NUEVO v3.0: Asigna problemas aleatorios a 2-4 pozos antes de simular
 
         Returns:
-            Diccionario con resumen de la simulación
+            Diccionario con resumen de la simulacion
         """
+        # NUEVO v3.0: Asignar problemas aleatorios a pozos
+        well_positions = [w.posicion for w in self.panel_wells]
+        self.well_issues = self.well_issues_simulator.assign_issues_to_panel(
+            well_positions, exclude_controls=True
+        )
+
         time_points = range(0, self.duracion_minutos + 1, 60)
 
         for well in self.panel_wells:
@@ -194,6 +210,7 @@ class ASTSimulator:
         - Si concentración >= MIC: crecimiento inhibido
 
         NUEVO v2.0: Inóculo real afecta OD inicial y capacidad de crecimiento
+        NUEVO v3.0: Pozos ambiguos pueden tener problemas que afectan lectura
 
         Args:
             well: Datos del pocillo
@@ -240,11 +257,18 @@ class ASTSimulator:
 
         od = max(od_initial, min(od, 4.0))
 
+        # NUEVO v3.0: Aplicar problemas de pozos si existen
+        if well.posicion in self.well_issues:
+            issue = self.well_issues[well.posicion]
+            od, is_valid = self.well_issues_simulator.apply_issue_to_od(
+                od, issue, tiempo_minutos
+            )
+
         return WellReading(
             tiempo_minutos=tiempo_minutos,
-            od_600=round(od, 3),
-            turbidez=round(od * 100, 1),
-            crecimiento_detectado=(od > 0.3),
+            od_600=round(od, 3) if not math.isnan(od) else float("nan"),
+            turbidez=round(od * 100, 1) if not math.isnan(od) else float("nan"),
+            crecimiento_detectado=(od > 0.3) if not math.isnan(od) else False,
         )
 
     def _simulate_control_well(
@@ -504,6 +528,28 @@ class ASTSimulator:
 
         return qc_results
 
+    def _format_well_issues(self) -> List[Dict]:
+        """
+        Formatea los problemas de pozos para el reporte.
+
+        Returns:
+            Lista de diccionarios con informacion de cada pozo problematico
+        """
+        issues_list = []
+        for well_pos, issue in self.well_issues.items():
+            issues_list.append(
+                {
+                    "posicion": well_pos,
+                    "tipo": issue.issue_type.value,
+                    "severidad": round(issue.severity, 2),
+                    "descripcion": issue.description,
+                    "afecta_lectura": issue.affects_reading,
+                    "afecta_interpretacion": issue.affects_interpretation,
+                    "accion_recomendada": issue.recommended_action,
+                }
+            )
+        return issues_list
+
     def get_report(self) -> Dict:
         """
         Genera reporte completo de la ejecución AST.
@@ -575,10 +621,12 @@ class ASTSimulator:
                 ),  # NUEVO: Inóculo con desviación
                 "inoculo_deviation": round(
                     self.inoculo_deviation, 3
-                ),  # NUEVO: Desviación
+                ),  # NUEVO v2.0: Desviacion
                 "duracion_horas": self.duracion_horas,
+                "pozos_problematicos": len(self.well_issues),  # NUEVO v3.0
             },
             "qc": qc_results,
+            "well_issues": self._format_well_issues(),  # NUEVO v3.0
             "well_data_list": well_data_list,
             "mic_results": mic_results_formatted,
             "resumen": {

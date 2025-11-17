@@ -268,6 +268,181 @@ metadata = {
 
 ---
 
+## FASE 4: POZOS AMBIGUOS
+
+### Problema Identificado
+
+**Feedback especialista**: "Tu simulador toma OD a color a binario crece/no crece. Esto es demasiado perfecto comparado con MicroScan. En la vida real ocurren pozos con crecimiento debil, pozos contaminados, pozos con borde difuso, pozos con precipitado."
+
+- **Condicion actual**: Todos los pozos se leen perfectamente
+- **Problema**: No simula condiciones reales de laboratorio
+- **Impacto clinico**: Pozos ambiguos requieren revision manual o repeticion
+
+### Solucion Implementada
+
+**Enfoque**: Asignacion aleatoria de 2-4 pozos con problemas por panel
+
+#### 1. Tipos de Problemas Simulados
+
+**Modulo nuevo**: `src/core/well_issues_model.py`
+
+**Clase**: `WellIssuesSimulator`
+
+**Tipos de problemas implementados**:
+
+1. **Crecimiento Debil** (25% probabilidad)
+   - OD reducida en 20-50%
+   - Lectura en zona gris (cerca del umbral 0.3)
+   - Accion: Repetir prueba o usar metodo alternativo
+
+2. **Contaminacion** (15% probabilidad)
+   - OD artificialmente elevada
+   - Ruido alto en lecturas
+   - Accion: Descartar resultado, repetir con cultivo puro
+
+3. **Borde Difuso** (20% probabilidad)
+   - Ruido en zona de transicion (OD 0.2-0.5)
+   - Dificil determinar umbral exacto
+   - Accion: Revisar manualmente, considerar MIC adyacente
+
+4. **Precipitado** (20% probabilidad)
+   - OD incrementada por material particulado (+0.05 a +0.15)
+   - No representa crecimiento bacteriano real
+   - Accion: Revisar visualmente, no confiar en OD automatica
+
+5. **No Legible** (10% probabilidad)
+   - OD = NaN (lectura rechazada)
+   - Fallo en sistema optico
+   - Accion: Excluir del analisis, reportar como no-disponible
+
+6. **OD Inconsistente** (10% probabilidad)
+   - Fluctuacion aleatoria entre lecturas (20%)
+   - Curva de crecimiento erratica
+   - Accion: Revisar curva completa, considerar repetir
+
+#### 2. Asignacion de Problemas
+
+```python
+# En ASTSimulator.simulate_incubation()
+well_positions = [w.posicion for w in self.panel_wells]
+self.well_issues = self.well_issues_simulator.assign_issues_to_panel(
+    well_positions, exclude_controls=True
+)
+```
+
+**Parametros**:
+- **Cantidad**: 2-4 pozos por panel (aleatorio)
+- **Exclusion**: Controles nunca tienen problemas
+- **Distribucion**: Segun pesos configurados por tipo
+
+#### 3. Aplicacion a Lecturas OD
+
+```python
+# En _simulate_test_well()
+if well.posicion in self.well_issues:
+    issue = self.well_issues[well.posicion]
+    od, is_valid = self.well_issues_simulator.apply_issue_to_od(
+        od, issue, tiempo_minutos
+    )
+```
+
+**Efectos segun tipo**:
+- **Crecimiento debil**: OD × (0.5 - 0.3×severidad)
+- **Contaminacion**: OD × (1.0 + 0.8×severidad) + ruido alto
+- **Borde difuso**: Ruido gaussiano en zona 0.2-0.5
+- **Precipitado**: OD + random(0.05, 0.15)×severidad
+- **No legible**: OD = NaN
+- **OD inconsistente**: OD × (1.0 + gaussiano(0, 0.2×severidad))
+
+#### 4. Reportes y Trazabilidad
+
+```python
+# En get_report()
+"metadata": {
+    "pozos_problematicos": len(self.well_issues),
+},
+"well_issues": [
+    {
+        "posicion": "A9",
+        "tipo": "crecimiento_debil",
+        "severidad": 0.53,
+        "descripcion": "Crecimiento lento, lectura en zona gris",
+        "afecta_lectura": True,
+        "afecta_interpretacion": True,
+        "accion_recomendada": "Repetir prueba o usar metodo alternativo"
+    }
+]
+```
+
+### Validacion Completada
+
+**Test ejecutado**: `scripts/test_well_issues.py`
+
+**Resultados (5 tests)**:
+
+1. **Generacion de pozos problematicos**: OK
+   - Rango 2-4 pozos respetado
+   - Asignacion aleatoria funcional
+
+2. **Distribucion de tipos**: OK (50 pozos analizados)
+   - Crecimiento debil: 30.0%
+   - Borde difuso: 22.0%
+   - OD inconsistente: 18.0%
+   - Contaminado: 14.0%
+   - No legible: 8.0%
+   - Precipitado: 8.0%
+
+3. **Modificacion de OD**: OK
+   - Pozos UNREADABLE devuelven NaN
+   - Otros tipos modifican OD correctamente
+
+4. **Reporte incluye problemas**: OK
+   - Metadata con contador de pozos problematicos
+   - Seccion `well_issues` con detalles completos
+   - Estructura validada
+
+5. **Controles sin problemas**: OK
+   - 10 simulaciones verificadas
+   - H11, H12 nunca afectados
+
+### Integracion con Fases Previas
+
+**Complementariedad**:
+- **FASE 2**: Ruido experimental en todos los pozos (instrumental, pipeteo)
+- **FASE 3**: Sesgo sistematico por inoculo (afecta toda la placa)
+- **FASE 4**: Problemas especificos en pozos individuales (2-4 por panel)
+
+**Diferencia clave**:
+- FASE 2: Ruido aleatorio leve en TODOS los pozos
+- FASE 3: Sesgo direccional en TODOS los pozos
+- FASE 4: Problemas severos en POCOS pozos especificos
+
+### Archivos Modificados
+
+**src/core/well_issues_model.py** (nuevo - 380 lineas):
+- `WellIssueType`: Enum con 6 tipos de problemas
+- `WellIssue`: Dataclass con informacion de problema
+- `WellIssuesSimulator`: Simulador de problemas
+  - `assign_issues_to_panel()`: Asigna 2-4 problemas aleatorios
+  - `apply_issue_to_od()`: Modifica OD segun tipo de problema
+  - `generate_issue_report()`: Genera reporte de texto
+
+**src/core/ast_simulator.py**:
+- Importacion de `WellIssuesSimulator`
+- `__init__()`: Inicializa simulador de problemas
+- `simulate_incubation()`: Asigna problemas antes de simular
+- `_simulate_test_well()`: Aplica problemas a lecturas OD
+- `_format_well_issues()`: Formatea problemas para reporte
+- `get_report()`: Incluye seccion `well_issues`
+
+**scripts/test_well_issues.py** (nuevo - 265 lineas):
+- 5 tests de validacion
+- Verificacion de distribucion de tipos
+- Validacion de modificaciones OD
+- Comprobacion de estructura de reporte
+
+---
+
 ## Archivos Modificados
 
 | Archivo | Líneas | Tipo | Descripción |
