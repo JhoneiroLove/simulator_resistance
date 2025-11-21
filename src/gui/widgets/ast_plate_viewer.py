@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QSlider,
     QFrame,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -94,15 +95,18 @@ class WellWidget(QFrame):
         self.setFixedSize(50, 50)
         self.setFrameStyle(QFrame.Box | QFrame.Plain)
         self.setLineWidth(2)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
 
         # Layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
+        layout.setAlignment(Qt.AlignCenter)  # Centrar contenido dentro del pocillo
 
         # Label de posición
         self.position_label = QLabel(position)
         self.position_label.setAlignment(Qt.AlignCenter)
         self.position_label.setStyleSheet("font-size: 9px; font-weight: bold;")
+        self.position_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         layout.addWidget(self.position_label)
 
         # Inicializar como vacío
@@ -281,23 +285,38 @@ class ASTPlateViewer(QWidget):
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
         layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear todo a la izquierda
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
 
         # Título
         title = QLabel("Placa AST - Vista 96 Pocillos")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
-        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 16px; 
+            font-weight: bold; 
+            color: #2c3e50;
+            padding: 8px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            min-width: 300px;
+        """)
+        title.setAlignment(Qt.AlignLeft)  # Alinear título a la izquierda
+        title.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         layout.addWidget(title)
 
-        # Grid de pocillos
+        # Contenedor para el grid (para controlar alineación)
         grid_container = QWidget()
+        grid_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         grid_layout = QGridLayout(grid_container)
         grid_layout.setSpacing(5)
+        grid_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear grid a la izquierda
 
-        # Labels de columnas (1-12)
+        # Labels de columnas (1-12) - ALINEADOS A LA IZQUIERDA
         for col in range(12):
             col_label = QLabel(str(col + 1))
             col_label.setAlignment(Qt.AlignCenter)
             col_label.setStyleSheet("font-weight: bold; color: #7f8c8d;")
+            col_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
             grid_layout.addWidget(col_label, 0, col + 1)
 
         # Filas A-H con pocillos
@@ -307,6 +326,7 @@ class ASTPlateViewer(QWidget):
             row_label = QLabel(row_letter)
             row_label.setAlignment(Qt.AlignCenter)
             row_label.setStyleSheet("font-weight: bold; color: #7f8c8d;")
+            row_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
             grid_layout.addWidget(row_label, row_idx + 1, 0)
 
             # Pocillos de la fila
@@ -317,17 +337,27 @@ class ASTPlateViewer(QWidget):
                 self.wells[position] = well
                 grid_layout.addWidget(well, row_idx + 1, col + 1)
 
-        layout.addWidget(grid_container)
+        # Contenedor para alinear el grid a la izquierda
+        grid_align_container = QHBoxLayout()
+        grid_align_container.setAlignment(Qt.AlignLeft)  # Alinear grid a la izquierda
+        grid_align_container.addWidget(grid_container)
+        grid_align_container.addStretch()  # Empujar espacio vacío a la derecha
+        
+        layout.addLayout(grid_align_container)
 
         # Slider temporal
         time_group = QWidget()
+        time_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         time_layout = QVBoxLayout(time_group)
+        time_layout.setAlignment(Qt.AlignLeft)  # Alinear contenido a la izquierda
 
         time_label = QLabel("Línea temporal (0 - 18 horas)")
         time_label.setStyleSheet("font-weight: bold; color: #34495e;")
+        time_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         time_layout.addWidget(time_label)
 
         slider_container = QHBoxLayout()
+        slider_container.setAlignment(Qt.AlignLeft)  # Alinear slider a la izquierda
 
         self.time_slider = QSlider(Qt.Horizontal)
         self.time_slider.setMinimum(0)
@@ -336,19 +366,36 @@ class ASTPlateViewer(QWidget):
         self.time_slider.setTickPosition(QSlider.TicksBelow)
         self.time_slider.setTickInterval(3)
         self.time_slider.valueChanged.connect(self._on_time_changed)
+        self.time_slider.setFixedWidth(400)  # Ancho fijo para el slider
+        self.time_slider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         slider_container.addWidget(self.time_slider)
 
         self.time_value_label = QLabel("18.0h (Final)")
         self.time_value_label.setStyleSheet("font-weight: bold; min-width: 100px;")
+        self.time_value_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         slider_container.addWidget(self.time_value_label)
 
+        slider_container.addStretch()  # Empujar espacio vacío a la derecha
         time_layout.addLayout(slider_container)
-        layout.addWidget(time_group)
+
+        # Contenedor para alinear el slider a la izquierda
+        time_align_container = QHBoxLayout()
+        time_align_container.setAlignment(Qt.AlignLeft)
+        time_align_container.addWidget(time_group)
+        time_align_container.addStretch()
+        
+        layout.addLayout(time_align_container)
 
         # Leyenda de colores
         legend_group = QWidget()
+        legend_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         legend_layout = QHBoxLayout(legend_group)
-        legend_layout.addWidget(QLabel("Leyenda:"))
+        legend_layout.setAlignment(Qt.AlignLeft)  # Alinear leyenda a la izquierda
+
+        legend_title = QLabel("Leyenda:")
+        legend_title.setStyleSheet("font-weight: bold;")
+        legend_title.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
+        legend_layout.addWidget(legend_title)
 
         colors = [
             ("#ffffff", "Claro (OD<0.1)"),
@@ -360,13 +407,32 @@ class ASTPlateViewer(QWidget):
         for color, desc in colors:
             color_box = QLabel("   ")
             color_box.setStyleSheet(
-                f"background-color: {color}; border: 1px solid #7f8c8d;"
+                f"background-color: {color}; border: 1px solid #7f8c8d; min-width: 20px;"
             )
+            color_box.setFixedSize(20, 20)
+            color_box.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
             legend_layout.addWidget(color_box)
-            legend_layout.addWidget(QLabel(desc))
+            
+            desc_label = QLabel(desc)
+            desc_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
+            legend_layout.addWidget(desc_label)
+            
+            # Espaciador entre elementos de leyenda
+            spacer = QLabel("  ")
+            spacer.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            legend_layout.addWidget(spacer)
 
-        legend_layout.addStretch()
-        layout.addWidget(legend_group)
+        legend_layout.addStretch()  # Empujar espacio vacío a la derecha
+
+        # Contenedor para alinear la leyenda a la izquierda
+        legend_align_container = QHBoxLayout()
+        legend_align_container.setAlignment(Qt.AlignLeft)
+        legend_align_container.addWidget(legend_group)
+        legend_align_container.addStretch()
+        
+        layout.addLayout(legend_align_container)
+
+        layout.addStretch()  # Empujar todo hacia arriba
 
     def load_well_data(self, well_data_list: List):
         """

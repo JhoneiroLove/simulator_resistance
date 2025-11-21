@@ -22,8 +22,12 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
     QMessageBox,
     QTextEdit,
+    QSizePolicy,
+    QProgressBar,
 )
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, QThread, QTimer
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication
 
 from src.data.database import get_session
 from src.data.models import BacteriaProfile as BacteriaProfileModel
@@ -33,6 +37,45 @@ from src.core.bacteria_profile_generator import (
     BacteriaProfile,
 )
 from src.core.genotype_phenotype_calculator import GenotypePhenotypeCalculator
+
+
+class ProfileGenerationThread(QThread):
+    """Hilo para generación de perfiles bacterianos en segundo plano."""
+    profile_generated = pyqtSignal(object)
+    error_occurred = pyqtSignal(str)
+    progress_updated = pyqtSignal(int)  # Nueva señal para progreso
+    
+    def __init__(self, profile_type, antibiotics=None):
+        super().__init__()
+        self.profile_type = profile_type
+        self.antibiotics = antibiotics
+    
+    def run(self):
+        try:
+            # Simular progreso inicial
+            self.progress_updated.emit(10)
+            
+            if self.profile_type == "wild-type":
+                # Simular progreso durante generación wild-type
+                self.progress_updated.emit(30)
+                profile = generate_wild_type()
+                self.progress_updated.emit(70)
+            else:
+                # Simular progreso durante generación con resistencia
+                self.progress_updated.emit(20)
+                profile = generate_from_history(self.antibiotics)
+                self.progress_updated.emit(60)
+            
+            # Simular cálculo final de MICs
+            self.progress_updated.emit(90)
+            
+            # Pequeña pausa para simular procesamiento final
+            self.msleep(200)
+            self.progress_updated.emit(100)
+            
+            self.profile_generated.emit(profile)
+        except Exception as e:
+            self.error_occurred.emit(str(e))
 
 
 class BacteriaProfileWidget(QWidget):
@@ -77,6 +120,8 @@ class BacteriaProfileWidget(QWidget):
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
         layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear todo a la izquierda
 
         # === Título ===
         title_label = QLabel("🦠 Generar Perfil Bacteriano")
@@ -90,11 +135,39 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 3px;
             }
         """)
+        title_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         layout.addWidget(title_label)
 
-        # === Selección de tipo de perfil ===
+        # === Contenedor principal con columnas ===
+        columns_container = QHBoxLayout()
+        columns_container.setSpacing(20)
+        columns_container.setAlignment(Qt.AlignLeft)  # Alinear columnas a la izquierda
+
+        # === COLUMNA 1: Tipo de perfil ===
+        profile_column = QVBoxLayout()
+        profile_column.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
         profile_type_group = QGroupBox("Tipo de Perfil")
+        profile_type_group.setFixedHeight(200)  # ALTURA AUMENTADA
+        profile_type_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        profile_type_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #3498db;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                min-width: 300px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #3498db;
+            }
+        """)
         profile_type_layout = QVBoxLayout()
+        profile_type_layout.setAlignment(Qt.AlignLeft)
 
         self.profile_type_group = QButtonGroup()
 
@@ -104,6 +177,7 @@ class BacteriaProfileWidget(QWidget):
             "Bacteria comunitaria sin exposición previa a antibióticos\n"
             "Todas las MICs en rango sensible"
         )
+        self.wildtype_radio.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.profile_type_group.addButton(self.wildtype_radio, 1)
         profile_type_layout.addWidget(self.wildtype_radio)
 
@@ -112,60 +186,193 @@ class BacteriaProfileWidget(QWidget):
             "Bacteria hospitalaria con exposición a antibióticos\n"
             "Genera mutaciones según historial de tratamientos"
         )
+        self.resistant_radio.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.profile_type_group.addButton(self.resistant_radio, 2)
         profile_type_layout.addWidget(self.resistant_radio)
 
+        # Agregar más espacio entre los radio buttons
+        profile_type_layout.addSpacing(10)
+
+        # Agregar espacio flexible para empujar el contenido hacia arriba
+        profile_type_layout.addStretch()
+
         profile_type_group.setLayout(profile_type_layout)
-        layout.addWidget(profile_type_group)
+        profile_column.addWidget(profile_type_group)
 
-        # Conectar señal para habilitar/deshabilitar selector de antibióticos
-        self.wildtype_radio.toggled.connect(self._on_profile_type_changed)
-
-        # === Selector de antibióticos previos ===
+        # === COLUMNA 2: Antibióticos previos ===
+        antibiotics_column = QVBoxLayout()
+        antibiotics_column.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
         self.antibiotics_group = QGroupBox("Antibióticos Previos (Exposición)")
+        self.antibiotics_group.setFixedHeight(200)  # ALTURA AUMENTADA
+        self.antibiotics_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.antibiotics_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #27ae60;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                min-width: 300px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #27ae60;
+            }
+        """)
         antibiotics_layout = QVBoxLayout()
+        antibiotics_layout.setAlignment(Qt.AlignLeft)
 
-        help_label = QLabel(
-            "Seleccione los antibióticos a los que fue expuesta la bacteria:"
+        # Mensaje informativo para Wild-type
+        self.info_label = QLabel(
+            "🟢 <b>Perfil Wild-type seleccionado</b><br>"
+            "<span style='color: #7f8c8d; font-size: 10px;'>"
+            "No se requieren antibióticos previos para bacteria sensible"
+            "</span>"
         )
-        help_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
-        antibiotics_layout.addWidget(help_label)
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet("""
+            QLabel {
+                background-color: #d5f4e6;
+                color: #27ae60;
+                padding: 15px;
+                border-radius: 5px;
+                border: 1px solid #27ae60;
+                font-size: 11px;
+                min-width: 270px;
+                max-height: 80px; 
+            }
+        """)
+        self.info_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        antibiotics_layout.addWidget(self.info_label)
 
+        # Lista de antibióticos (inicialmente oculta)
         self.antibiotics_list = QListWidget()
         self.antibiotics_list.setSelectionMode(QListWidget.MultiSelection)
         self.antibiotics_list.addItems(self.available_antibiotics)
-        self.antibiotics_list.setMaximumHeight(120)
+        self.antibiotics_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.antibiotics_list.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.antibiotics_list.setVisible(False)
+        self.antibiotics_list.setStyleSheet("""
+            QListWidget {
+                background-color: white;
+                border: 1px solid #bdc3c7;
+                border-radius: 3px;
+                min-width: 270px;
+                max-height: 140px;  
+            }
+            QListWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid #ecf0f1;
+                font-size: 11px;
+            }
+            QListWidget::item:selected {
+                background-color: #3498db;
+                color: white;
+            }
+        """)
         antibiotics_layout.addWidget(self.antibiotics_list)
 
         self.antibiotics_group.setLayout(antibiotics_layout)
-        self.antibiotics_group.setEnabled(False)  # Deshabilitado por defecto
-        layout.addWidget(self.antibiotics_group)
+        antibiotics_column.addWidget(self.antibiotics_group)
 
-        # === Botón generar ===
-        button_layout = QHBoxLayout()
+        # Agregar ambas columnas al contenedor principal
+        columns_container.addLayout(profile_column)
+        columns_container.addLayout(antibiotics_column)
+        columns_container.addStretch()
 
+        # Agregar el contenedor de columnas al layout principal
+        layout.addLayout(columns_container)
+
+        # === FILA DE BOTÓN Y BARRA DE CARGA ===
+        button_progress_container = QHBoxLayout()
+        button_progress_container.setSpacing(20)
+        button_progress_container.setAlignment(Qt.AlignLeft)
+
+        # === BOTÓN GENERAR (mismo ancho que Tipo de Perfil) ===
         self.generate_button = QPushButton("⚡ Generar Perfil")
+        self.generate_button.setFixedWidth(300)  # Mismo ancho que el groupbox de Tipo de Perfil
+        self.generate_button.setFixedHeight(40)  # Altura consistente
+        self.generate_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.generate_button.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
+                background-color: #27ae60; 
                 color: white;
-                font-size: 13px;
+                font-size: 14px;
                 font-weight: bold;
-                padding: 10px;
+                padding: 12px;
                 border-radius: 5px;
+                border: none;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #229954; 
+            }
+            QPushButton:pressed {
+                background-color: #1e8449;  
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+                color: #7f8c8d;
             }
         """)
         self.generate_button.clicked.connect(self._on_generate_clicked)
-        button_layout.addWidget(self.generate_button)
+        button_progress_container.addWidget(self.generate_button)
 
-        layout.addLayout(button_layout)
+        # === BARRA DE CARGA (mismo tamaño que Antibióticos Previos) - SIEMPRE VISIBLE ===
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedWidth(520)  # Mismo ancho que el groupbox de Antibióticos Previos
+        self.progress_bar.setFixedHeight(40)  # Misma altura que el botón
+        self.progress_bar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.progress_bar.setVisible(True)  # SIEMPRE VISIBLE
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #27ae60;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #f8f9fa;
+                font-weight: bold;
+                color: #2c3e50;
+            }
+            QProgressBar::chunk {
+                background-color: #27ae60;
+                border-radius: 3px;
+            }
+        """)
+        self.progress_bar.setAlignment(Qt.AlignCenter)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)  # Inicia en 0%
+        self.progress_bar.setFormat("0% - Listo")
+        button_progress_container.addWidget(self.progress_bar)
+
+        # Agregar stretch para alinear a la izquierda
+        button_progress_container.addStretch()
+
+        # Agregar el contenedor de botón y barra al layout principal
+        layout.addLayout(button_progress_container)
 
         # === Resumen del perfil generado ===
         summary_group = QGroupBox("📋 Perfil Actual")
+        summary_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        summary_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #9b59b6;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                min-width: 620px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #9b59b6;
+            }
+        """)
         summary_layout = QVBoxLayout()
+        summary_layout.setAlignment(Qt.AlignLeft)
 
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
@@ -178,9 +385,11 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 3px;
                 padding: 5px;
                 font-family: 'Courier New', monospace;
-                font-size: 10px;
+                font-size: 12px;
+                min-width: 630px;
             }
         """)
+        self.summary_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         summary_layout.addWidget(self.summary_text)
 
         summary_group.setLayout(summary_layout)
@@ -188,29 +397,68 @@ class BacteriaProfileWidget(QWidget):
 
         layout.addStretch()
 
+        # Conectar señal para habilitar/deshabilitar selector de antibióticos
+        self.wildtype_radio.toggled.connect(self._on_profile_type_changed)
+
     def _on_profile_type_changed(self, checked: bool):
         """Habilita/deshabilita selector de antibióticos según tipo de perfil."""
-        # Si se selecciona wild-type, deshabilitar antibióticos
-        self.antibiotics_group.setEnabled(not checked)
-
-        # Limpiar selección si se cambia a wild-type
-        if checked:
+        if checked:  # Wild-type seleccionado
+            # Mostrar mensaje informativo
+            self.info_label.setText(
+                "🟢 <b>Perfil Wild-type seleccionado</b><br>"
+                "<span style='color: #7f8c8d; font-size: 10px;'>"
+                "No se requieren antibióticos previos para bacteria sensible"
+                "</span>"
+            )
+            self.info_label.setStyleSheet("""
+                QLabel {
+                    background-color: #d5f4e6;
+                    color: #27ae60;
+                    padding: 15px;
+                    border-radius: 5px;
+                    border: 1px solid #27ae60;
+                    font-size: 11px;
+                    min-width: 270px;
+                    max-height: 80px;
+                }
+            """)
+            self.info_label.setVisible(True)
+            
+            # Ocultar lista de antibióticos
+            self.antibiotics_list.setVisible(False)
             self.antibiotics_list.clearSelection()
+            
+        else:  # Con resistencia adquirida seleccionado
+            # Mostrar mensaje diferente
+            self.info_label.setText(
+                "🔴 <b>Perfil con Resistencia Adquirida</b><br>"
+                "<span style='color: #7f8c8d; font-size: 10px;'>"
+                "Seleccione los antibióticos a los que fue expuesta la bacteria"
+                "</span>"
+            )
+            self.info_label.setStyleSheet("""
+                QLabel {
+                    background-color: #fdeaea;
+                    color: #e74c3c;
+                    padding: 15px;
+                    border-radius: 5px;
+                    border: 1px solid #e74c3c;
+                    font-size: 11px;
+                    min-width: 270px;
+                    max-height: 80px;
+                }
+            """)
+            self.info_label.setVisible(True)
+            
+            # Mostrar lista de antibióticos
+            self.antibiotics_list.setVisible(True)
 
     def _on_generate_clicked(self):
         """Genera el perfil bacteriano según la configuración seleccionada."""
         try:
-            # Determinar tipo de perfil
-            if self.wildtype_radio.isChecked():
-                # Generar wild-type
-                profile = generate_wild_type()
-                profile_type = "wild-type"
-                antibioticos_previos = None
-
-            else:
-                # Generar con resistencia
+            # Validar selección para perfil resistente
+            if self.resistant_radio.isChecked():
                 selected_items = self.antibiotics_list.selectedItems()
-
                 if not selected_items:
                     QMessageBox.warning(
                         self,
@@ -219,13 +467,58 @@ class BacteriaProfileWidget(QWidget):
                         "un perfil con resistencia adquirida.",
                     )
                     return
-
                 antibioticos_previos = [item.text() for item in selected_items]
-                profile = generate_from_history(
-                    antibioticos_previos=antibioticos_previos,
-                    probabilidad_mutacion=0.7,
-                )
-                profile_type = "resistente"
+            else:
+                antibioticos_previos = None
+
+            # Resetear barra de progreso a 0% para nueva generación
+            self.progress_bar.setValue(0)
+            self.progress_bar.setFormat("0% - Iniciando...")
+            self.generate_button.setEnabled(False)
+            
+            # Forzar actualización de la UI
+            QApplication.processEvents()
+
+            # Determinar tipo de perfil y configurar hilo
+            if self.wildtype_radio.isChecked():
+                self.thread = ProfileGenerationThread("wild-type")
+            else:
+                self.thread = ProfileGenerationThread("resistant", antibioticos_previos)
+
+            # Conectar señales del hilo
+            self.thread.profile_generated.connect(self._on_profile_generated)
+            self.thread.error_occurred.connect(self._on_generation_error)
+            self.thread.progress_updated.connect(self._on_progress_updated)
+
+            # Iniciar generación en segundo plano
+            self.thread.start()
+
+        except Exception as e:
+            self._reset_ui_after_error()
+            QMessageBox.critical(
+                self,
+                "Error al generar perfil",
+                f"Ocurrió un error al generar el perfil bacteriano:\n\n{str(e)}",
+            )
+
+    def _on_progress_updated(self, progress_value: int):
+        """Actualiza la barra de progreso con el valor recibido."""
+        self.progress_bar.setValue(progress_value)
+        self.progress_bar.setFormat(f"{progress_value}% - Procesando...")
+        QApplication.processEvents()
+
+    def _on_profile_generated(self, profile: BacteriaProfile):
+        """Maneja la finalización exitosa de la generación del perfil."""
+        try:
+            # Asegurar que la barra muestre 100%
+            self.progress_bar.setValue(100)
+            self.progress_bar.setFormat("100%")
+            
+            # Habilitar el botón para nueva generación
+            self.generate_button.setEnabled(True)
+
+            # Determinar tipo de perfil para el resumen
+            profile_type = "wild-type" if self.wildtype_radio.isChecked() else "resistente"
 
             # Guardar perfil en base de datos
             bacteria_profile_id = self._save_profile_to_db(profile)
@@ -247,11 +540,28 @@ class BacteriaProfileWidget(QWidget):
             )
 
         except Exception as e:
+            self._reset_ui_after_error()
             QMessageBox.critical(
                 self,
-                "Error al generar perfil",
-                f"Ocurrió un error al generar el perfil bacteriano:\n\n{str(e)}",
+                "Error al guardar perfil",
+                f"Ocurrió un error al guardar el perfil bacteriano:\n\n{str(e)}",
             )
+
+    def _on_generation_error(self, error_msg: str):
+        """Maneja errores durante la generación del perfil."""
+        self._reset_ui_after_error()
+        QMessageBox.critical(
+            self,
+            "Error al generar perfil",
+            f"Ocurrió un error al generar el perfil bacteriano:\n\n{error_msg}",
+        )
+
+    def _reset_ui_after_error(self):
+        """Resetea la UI después de un error."""
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("0% - Listo")
+        self.generate_button.setEnabled(True)
+        QApplication.processEvents()
 
     def _save_profile_to_db(self, profile: BacteriaProfile) -> int:
         """
