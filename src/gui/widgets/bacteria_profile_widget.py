@@ -43,20 +43,21 @@ from src.core.genotype_phenotype_calculator import GenotypePhenotypeCalculator
 
 class ProfileGenerationThread(QThread):
     """Hilo para generación de perfiles bacterianos en segundo plano."""
+
     profile_generated = pyqtSignal(object)
     error_occurred = pyqtSignal(str)
     progress_updated = pyqtSignal(int)  # Nueva señal para progreso
-    
+
     def __init__(self, profile_type, antibiotics=None):
         super().__init__()
         self.profile_type = profile_type
         self.antibiotics = antibiotics
-    
+
     def run(self):
         try:
             # Simular progreso inicial
             self.progress_updated.emit(10)
-            
+
             if self.profile_type == "wild-type":
                 # Simular progreso durante generación wild-type
                 self.progress_updated.emit(30)
@@ -67,14 +68,14 @@ class ProfileGenerationThread(QThread):
                 self.progress_updated.emit(20)
                 profile = generate_from_history(self.antibiotics)
                 self.progress_updated.emit(60)
-            
+
             # Simular cálculo final de MICs
             self.progress_updated.emit(90)
-            
+
             # Pequeña pausa para simular procesamiento final
             self.msleep(200)
             self.progress_updated.emit(100)
-            
+
             self.profile_generated.emit(profile)
         except Exception as e:
             self.error_occurred.emit(str(e))
@@ -127,10 +128,19 @@ class BacteriaProfileWidget(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
 
+        central_container = QWidget()
+        central_layout = QHBoxLayout(central_container)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+
         main_widget = QWidget()
+        main_widget.setMaximumWidth(900)
         layout = QVBoxLayout(main_widget)
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
+
+        central_layout.addStretch()
+        central_layout.addWidget(main_widget)
+        central_layout.addStretch()
 
         # === Título ===
         title_label = QLabel("🦠 Generar Perfil Bacteriano")
@@ -215,7 +225,9 @@ class BacteriaProfileWidget(QWidget):
                 color: #27ae60;
             }
         """)
-        self.antibiotics_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.antibiotics_group.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Preferred
+        )
         antibiotics_layout = QVBoxLayout()
 
         # Mensaje informativo para Wild-type
@@ -244,7 +256,9 @@ class BacteriaProfileWidget(QWidget):
         self.antibiotics_list.setSelectionMode(QListWidget.MultiSelection)
         self.antibiotics_list.addItems(self.available_antibiotics)
         self.antibiotics_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.antibiotics_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.antibiotics_list.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding
+        )
         self.antibiotics_list.setVisible(False)
         self.antibiotics_list.setStyleSheet("""
             QListWidget {
@@ -277,55 +291,19 @@ class BacteriaProfileWidget(QWidget):
         # === BOTÓN GENERAR ===
         self.generate_button = QPushButton("⚡ Generar Perfil")
         self.generate_button.setMinimumHeight(40)
-        self.generate_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.generate_button.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60; 
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #229954; 
-            }
-            QPushButton:pressed {
-                background-color: #1e8449;  
-            }
-            QPushButton:disabled {
-                background-color: #bdc3c7;
-                color: #7f8c8d;
-            }
-        """)
         self.generate_button.clicked.connect(self._on_generate_clicked)
-        button_progress_container.addWidget(self.generate_button, stretch=1)
+        button_progress_container.addWidget(self.generate_button)
 
         # === BARRA DE CARGA ===
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimumHeight(40)
         self.progress_bar.setVisible(True)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #27ae60;
-                border-radius: 5px;
-                text-align: center;
-                background-color: #f8f9fa;
-                font-weight: bold;
-                color: #2c3e50;
-            }
-            QProgressBar::chunk {
-                background-color: #27ae60;
-                border-radius: 3px;
-            }
-        """)
         self.progress_bar.setAlignment(Qt.AlignCenter)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("0% - Listo")
-        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        button_progress_container.addWidget(self.progress_bar, stretch=2)
+        button_progress_container.addWidget(self.progress_bar, stretch=1)
+        button_progress_container.addStretch()
 
         layout.addLayout(button_progress_container)
 
@@ -355,12 +333,14 @@ class BacteriaProfileWidget(QWidget):
         self.summary_text.setPlaceholderText("Ningún perfil generado aún...")
         self.summary_text.setStyleSheet("""
             QTextEdit {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 3px;
-                padding: 5px;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+                padding: 12px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 13px;
+                line-height: 1.5;
+                color: #2C3E50;
             }
         """)
         self.summary_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -369,10 +349,8 @@ class BacteriaProfileWidget(QWidget):
         summary_group.setLayout(summary_layout)
         layout.addWidget(summary_group)
 
-        layout.addStretch()
-
         # Configurar scroll area
-        scroll_area.setWidget(main_widget)
+        scroll_area.setWidget(central_container)
 
         # Layout principal del widget
         widget_layout = QVBoxLayout(self)
@@ -405,11 +383,11 @@ class BacteriaProfileWidget(QWidget):
                 }
             """)
             self.info_label.setVisible(True)
-            
+
             # Ocultar lista de antibióticos
             self.antibiotics_list.setVisible(False)
             self.antibiotics_list.clearSelection()
-            
+
         else:  # Con resistencia adquirida seleccionado
             # Mostrar mensaje diferente
             self.info_label.setText(
@@ -431,7 +409,7 @@ class BacteriaProfileWidget(QWidget):
                 }
             """)
             self.info_label.setVisible(True)
-            
+
             # Mostrar lista de antibióticos
             self.antibiotics_list.setVisible(True)
 
@@ -457,7 +435,7 @@ class BacteriaProfileWidget(QWidget):
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("0% - Iniciando...")
             self.generate_button.setEnabled(False)
-            
+
             # Forzar actualización de la UI
             QApplication.processEvents()
 
@@ -487,6 +465,18 @@ class BacteriaProfileWidget(QWidget):
         """Actualiza la barra de progreso con el valor recibido."""
         self.progress_bar.setValue(progress_value)
         self.progress_bar.setFormat(f"{progress_value}% - Procesando...")
+
+        # Cambiar color del texto a blanco cuando la barra está > 90% llena
+        if progress_value >= 90:
+            self.progress_bar.setStyleSheet("""
+                QProgressBar {
+                    color: #FFFFFF;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            self.progress_bar.setStyleSheet("")  # Usar estilo global
+
         QApplication.processEvents()
 
     def _on_profile_generated(self, profile: BacteriaProfile):
@@ -494,13 +484,23 @@ class BacteriaProfileWidget(QWidget):
         try:
             # Asegurar que la barra muestre 100%
             self.progress_bar.setValue(100)
-            self.progress_bar.setFormat("100%")
-            
+            self.progress_bar.setFormat("100% - Completado")
+
+            # Color blanco para máxima legibilidad
+            self.progress_bar.setStyleSheet("""
+                QProgressBar {
+                    color: #FFFFFF;
+                    font-weight: bold;
+                }
+            """)
+
             # Habilitar el botón para nueva generación
             self.generate_button.setEnabled(True)
 
             # Determinar tipo de perfil para el resumen
-            profile_type = "wild-type" if self.wildtype_radio.isChecked() else "resistente"
+            profile_type = (
+                "wild-type" if self.wildtype_radio.isChecked() else "resistente"
+            )
 
             # Guardar perfil en base de datos
             bacteria_profile_id = self._save_profile_to_db(profile)

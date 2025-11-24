@@ -58,14 +58,14 @@ class GrowthCurveWidget(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
-        
+
         main_widget = QWidget()
         layout = QVBoxLayout(main_widget)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
         # === TÍTULO ===
-        title_label = QLabel("📈 Curvas de Crecimiento Bacteriano")
+        title_label = QLabel("📈 Curvas de Crecimiento")
         title_label.setStyleSheet("""
             QLabel {
                 font-size: 14px;
@@ -76,7 +76,7 @@ class GrowthCurveWidget(QWidget):
                 border-radius: 3px;
             }
         """)
-        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         layout.addWidget(title_label)
 
         # === CONTENEDOR PRINCIPAL ===
@@ -100,7 +100,7 @@ class GrowthCurveWidget(QWidget):
                 color: #3498db;
             }
         """)
-        plot_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        plot_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         plot_layout = QVBoxLayout(plot_group)
         plot_layout.setContentsMargins(5, 5, 5, 5)
 
@@ -109,8 +109,8 @@ class GrowthCurveWidget(QWidget):
         self.plot_widget.setBackground("w")
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         self.plot_widget.setMinimumSize(500, 400)
-        self.plot_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
+        self.plot_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
         # DESHABILITAR ZOOM Y ARRASTRE
         self.plot_widget.setMouseEnabled(x=False, y=False)
         self.plot_widget.setMenuEnabled(False)
@@ -118,23 +118,27 @@ class GrowthCurveWidget(QWidget):
 
         # Configurar ejes
         self.plot_widget.setLabel(
-            "left", "Densidad Óptica (OD 600 nm)", color="#2c3e50", size="10pt"
+            "left", "Densidad Óptica (OD 600 nm)", color="#2c3e50", size="12pt"
         )
         self.plot_widget.setLabel(
-            "bottom", "Tiempo (horas)", color="#2c3e50", size="10pt"
+            "bottom", "Tiempo (horas)", color="#2c3e50", size="12pt"
         )
         self.plot_widget.setTitle(
-            "Curvas de Crecimiento vs Concentración de Antibiótico", 
-            color="#2c3e50", 
-            size="12pt"
+            "Curvas de Crecimiento vs Concentración de Antibiótico",
+            color="#2c3e50",
+            size="14pt",
+            bold=True,
         )
 
         # Configurar rangos fijos
         self.plot_widget.setYRange(0, 3.5, padding=0.05)
         self.plot_widget.setXRange(0, 18, padding=0.02)
 
-        # Añadir leyenda
-        self.plot_widget.addLegend(offset=(10, 10), verSpacing=-5, horSpacing=5)
+        # Añadir leyenda con mejor legibilidad
+        legend = self.plot_widget.addLegend(
+            offset=(10, 10), verSpacing=2, horSpacing=10
+        )
+        legend.setLabelTextSize("11pt")
 
         plot_layout.addWidget(self.plot_widget)
         main_container.addWidget(plot_group, stretch=2)
@@ -169,11 +173,11 @@ class GrowthCurveWidget(QWidget):
         # Selector de antibiótico
         antibiotic_layout = QVBoxLayout()
         antibiotic_layout.setSpacing(5)
-        
+
         antibiotic_label = QLabel("Antibiótico:")
         antibiotic_label.setStyleSheet("font-weight: bold; font-size: 11px;")
         antibiotic_layout.addWidget(antibiotic_label)
-        
+
         self.antibiotic_combo = QComboBox()
         self.antibiotic_combo.setStyleSheet("""
             QComboBox {
@@ -186,7 +190,7 @@ class GrowthCurveWidget(QWidget):
                 border-color: #3498db;
             }
         """)
-        self.antibiotic_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.antibiotic_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.antibiotic_combo.currentTextChanged.connect(self._on_antibiotic_changed)
         antibiotic_layout.addWidget(self.antibiotic_combo)
 
@@ -233,7 +237,7 @@ class GrowthCurveWidget(QWidget):
                 border: 1px solid #dee2e6;
             }
         """)
-        self.info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.info_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         info_section.addWidget(self.info_label)
 
         controls_layout.addLayout(info_section)
@@ -248,7 +252,7 @@ class GrowthCurveWidget(QWidget):
 
         # Configurar scroll area
         scroll_area.setWidget(main_widget)
-        
+
         # Layout principal del widget
         widget_layout = QVBoxLayout(self)
         widget_layout.setContentsMargins(0, 0, 0, 0)
@@ -263,10 +267,10 @@ class GrowthCurveWidget(QWidget):
                 {
                     'antibiotico1': [
                         {
-                            'concentracion': 0.0,  
-                            'tiempos': [0, 1, 2, ..., 18],  
-                            'ods': [0.1, 0.15, 0.25, ..., 2.5],  
-                            'mic': False 
+                            'concentracion': 0.0,
+                            'tiempos': [0, 1, 2, ..., 18],
+                            'ods': [0.1, 0.15, 0.25, ..., 2.5],
+                            'mic': False
                         },
                         ...
                     ],
@@ -319,7 +323,10 @@ class GrowthCurveWidget(QWidget):
         """
         # Limpiar gráfico anterior
         self.plot_widget.clear()
-        self.plot_widget.addLegend(offset=(10, 10), verSpacing=-5, horSpacing=5)
+        legend = self.plot_widget.addLegend(
+            offset=(10, 10), verSpacing=2, horSpacing=10
+        )
+        legend.setLabelTextSize("11pt")
         self.curves = []
 
         if antibiotic not in self.current_data:
@@ -358,14 +365,16 @@ class GrowthCurveWidget(QWidget):
             if concentracion == 0:
                 # Control positivo: línea más gruesa
                 pen = mkPen(color=color, width=3, style=1)  # Solid
-                label = "Control (+) 0 µg/mL"
+                label = "<span style='font-size: 11pt; font-weight: bold;'>Control (+) 0 µg/mL</span>"
             else:
                 # Otras concentraciones
                 pen = mkPen(color=color, width=2)
-                label = f"{concentracion:.2f} µg/mL"
+                label = (
+                    f"<span style='font-size: 11pt;'>{concentracion:.2f} µg/mL</span>"
+                )
 
                 if is_mic:
-                    label += " ← MIC"
+                    label += "<span style='font-size: 11pt; color: #e74c3c; font-weight: bold;'> ← MIC</span>"
                     mic_concentration = concentracion
 
             # Graficar curva
@@ -399,14 +408,19 @@ class GrowthCurveWidget(QWidget):
             info_text += "<span style='color: #27ae60;'>✓ Inhibición completa</span>"
         else:
             info_text += "<b>MIC:</b> No determinado<br/>"
-            info_text += "<span style='color: #e74c3c;'>⚠ Sin inhibición completa</span>"
+            info_text += (
+                "<span style='color: #e74c3c;'>⚠ Sin inhibición completa</span>"
+            )
 
         self.info_label.setText(info_text)
 
-    def clear(self):
+    def clear_plot(self):
         """Limpia el gráfico y resetea el widget."""
         self.plot_widget.clear()
-        self.plot_widget.addLegend(offset=(10, 10), verSpacing=-5, horSpacing=5)
+        legend = self.plot_widget.addLegend(
+            offset=(10, 10), verSpacing=2, horSpacing=10
+        )
+        legend.setLabelTextSize("11pt")
         self.curves = []
         self.mic_line = None
         self.current_data = {}

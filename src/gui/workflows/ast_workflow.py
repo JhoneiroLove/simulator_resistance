@@ -60,58 +60,62 @@ class ASTWorkflow(QWidget):
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         # === TÍTULO ===
+        title_widget = QWidget()
+        title_widget.setStyleSheet(
+            "background-color: #FFFFFF; border-bottom: 2px solid #E1E8ED;"
+        )
+        title_layout = QHBoxLayout(title_widget)
+        title_layout.setContentsMargins(20, 12, 20, 12)
+
         title_label = QLabel("🧬 Simulador de Antibiograma (AST)")
         title_label.setStyleSheet("""
             QLabel {
                 font-size: 18px;
-                font-weight: bold;
-                color: #2c3e50;
-                padding: 10px;
-                background-color: #ecf0f1;
-                border-radius: 5px;
+                font-weight: 600;
+                color: #1A252F;
+                background: transparent;
             }
         """)
-        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        main_layout.addWidget(title_label)
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+
+        main_layout.addWidget(title_widget)
 
         # === SISTEMA DE PESTAÑAS PRINCIPAL ===
         self.main_tabs = QTabWidget()
         self.main_tabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 2px solid #3498db;
-                border-radius: 5px;
-                background-color: white;
-                padding: 5px;
+                border: none;
+                background-color: #F5F7FA;
             }
             QTabBar::tab {
-                background-color: #ecf0f1;
-                color: #2c3e50;
-                padding: 12px 20px;
-                margin-right: 3px;
-                border: 2px solid #bdc3c7;
-                border-bottom: none;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
+                background-color: #FFFFFF;
+                color: #5A6C7D;
+                padding: 12px 24px;
+                margin-right: 2px;
+                border: none;
+                border-bottom: 3px solid transparent;
                 font-size: 13px;
-                font-weight: bold;
-                min-width: 120px;    
+                font-weight: 500;
+                min-width: 120px;
             }
             QTabBar::tab:selected {
-                background-color: white;
-                color: #3498db;
-                border-color: #3498db;
-                margin-bottom: -2px;
+                background-color: #FFFFFF;
+                color: #841C1C;
+                border-bottom: 3px solid #841C1C;
+                font-weight: 600;
             }
-            QTabBar::tab:hover {
-                background-color: #d5dbdb;
+            QTabBar::tab:hover:!selected {
+                background-color: #F8F9FA;
+                color: #2C3E50;
             }
             QTabBar::tab:disabled {
-                color: #95a5a6;
-                background-color: #f8f9fa;
+                color: #BDC3C7;
+                background-color: #F5F7FA;
             }
         """)
 
@@ -172,24 +176,6 @@ class ASTWorkflow(QWidget):
         nav_layout = QHBoxLayout()
 
         self.next_profile_btn = QPushButton("Siguiente: Generar Perfil ➔")
-        self.next_profile_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 220px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:disabled {
-                background-color: #95a5a6;
-            }
-        """)
-        self.next_profile_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_profile_btn.setEnabled(False)
         self.next_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
         nav_layout.addWidget(self.next_profile_btn)
@@ -236,24 +222,6 @@ class ASTWorkflow(QWidget):
         next_config_layout = QHBoxLayout()
 
         self.next_config_btn = QPushButton("Siguiente: Configurar AST ➔")
-        self.next_config_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 220px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:disabled {
-                background-color: #95a5a6;
-            }
-        """)
-        self.next_config_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_config_btn.setEnabled(False)
         self.next_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         next_config_layout.addWidget(self.next_config_btn)
@@ -313,31 +281,17 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        back_profile_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        back_profile_btn.setFixedWidth(150)
+        # Botones navegación
+        nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(10)
+
+        back_profile_btn = QPushButton("◀ Volver")
+        back_profile_btn.setProperty("secondary", True)
         back_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
         nav_layout.addWidget(back_profile_btn)
 
-        nav_layout.addSpacing(20)
-
         self.next_plate_btn = QPushButton("Siguiente: Ver Placa ➔")
-        self.next_plate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 180px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:disabled {
-                background-color: #95a5a6;
-            }
-        """)
-        self.next_plate_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_plate_btn.setEnabled(False)
         self.next_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         nav_layout.addWidget(self.next_plate_btn)
@@ -398,7 +352,7 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        back_config_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        back_config_btn.setFixedWidth(180)
         back_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         plate_nav_layout.addWidget(back_config_btn)
 
@@ -419,7 +373,7 @@ class ASTWorkflow(QWidget):
                 background-color: #229954;
             }
         """)
-        next_results_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        next_results_btn.setFixedWidth(200)
         next_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         plate_nav_layout.addWidget(next_results_btn)
 
@@ -464,43 +418,14 @@ class ASTWorkflow(QWidget):
 
         # Botones navegación
         results_nav_layout = QHBoxLayout()
+        results_nav_layout.setSpacing(10)
 
-        back_plate_btn = QPushButton("◀ Volver: Placa")
-        back_plate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                font-size: 14px;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
-        back_plate_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        back_plate_btn = QPushButton("◀ Volver")
+        back_plate_btn.setProperty("secondary", True)
         back_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         results_nav_layout.addWidget(back_plate_btn)
 
-        results_nav_layout.addSpacing(20)
-
         next_curves_btn = QPushButton("Siguiente: Ver Curvas ➔")
-        next_curves_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9b59b6;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 180px;
-            }
-            QPushButton:hover {
-                background-color: #8e44ad;
-            }
-        """)
-        next_curves_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         next_curves_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(5))
         results_nav_layout.addWidget(next_curves_btn)
 
@@ -545,43 +470,14 @@ class ASTWorkflow(QWidget):
 
         # Botones navegación
         curves_nav_layout = QHBoxLayout()
+        curves_nav_layout.setSpacing(10)
 
-        back_results_btn = QPushButton("◀ Volver: Resultados")
-        back_results_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                font-size: 14px;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 160px;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
-        back_results_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        back_results_btn = QPushButton("◀ Volver")
+        back_results_btn.setProperty("secondary", True)
         back_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         curves_nav_layout.addWidget(back_results_btn)
 
-        curves_nav_layout.addSpacing(20)
-
         restart_btn = QPushButton("🔄 Nueva Simulación")
-        restart_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 180px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
-        restart_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         restart_btn.clicked.connect(self._restart_workflow)
         curves_nav_layout.addWidget(restart_btn)
 

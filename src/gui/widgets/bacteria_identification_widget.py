@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QMessageBox,
     QScrollArea,
-    QFrame
+    QFrame,
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 
@@ -34,7 +34,9 @@ class BacteriaIdentificationWidget(QWidget):
             - confidence (float): Confianza en identificación (0.0-1.0)
     """
 
-    identification_completed = pyqtSignal(str, str, float)  # organism, origin, confidence
+    identification_completed = pyqtSignal(
+        str, str, float
+    )  # organism, origin, confidence
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -50,11 +52,20 @@ class BacteriaIdentificationWidget(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
-        
+
+        central_container = QWidget()
+        central_layout = QHBoxLayout(central_container)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+
         main_widget = QWidget()
+        main_widget.setMaximumWidth(900)
         main_layout = QVBoxLayout(main_widget)
         main_layout.setSpacing(20)
         main_layout.setContentsMargins(20, 20, 20, 20)
+
+        central_layout.addStretch()
+        central_layout.addWidget(main_widget)
+        central_layout.addStretch()
 
         # === TÍTULO ===
         title_label = QLabel("🔬 Identificación Bacteriana")
@@ -114,16 +125,18 @@ class BacteriaIdentificationWidget(QWidget):
         sample_layout = QVBoxLayout()
 
         self.sample_combo = QComboBox()
-        self.sample_combo.addItems([
-            "-- Seleccione origen --",
-            "🩸 Hemocultivo (sangre)",
-            "🫁 Esputo (tracto respiratorio)",
-            "💧 Orina (urocultivo)",
-            "🦴 Líquido sinovial (articulación)",
-            "🧪 Punta de catéter",
-            "🩹 Exudado de herida",
-            "🧠 Líquido cefalorraquídeo (LCR)",
-        ])
+        self.sample_combo.addItems(
+            [
+                "-- Seleccione origen --",
+                "🩸 Hemocultivo (sangre)",
+                "🫁 Esputo (tracto respiratorio)",
+                "💧 Orina (urocultivo)",
+                "🦴 Líquido sinovial (articulación)",
+                "🧪 Punta de catéter",
+                "🩹 Exudado de herida",
+                "🧠 Líquido cefalorraquídeo (LCR)",
+            ]
+        )
         self.sample_combo.setStyleSheet("""
             QComboBox {
                 padding: 11px;
@@ -143,7 +156,9 @@ class BacteriaIdentificationWidget(QWidget):
         steps_container.addWidget(sample_group, stretch=1)
 
         # === PASO 2: CULTIVO Y PRUEBAS ===
-        self.tests_group = QGroupBox("🧫 Paso 2: Cultivo en MacConkey y Pruebas Bioquímicas")
+        self.tests_group = QGroupBox(
+            "🧫 Paso 2: Cultivo en MacConkey y Pruebas Bioquímicas"
+        )
         self.tests_group.setEnabled(False)
         self.tests_group.setStyleSheet("""
             QGroupBox {
@@ -163,7 +178,9 @@ class BacteriaIdentificationWidget(QWidget):
         self.tests_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         tests_layout = QVBoxLayout()
 
-        self.run_tests_btn = QPushButton("▶ Ejecutar Cultivo y Pruebas de Identificación")
+        self.run_tests_btn = QPushButton(
+            "▶ Ejecutar Cultivo y Pruebas de Identificación"
+        )
         self.run_tests_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
@@ -185,7 +202,7 @@ class BacteriaIdentificationWidget(QWidget):
                 color: #7f8c8d;
             }
         """)
-        self.run_tests_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.run_tests_btn.setFixedWidth(400)
         self.run_tests_btn.clicked.connect(self._run_identification_tests)
         tests_layout.addWidget(self.run_tests_btn)
 
@@ -221,15 +238,19 @@ class BacteriaIdentificationWidget(QWidget):
         self.results_text = QTextEdit()
         self.results_text.setReadOnly(True)
         self.results_text.setMinimumHeight(200)
-        self.results_text.setPlaceholderText("Los resultados de las pruebas aparecerán aquí...")
+        self.results_text.setPlaceholderText(
+            "Los resultados de las pruebas aparecerán aquí..."
+        )
         self.results_text.setStyleSheet("""
             QTextEdit {
-                background-color: #f8f9fa;
-                border: 2px solid #dee2e6;
-                border-radius: 5px;
-                padding: 10px;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+                padding: 12px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 13px;
+                line-height: 1.6;
+                color: #2C3E50;
             }
         """)
         self.results_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -295,18 +316,18 @@ class BacteriaIdentificationWidget(QWidget):
             }
         """)
         self.identification_label.setVisible(False)
-        self.identification_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.identification_label.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         self.identification_label.setWordWrap(True)
         confirm_layout.addWidget(self.identification_label)
 
         self.confirm_group.setLayout(confirm_layout)
         main_layout.addWidget(self.confirm_group)
 
-        main_layout.addStretch()
-        
         # Configurar el scroll area
-        scroll_area.setWidget(main_widget)
-        
+        scroll_area.setWidget(central_container)
+
         # Layout principal del widget
         widget_layout = QVBoxLayout(self)
         widget_layout.setContentsMargins(0, 0, 0, 0)
@@ -372,7 +393,7 @@ class BacteriaIdentificationWidget(QWidget):
             # Finalizar
             self.timer.stop()
             self.run_tests_btn.setEnabled(True)
-            self.progress_bar.setValue(100) 
+            self.progress_bar.setValue(100)
 
     # Métodos de pruebas simuladas:
     def _test_macconkey(self) -> str:

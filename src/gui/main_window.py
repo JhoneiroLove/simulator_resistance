@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QStatusBar,
     QApplication,
 )
+from PyQt5.QtCore import Qt
 from src.gui.workflows.ast_workflow import ASTWorkflow
 from PyQt5.QtGui import QIcon
 
@@ -33,12 +34,20 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("SRB - AST Simulator")
 
-        # En lugar de resize fijo, usar porcentaje de pantalla
-        screen = QApplication.primaryScreen().availableGeometry()
-        self.resize(int(screen.width() * 0.8), int(screen.height() * 0.8))
+        # Deshabilitar botón de maximizar/pantalla completa
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowMaximizeButtonHint)
 
-        # Establecer tamaño mínimo razonable
-        self.setMinimumSize(1024, 768)
+        # Tamaño inicial más compacto ajustado al contenido centrado
+        screen = QApplication.primaryScreen().availableGeometry()
+
+        # Ancho: 1100px (contenido 900px + márgenes + scrollbar)
+        # Alto: 85% de la pantalla para mantener altura cómoda
+        initial_width = min(1100, int(screen.width() * 0.7))
+        initial_height = int(screen.height() * 0.85)
+        self.resize(initial_width, initial_height)
+
+        # Establecer tamaño mínimo más compacto
+        self.setMinimumSize(950, 700)
 
         # Centrar
         qr = self.frameGeometry()

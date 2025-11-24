@@ -77,10 +77,19 @@ class IncubationProgressWidget(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
 
+        central_container = QWidget()
+        central_layout = QHBoxLayout(central_container)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+
         main_widget = QWidget()
+        main_widget.setMaximumWidth(800)
         layout = QVBoxLayout(main_widget)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
+
+        central_layout.addStretch()
+        central_layout.addWidget(main_widget)
+        central_layout.addStretch()
 
         # Titulo
         title = QLabel("🔬 Incubación en Progreso")
@@ -234,7 +243,7 @@ class IncubationProgressWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
-        self.start_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.start_button.setFixedWidth(200)
         self.start_button.clicked.connect(self._on_start_clicked)
         controls_layout.addWidget(self.start_button)
 
@@ -257,7 +266,7 @@ class IncubationProgressWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
-        self.pause_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.pause_button.setFixedWidth(150)
         self.pause_button.clicked.connect(self._on_pause_clicked)
         controls_layout.addWidget(self.pause_button)
 
@@ -278,7 +287,7 @@ class IncubationProgressWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
-        self.skip_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.skip_button.setFixedWidth(200)
         self.skip_button.clicked.connect(self._on_skip_clicked)
         controls_layout.addWidget(self.skip_button)
 
@@ -301,10 +310,8 @@ class IncubationProgressWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        layout.addStretch()
-
         # Configurar scroll area
-        scroll_area.setWidget(main_widget)
+        scroll_area.setWidget(central_container)
 
         # Layout principal del widget
         widget_layout = QVBoxLayout(self)
