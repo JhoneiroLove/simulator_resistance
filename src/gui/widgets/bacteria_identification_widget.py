@@ -10,7 +10,9 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QProgressBar,
     QSizePolicy,
-    QMessageBox
+    QMessageBox,
+    QScrollArea,
+    QFrame
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 
@@ -44,9 +46,15 @@ class BacteriaIdentificationWidget(QWidget):
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
-        main_layout = QVBoxLayout(self)
+        # Crear un scroll area para todo el contenido
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
         main_layout.setSpacing(20)
-        main_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        main_layout.setContentsMargins(20, 20, 20, 20)
 
         # === TÍTULO ===
         title_label = QLabel("🔬 Identificación Bacteriana")
@@ -60,7 +68,7 @@ class BacteriaIdentificationWidget(QWidget):
                 border-radius: 3px;
             }
         """)
-        title_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         main_layout.addWidget(title_label)
 
         # === INFORMACIÓN CLÍNICA ===
@@ -76,21 +84,16 @@ class BacteriaIdentificationWidget(QWidget):
                 border-left: 4px solid #3498db;
                 border-radius: 3px;
                 font-size: 11px;
-                min-width: 740px;  
             }
         """)
-        info_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         main_layout.addWidget(info_label)
 
-        # === CONTENEDOR PARA PASOS 1 Y 2 EN COLUMNAS ===
+        # === CONTENEDOR PARA PASOS 1 Y 2 - GRID RESPONSIVO ===
         steps_container = QHBoxLayout()
-        steps_container.setAlignment(Qt.AlignLeft)
         steps_container.setSpacing(20)
 
         # === PASO 1: ORIGEN DE MUESTRA ===
-        step1_layout = QVBoxLayout()
-        step1_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
         sample_group = QGroupBox("📋 Paso 1: Origen de la Muestra")
         sample_group.setStyleSheet("""
             QGroupBox {
@@ -107,9 +110,8 @@ class BacteriaIdentificationWidget(QWidget):
                 color: #3498db;
             }
         """)
-        sample_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        sample_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         sample_layout = QVBoxLayout()
-        sample_layout.setAlignment(Qt.AlignLeft)
 
         self.sample_combo = QComboBox()
         self.sample_combo.addItems([
@@ -128,23 +130,19 @@ class BacteriaIdentificationWidget(QWidget):
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
                 font-size: 12px;
-                min-width: 300px;  
             }
             QComboBox:focus {
                 border-color: #3498db;
             }
         """)
-        self.sample_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.sample_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.sample_combo.currentTextChanged.connect(self._on_sample_changed)
         sample_layout.addWidget(self.sample_combo)
 
         sample_group.setLayout(sample_layout)
-        step1_layout.addWidget(sample_group)
+        steps_container.addWidget(sample_group, stretch=1)
 
         # === PASO 2: CULTIVO Y PRUEBAS ===
-        step2_layout = QVBoxLayout()
-        step2_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
         self.tests_group = QGroupBox("🧫 Paso 2: Cultivo en MacConkey y Pruebas Bioquímicas")
         self.tests_group.setEnabled(False)
         self.tests_group.setStyleSheet("""
@@ -162,21 +160,19 @@ class BacteriaIdentificationWidget(QWidget):
                 color: #27ae60;
             }
         """)
-        self.tests_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.tests_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         tests_layout = QVBoxLayout()
-        tests_layout.setAlignment(Qt.AlignLeft)
 
         self.run_tests_btn = QPushButton("▶ Ejecutar Cultivo y Pruebas de Identificación")
         self.run_tests_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;  /* Cambiar rojo por verde */
+                background-color: #27ae60;
                 color: white;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 14px;
                 border-radius: 6px;
                 border: none;
-                min-width: 300px;  
             }
             QPushButton:hover {
                 background-color: #229954;  
@@ -189,31 +185,16 @@ class BacteriaIdentificationWidget(QWidget):
                 color: #7f8c8d;
             }
         """)
-        self.run_tests_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.run_tests_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_tests_btn.clicked.connect(self._run_identification_tests)
-
-        button_container1 = QHBoxLayout()
-        button_container1.setAlignment(Qt.AlignLeft)
-        button_container1.addWidget(self.run_tests_btn)
-        button_container1.addStretch()
-        tests_layout.addLayout(button_container1)
+        tests_layout.addWidget(self.run_tests_btn)
 
         self.tests_group.setLayout(tests_layout)
-        step2_layout.addWidget(self.tests_group)
+        steps_container.addWidget(self.tests_group, stretch=1)
 
-        # Agregar ambos pasos a las columnas
-        steps_container.addLayout(step1_layout)
-        steps_container.addLayout(step2_layout)
-        steps_container.addStretch()
-
-        # Agregar el contenedor de los pasos a la ventana principal
         main_layout.addLayout(steps_container)
 
-        # === BARRA DE PROGRESO (DEBAJO DE LOS PASOS 1 Y 2) ===
-        progress_container = QHBoxLayout()
-        progress_container.setAlignment(Qt.AlignLeft)
-        
-        # Barra de progreso - MÁS ANCHA PARA OCUPAR EL ESPACIO
+        # === BARRA DE PROGRESO ===
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setStyleSheet("""
@@ -222,8 +203,6 @@ class BacteriaIdentificationWidget(QWidget):
                 border-radius: 5px;
                 text-align: center;
                 font-weight: bold;
-                min-width: 760px;
-                max-width: 760px;
                 height: 25px;
             }
             QProgressBar::chunk {
@@ -231,21 +210,17 @@ class BacteriaIdentificationWidget(QWidget):
                 border-radius: 3px;
             }
         """)
-        self.progress_bar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        progress_container.addWidget(self.progress_bar)
-        progress_container.addStretch()
+        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        main_layout.addWidget(self.progress_bar)
 
-        main_layout.addLayout(progress_container)
-
-        # === Sección de RESULTADOS ===
+        # === RESULTADOS ===
         results_group = QGroupBox("📊 Resultados de las Pruebas")
-        results_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        results_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         results_layout = QVBoxLayout()
-        results_layout.setAlignment(Qt.AlignLeft)
 
         self.results_text = QTextEdit()
         self.results_text.setReadOnly(True)
-        self.results_text.setMaximumHeight(250)
+        self.results_text.setMinimumHeight(200)
         self.results_text.setPlaceholderText("Los resultados de las pruebas aparecerán aquí...")
         self.results_text.setStyleSheet("""
             QTextEdit {
@@ -254,17 +229,16 @@ class BacteriaIdentificationWidget(QWidget):
                 border-radius: 5px;
                 padding: 10px;
                 font-family: 'Courier New', monospace;
-                font-size: 12px;  
-                min-width: 700px; 
+                font-size: 12px;
             }
         """)
-        self.results_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.results_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         results_layout.addWidget(self.results_text)
 
         results_group.setLayout(results_layout)
         main_layout.addWidget(results_group)
 
-        # === PASO 3: CONFIRMACIÓN ===
+        # === CONFIRMACIÓN ===
         self.confirm_group = QGroupBox("✅ Paso 3: Confirmación de Identificación")
         self.confirm_group.setEnabled(False)
         self.confirm_group.setStyleSheet("""
@@ -274,7 +248,6 @@ class BacteriaIdentificationWidget(QWidget):
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
-                min-width: 740px;  
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -283,19 +256,12 @@ class BacteriaIdentificationWidget(QWidget):
                 color: #9b59b6;
             }
         """)
-        self.confirm_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        confirm_layout = QVBoxLayout()
-        confirm_layout.setAlignment(Qt.AlignLeft)
+        self.confirm_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        confirm_layout = QHBoxLayout()
 
-        # Contenedor horizontal para botón y mensaje
-        confirm_row = QHBoxLayout()
-        confirm_row.setSpacing(15)
-        confirm_row.setAlignment(Qt.AlignLeft)
-
-        # Botón de confirmación (PRIMERO)
         self.confirm_btn = QPushButton("✓ Confirmar")
         self.confirm_btn.setEnabled(False)
-        self.confirm_btn.setFixedWidth(150)  # Ancho fijo para el botón
+        self.confirm_btn.setFixedWidth(150)
         self.confirm_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
@@ -309,20 +275,14 @@ class BacteriaIdentificationWidget(QWidget):
             QPushButton:hover {
                 background-color: #229954;  
             }
-            QPushButton:pressed {
-                background-color: #1e8449;  
-            }
             QPushButton:disabled {
                 background-color: #bdc3c7;
                 color: #808080;
-                border: 1px solid #A9A9A9;
             }
         """)
-        self.confirm_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.confirm_btn.clicked.connect(self._confirm_identification)
-        confirm_row.addWidget(self.confirm_btn)
+        confirm_layout.addWidget(self.confirm_btn)
 
-        # Mensaje de bacteria identificada (A LA DERECHA)
         self.identification_label = QLabel("")
         self.identification_label.setStyleSheet("""
             QLabel {
@@ -332,22 +292,25 @@ class BacteriaIdentificationWidget(QWidget):
                 border-radius: 5px;
                 font-size: 13px;
                 font-weight: bold;
-                min-width: 500px;
-                max-width: 500px;
             }
         """)
         self.identification_label.setVisible(False)
-        self.identification_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.identification_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.identification_label.setWordWrap(True)
-        confirm_row.addWidget(self.identification_label)
-
-        confirm_row.addStretch()
-        confirm_layout.addLayout(confirm_row)
+        confirm_layout.addWidget(self.identification_label)
 
         self.confirm_group.setLayout(confirm_layout)
         main_layout.addWidget(self.confirm_group)
 
         main_layout.addStretch()
+        
+        # Configurar el scroll area
+        scroll_area.setWidget(main_widget)
+        
+        # Layout principal del widget
+        widget_layout = QVBoxLayout(self)
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.addWidget(scroll_area)
 
     def _on_sample_changed(self, sample_text: str):
         """Maneja cambio en selección de muestra."""

@@ -62,34 +62,28 @@ class ASTResultsTable(QWidget):
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
+
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear todo a la izquierda
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(10)
 
-        # Establecer ancho máximo para todo el widget
-        self.setMaximumWidth(600)  # Ancho máximo del contenedor
-        self.setMinimumWidth(500)  # Ancho mínimo del contenedor
-
-        # Barra de herramientas superior - ALINEADA A LA IZQUIERDA
+        # Barra de herramientas superior
         toolbar = QHBoxLayout()
-        toolbar.setAlignment(Qt.AlignLeft)
         toolbar.setSpacing(8)
 
         # Título más compacto
         title = QLabel("Resultados AST")
         title.setStyleSheet("""
-            font-size: 14px; 
-            font-weight: bold; 
-            color: #2c3e50;
-            padding: 6px 10px;
-            background-color: #ecf0f1;
-            border-radius: 4px;
-            min-width: 120px;
-            max-width: 120px;
+            QLabel {
+                font-size: 14px; 
+                font-weight: bold; 
+                color: #2c3e50;
+                padding: 6px 10px;
+                background-color: #ecf0f1;
+                border-radius: 4px;
+            }
         """)
-        title.setAlignment(Qt.AlignLeft)
-        title.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        title.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         toolbar.addWidget(title)
 
         toolbar.addStretch()
@@ -102,24 +96,17 @@ class ASTResultsTable(QWidget):
 
         self.guideline_combo = QComboBox()
         self.guideline_combo.addItems(["Todos", "EUCAST", "CLSI"])
-        self.guideline_combo.setFixedWidth(70)
+        self.guideline_combo.setFixedWidth(80)
         self.guideline_combo.setStyleSheet("""
             QComboBox {
                 font-size: 11px; 
-                padding: 2px;
+                padding: 4px;
                 border: 1px solid #bdc3c7;
                 border-radius: 3px;
                 background-color: white;
             }
             QComboBox:focus {
-                border: 1px solid #bdc3c7; 
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                width: 12px;
-                height: 12px;
+                border: 1px solid #3498db; 
             }
         """)
         self.guideline_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -134,10 +121,8 @@ class ASTResultsTable(QWidget):
                 color: white;
                 font-weight: bold;
                 font-size: 11px;
-                padding: 4px 8px;
+                padding: 6px 10px;
                 border-radius: 3px;
-                min-width: 50px;
-                max-width: 50px;
             }
             QPushButton:hover {
                 background-color: #c0392b;
@@ -151,17 +136,15 @@ class ASTResultsTable(QWidget):
         self.export_pdf_button.setEnabled(False)
         toolbar.addWidget(self.export_pdf_button)
 
-        self.export_csv_button = QPushButton(" CSV")
+        self.export_csv_button = QPushButton("📊 CSV")
         self.export_csv_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
                 color: white;
                 font-weight: bold;
                 font-size: 11px;
-                padding: 4px 8px;
+                padding: 6px 10px;
                 border-radius: 3px;
-                min-width: 50px;
-                max-width: 50px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -175,15 +158,9 @@ class ASTResultsTable(QWidget):
         self.export_csv_button.setEnabled(False)
         toolbar.addWidget(self.export_csv_button)
 
-        # Contenedor para alinear la toolbar a la izquierda
-        toolbar_container = QHBoxLayout()
-        toolbar_container.setAlignment(Qt.AlignLeft)
-        toolbar_container.addLayout(toolbar)
-        toolbar_container.addStretch()
-        
-        layout.addLayout(toolbar_container)
+        layout.addLayout(toolbar)
 
-        # Tabla más compacta con ancho controlado
+        # Tabla más compacta
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
@@ -204,69 +181,53 @@ class ASTResultsTable(QWidget):
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.setSortingEnabled(True)
         self.table.verticalHeader().setVisible(False)
-        
-        # Política de tamaño para altura proporcional al contenido
-        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Scroll cuando sea necesario
-        
+
+        # Política de tamaño expandible
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
         # Fuente más pequeña para la tabla
         font = self.table.font()
         font.setPointSize(9)
         self.table.setFont(font)
-        
+
         # Altura de filas más pequeña
         self.table.verticalHeader().setDefaultSectionSize(28)
 
-        # Anchos fijos para columnas - TOTAL: 120+60+40+50+70+60+60 = 460px
-        self.table.setColumnWidth(0, 120)  # Antibiótico
-        self.table.setColumnWidth(1, 60)   # MIC
-        self.table.setColumnWidth(2, 40)   # Operador
-        self.table.setColumnWidth(3, 50)   # Interpretación
-        self.table.setColumnWidth(4, 70)   # Guideline
-        self.table.setColumnWidth(5, 60)   # BP S
-        self.table.setColumnWidth(6, 60)   # BP R
-
-        # Ancho fijo para la tabla
-        self.table.setFixedWidth(462)  # 460px + 2px de bordes
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Ocultar scroll horizontal
+        # Anchos relativos para columnas
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)  # Antibiótico - expandible
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # MIC
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Operador
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Interpretación
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Guideline
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # BP S
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # BP R
 
         # Altura mínima para cuando la tabla está vacía
-        self.table.setMinimumHeight(120)
+        self.table.setMinimumHeight(200)
 
         # Conectar señal de selección
         self.table.cellClicked.connect(self._on_cell_clicked)
 
-        # Contenedor para la tabla que la mantenga alineada a la izquierda
-        table_container = QHBoxLayout()
-        table_container.setAlignment(Qt.AlignLeft)
-        table_container.addWidget(self.table)
-        table_container.addStretch()
-        
-        layout.addLayout(table_container)
+        layout.addWidget(self.table)
 
         # Resumen inferior más compacto
         self.summary_label = QLabel("Sin resultados cargados")
         self.summary_label.setStyleSheet("""
-            color: #7f8c8d; 
-            font-style: italic; 
-            font-size: 11px;
-            padding: 4px 8px;
-            background-color: #f8f9fa;
-            border-radius: 3px;
-            min-width: 300px;
-            max-width: 460px;
+            QLabel {
+                color: #7f8c8d; 
+                font-style: italic; 
+                font-size: 11px;
+                padding: 8px;
+                background-color: #f8f9fa;
+                border-radius: 3px;
+            }
         """)
-        self.summary_label.setAlignment(Qt.AlignLeft)
-        self.summary_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.summary_label.setWordWrap(True)  # Permitir que el texto se ajuste
-        
-        # Contenedor para alinear el resumen a la izquierda
-        summary_container = QHBoxLayout()
-        summary_container.setAlignment(Qt.AlignLeft)
-        summary_container.addWidget(self.summary_label)
-        summary_container.addStretch()
-        
-        layout.addLayout(summary_container)
+        self.summary_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.summary_label.setWordWrap(True)
+        layout.addWidget(self.summary_label)
 
     def load_results(
         self, mic_results: List[Dict], patient_info: Optional[Dict] = None

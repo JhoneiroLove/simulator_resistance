@@ -27,6 +27,8 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QStackedWidget,
     QSizePolicy,
+    QScrollArea,
+    QFrame,
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import time
@@ -203,13 +205,19 @@ class ASTPanelWidget(QWidget):
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
-        layout = QVBoxLayout(self)
+
+        # Crear scroll area principal
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        main_widget = QWidget()
+        layout = QVBoxLayout(main_widget)
         layout.setSpacing(15)
-        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear todo a la izquierda
+        layout.setContentsMargins(20, 20, 20, 20)
 
         # Grupo: Configuración AST
         config_group = QGroupBox("Configuración AST")
-        config_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
         config_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -217,7 +225,6 @@ class ASTPanelWidget(QWidget):
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
-                min-width: 620px; 
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -226,13 +233,15 @@ class ASTPanelWidget(QWidget):
                 color: #3498db;
             }
         """)
+        config_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         config_layout = QFormLayout()
-        config_layout.setLabelAlignment(Qt.AlignLeft)  # Alinear labels a la izquierda
+        config_layout.setLabelAlignment(Qt.AlignLeft)
+        config_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         # Organismo (fijo, no editable)
         organism_label = QLabel("<b>Pseudomonas aeruginosa</b>")
         organism_label.setStyleSheet("color: #2c3e50;")
-        organism_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        organism_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Organismo:", organism_label)
 
         # Panel selector
@@ -244,13 +253,12 @@ class ASTPanelWidget(QWidget):
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
                 font-size: 12px;
-                min-width: 300px;
             }
             QComboBox:focus {
                 border-color: #3498db;
             }
         """)
-        self.panel_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.panel_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Panel:", self.panel_combo)
 
         # Inóculo (McFarland)
@@ -269,13 +277,12 @@ class ASTPanelWidget(QWidget):
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
                 font-size: 12px;
-                min-width: 100px;
             }
             QDoubleSpinBox:focus {
                 border-color: #3498db;
             }
         """)
-        self.inoculo_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.inoculo_spin.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Inóculo:", self.inoculo_spin)
 
         # Temperatura
@@ -292,43 +299,41 @@ class ASTPanelWidget(QWidget):
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
                 font-size: 12px;
-                min-width: 100px;
             }
             QDoubleSpinBox:focus {
                 border-color: #3498db;
             }
         """)
-        self.temperatura_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.temperatura_spin.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Temperatura:", self.temperatura_spin)
 
         # Duración (fija)
         duracion_label = QLabel("<b>18.0 h</b> (estándar)")
         duracion_label.setStyleSheet("color: #7f8c8d;")
         duracion_label.setToolTip("Duración estándar para AST según CLSI M07")
-        duracion_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        duracion_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Duración:", duracion_label)
 
-        # NUEVO v5.0: Modo temporal
+        # Modo temporal
         self.progressive_mode_check = QCheckBox("Simulación temporal (hora por hora)")
         self.progressive_mode_check.setToolTip(
             "Simula el crecimiento bacteriano hora por hora (18h reales aceleradas)\n"
             "Desactivado: simulación instantánea"
         )
         self.progressive_mode_check.setChecked(False)
-        self.progressive_mode_check.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.progressive_mode_check.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Modo:", self.progressive_mode_check)
 
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
 
-        # === CONTENEDOR PARA BOTÓN Y BARRA DE CARGA (EN LA MISMA FILA) ===
+        # === CONTENEDOR PARA BOTÓN Y BARRA DE CARGA ===
         button_progress_container = QHBoxLayout()
         button_progress_container.setSpacing(20)
-        button_progress_container.setAlignment(Qt.AlignLeft)
 
         # Botón ejecutar
         self.run_button = QPushButton("▶ Ejecutar AST")
-        self.run_button.setFixedWidth(200)  # Ancho fijo para el botón
+        self.run_button.setMinimumHeight(40)
         self.run_button.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
@@ -346,15 +351,14 @@ class ASTPanelWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
-        self.run_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.run_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.run_button.clicked.connect(self._on_run_clicked)
-        button_progress_container.addWidget(self.run_button)
+        button_progress_container.addWidget(self.run_button, stretch=1)
 
-        # Barra de progreso simple (al lado del botón) - SIEMPRE VISIBLE
+        # Barra de progreso simple
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFixedWidth(500)  # Ancho fijo para la barra
-        self.progress_bar.setFixedHeight(40)  # Altura consistente con el botón
-        self.progress_bar.setVisible(True)  # SIEMPRE VISIBLE DESDE EL INICIO
+        self.progress_bar.setMinimumHeight(40)
+        self.progress_bar.setVisible(True)
         self.progress_bar.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #27ae60;
@@ -373,12 +377,12 @@ class ASTPanelWidget(QWidget):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("0% - Listo")
-        button_progress_container.addWidget(self.progress_bar)
+        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        button_progress_container.addWidget(self.progress_bar, stretch=2)
 
-        button_progress_container.addStretch()
         layout.addLayout(button_progress_container)
 
-        # === MENSAJE DE ESTADO (DEBAJO DEL BOTÓN Y BARRA) ===
+        # === MENSAJE DE ESTADO ===
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("""
             QLabel {
@@ -387,31 +391,39 @@ class ASTPanelWidget(QWidget):
                 padding: 5px;
                 background-color: #f8f9fa;
                 border-radius: 3px;
-                min-width: 620px;
             }
         """)
-        self.status_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
         # Contenedor apilado: Widget visual (solo para modo progresivo)
         self.progress_stack = QStackedWidget()
-        self.progress_stack.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.progress_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         # Página 0: Vacía (no se usa en modo rápido)
         empty_widget = QWidget()
-        empty_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        empty_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.progress_stack.addWidget(empty_widget)
 
         # Página 1: Widget de progreso visual (modo progresivo)
         self.incubation_widget = IncubationProgressWidget()
         self.incubation_widget.setVisible(False)
-        self.incubation_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.incubation_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.progress_stack.addWidget(self.incubation_widget)
-        
+
         self.progress_stack.setCurrentIndex(0)  # Por defecto: vacío
         layout.addWidget(self.progress_stack)
 
         layout.addStretch()
+
+        # Configurar scroll area
+        scroll_area.setWidget(main_widget)
+
+        # Layout principal del widget
+        widget_layout = QVBoxLayout(self)
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.addWidget(scroll_area)
 
     def _load_panels(self):
         """Carga paneles disponibles desde la base de datos."""

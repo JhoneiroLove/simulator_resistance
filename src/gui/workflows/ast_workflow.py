@@ -21,7 +21,9 @@ from PyQt5.QtWidgets import (
     QLabel,
     QTabWidget,
     QPushButton,
-    QSizePolicy
+    QSizePolicy,
+    QScrollArea,
+    QFrame,
 )
 from PyQt5.QtCore import Qt
 
@@ -73,61 +75,101 @@ class ASTWorkflow(QWidget):
                 border-radius: 5px;
             }
         """)
+        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         main_layout.addWidget(title_label)
 
         # === SISTEMA DE PESTAÑAS PRINCIPAL ===
         self.main_tabs = QTabWidget()
         self.main_tabs.setStyleSheet("""
-        QTabWidget::pane {
-            border: 2px solid #3498db;
-            border-radius: 5px;
-            background-color: white;
-            padding: 5px;
-        }
-        QTabBar::tab {
-            background-color: #ecf0f1;
-            color: #2c3e50;
-            padding: 12px 20px;
-            margin-right: 3px;
-            border: 2px solid #bdc3c7;
-            border-bottom: none;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            font-size: 13px;
-            font-weight: bold;
-            min-width: 140px;    
-        }
-        QTabBar::tab:selected {
-            background-color: white;
-            color: #3498db;
-            border-color: #3498db;
-            margin-bottom: -2px;
-        }
-        QTabBar::tab:hover {
-            background-color: #d5dbdb;
-        }
-        QTabBar::tab:disabled {
-            color: #95a5a6;
-            background-color: #f8f9fa;
-        }
-    """)
+            QTabWidget::pane {
+                border: 2px solid #3498db;
+                border-radius: 5px;
+                background-color: white;
+                padding: 5px;
+            }
+            QTabBar::tab {
+                background-color: #ecf0f1;
+                color: #2c3e50;
+                padding: 12px 20px;
+                margin-right: 3px;
+                border: 2px solid #bdc3c7;
+                border-bottom: none;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-size: 13px;
+                font-weight: bold;
+                min-width: 120px;    
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                color: #3498db;
+                border-color: #3498db;
+                margin-bottom: -2px;
+            }
+            QTabBar::tab:hover {
+                background-color: #d5dbdb;
+            }
+            QTabBar::tab:disabled {
+                color: #95a5a6;
+                background-color: #f8f9fa;
+            }
+        """)
 
         # === TAB 0: Identificación Bacteriana ===
-        id_tab = QWidget()
-        id_layout = QVBoxLayout(id_tab)
-        id_layout.setContentsMargins(15, 15, 15, 15)
-        id_layout.setSpacing(15)
+        id_tab = self._create_identification_tab()
+        self.main_tabs.addTab(id_tab, "Identificación")
+
+        # === TAB 1: Generar Perfil Bacteriano ===
+        profile_tab = self._create_profile_tab()
+        self.main_tabs.addTab(profile_tab, "Perfil Bacteriano")
+
+        # === TAB 2: Configurar AST ===
+        config_tab = self._create_config_tab()
+        self.main_tabs.addTab(config_tab, "Configurar AST")
+
+        # === TAB 3: Visualizar Placa ===
+        plate_tab = self._create_plate_tab()
+        self.main_tabs.addTab(plate_tab, "Placa AST")
+
+        # === TAB 4: Resultados MIC ===
+        results_tab = self._create_results_tab()
+        self.main_tabs.addTab(results_tab, "Resultados MIC")
+
+        # === TAB 5: Curvas de Crecimiento ===
+        curves_tab = self._create_curves_tab()
+        self.main_tabs.addTab(curves_tab, "Curvas de Crecimiento")
+
+        # Agregar tabs al layout principal
+        main_layout.addWidget(self.main_tabs, stretch=1)
+
+        # Deshabilitar tabs hasta que se complete el flujo
+        self.main_tabs.setTabEnabled(1, False)  # Perfil Bacteriano
+        self.main_tabs.setTabEnabled(2, False)  # Configurar AST
+        self.main_tabs.setTabEnabled(3, False)  # Placa
+        self.main_tabs.setTabEnabled(4, False)  # Resultados
+        self.main_tabs.setTabEnabled(5, False)  # Curvas
+
+    def _create_identification_tab(self):
+        """Crea la pestaña de identificación bacteriana."""
+        # Crear scroll area para el tab
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
 
         # Widget de identificación
         self.identification_widget = BacteriaIdentificationWidget()
         self.identification_widget.identification_completed.connect(
             self._on_identification_completed
         )
-        id_layout.addWidget(self.identification_widget, stretch=1)
+        layout.addWidget(self.identification_widget, stretch=1)
 
-        # Botón siguiente - ALINEADO A LA IZQUIERDA
-        id_nav_layout = QHBoxLayout()
-        id_nav_layout.setAlignment(Qt.AlignLeft)  # Alinear a la izquierda
+        # Botón siguiente
+        nav_layout = QHBoxLayout()
 
         self.next_profile_btn = QPushButton("Siguiente: Generar Perfil ➔")
         self.next_profile_btn.setStyleSheet("""
@@ -147,19 +189,27 @@ class ASTWorkflow(QWidget):
                 background-color: #95a5a6;
             }
         """)
+        self.next_profile_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_profile_btn.setEnabled(False)
         self.next_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
-        id_nav_layout.addWidget(self.next_profile_btn)
+        nav_layout.addWidget(self.next_profile_btn)
+        nav_layout.addStretch()
 
-        id_layout.addLayout(id_nav_layout)
+        layout.addLayout(nav_layout)
 
-        self.main_tabs.addTab(id_tab, "Identificación")
+        scroll_area.setWidget(tab_widget)
+        return scroll_area
 
-        # === TAB 1: Generar Perfil Bacteriano ===
-        profile_tab = QWidget()
-        profile_layout = QVBoxLayout(profile_tab)
-        profile_layout.setContentsMargins(15, 15, 15, 15)
-        profile_layout.setSpacing(15)
+    def _create_profile_tab(self):
+        """Crea la pestaña de perfil bacteriano."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
 
         # Instrucciones
         instructions_label = QLabel(
@@ -174,26 +224,16 @@ class ASTWorkflow(QWidget):
                 border-left: 4px solid #3498db;
                 border-radius: 3px;
                 font-size: 11px;
-                min-width: 660px;  
             }
         """)
-        instructions_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        instructions_label.setAlignment(Qt.AlignLeft)
-
-        # Contenedor para alinear a la izquierda
-        instructions_container = QHBoxLayout()
-        instructions_container.setAlignment(Qt.AlignLeft)
-        instructions_container.addWidget(instructions_label)
-        instructions_container.addStretch()
-
-        profile_layout.addLayout(instructions_container)
+        instructions_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(instructions_label)
 
         self.profile_widget = BacteriaProfileWidget()
-        profile_layout.addWidget(self.profile_widget)
+        layout.addWidget(self.profile_widget, stretch=1)
 
-        # Botón siguiente - ALINEADO A LA IZQUIERDA
+        # Botón siguiente
         next_config_layout = QHBoxLayout()
-        next_config_layout.setAlignment(Qt.AlignLeft)  # Alinear a la izquierda
 
         self.next_config_btn = QPushButton("Siguiente: Configurar AST ➔")
         self.next_config_btn.setStyleSheet("""
@@ -213,19 +253,27 @@ class ASTWorkflow(QWidget):
                 background-color: #95a5a6;
             }
         """)
+        self.next_config_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_config_btn.setEnabled(False)
         self.next_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         next_config_layout.addWidget(self.next_config_btn)
+        next_config_layout.addStretch()
 
-        profile_layout.addLayout(next_config_layout)
+        layout.addLayout(next_config_layout)
 
-        self.main_tabs.addTab(profile_tab, "Perfil Bacteriano")
+        scroll_area.setWidget(tab_widget)
+        return scroll_area
 
-        # === TAB 2: Configurar AST ===
-        config_tab = QWidget()
-        config_layout = QVBoxLayout(config_tab)
-        config_layout.setContentsMargins(15, 15, 15, 15)
-        config_layout.setSpacing(15)
+    def _create_config_tab(self):
+        """Crea la pestaña de configuración AST."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
 
         # Instrucciones
         config_instructions = QLabel(
@@ -240,26 +288,16 @@ class ASTWorkflow(QWidget):
                 border-left: 4px solid #f39c12;
                 border-radius: 3px;
                 font-size: 11px;
-                min-width: 630px;  
             }
         """)
-        config_instructions.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        config_instructions.setAlignment(Qt.AlignLeft)
-
-        # Contenedor para alinear a la izquierda
-        instructions_container = QHBoxLayout()
-        instructions_container.setAlignment(Qt.AlignLeft)
-        instructions_container.addWidget(config_instructions)
-        instructions_container.addStretch()
-
-        config_layout.addLayout(instructions_container)
+        config_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(config_instructions)
 
         self.panel_widget = ASTPanelWidget()
-        config_layout.addWidget(self.panel_widget)
+        layout.addWidget(self.panel_widget, stretch=1)
 
-        # Botones navegación - ALINEADOS A LA IZQUIERDA
+        # Botones navegación
         nav_layout = QHBoxLayout()
-        nav_layout.setAlignment(Qt.AlignLeft)  # Alinear a la izquierda
 
         back_profile_btn = QPushButton("◀ Volver: Perfil")
         back_profile_btn.setStyleSheet("""
@@ -269,16 +307,16 @@ class ASTWorkflow(QWidget):
                 font-size: 14px;
                 padding: 12px;
                 border-radius: 5px;
-                min-width: 220px;
+                min-width: 150px;
             }
             QPushButton:hover {
                 background-color: #7f8c8d;
             }
         """)
+        back_profile_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         back_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
         nav_layout.addWidget(back_profile_btn)
 
-        # Espacio entre botones
         nav_layout.addSpacing(20)
 
         self.next_plate_btn = QPushButton("Siguiente: Ver Placa ➔")
@@ -299,19 +337,28 @@ class ASTWorkflow(QWidget):
                 background-color: #95a5a6;
             }
         """)
+        self.next_plate_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.next_plate_btn.setEnabled(False)
         self.next_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         nav_layout.addWidget(self.next_plate_btn)
 
-        config_layout.addLayout(nav_layout)
+        nav_layout.addStretch()
 
-        self.main_tabs.addTab(config_tab, "Configurar AST")
+        layout.addLayout(nav_layout)
 
-        # === TAB 3: Visualizar Placa ===
-        plate_tab = QWidget()
-        plate_layout = QVBoxLayout(plate_tab)
-        plate_layout.setContentsMargins(15, 15, 15, 15)
-        plate_layout.setSpacing(10)
+        scroll_area.setWidget(tab_widget)
+        return scroll_area
+
+    def _create_plate_tab(self):
+        """Crea la pestaña de visualización de placa."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
 
         # Instrucciones
         plate_instructions = QLabel(
@@ -326,26 +373,16 @@ class ASTWorkflow(QWidget):
                 border-left: 4px solid #5dade2;
                 border-radius: 3px;
                 font-size: 11px;
-                min-width: 720px;  
             }
         """)
-        plate_instructions.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        plate_instructions.setAlignment(Qt.AlignLeft)
-
-        # Contenedor para alinear a la izquierda
-        instructions_container = QHBoxLayout()
-        instructions_container.setAlignment(Qt.AlignLeft)
-        instructions_container.addWidget(plate_instructions)
-        instructions_container.addStretch()
-
-        plate_layout.addLayout(instructions_container)
+        plate_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(plate_instructions)
 
         self.plate_viewer = ASTPlateViewer()
-        plate_layout.addWidget(self.plate_viewer, stretch=1)
+        layout.addWidget(self.plate_viewer, stretch=1)
 
-        # Botones navegación - ALINEADOS A LA IZQUIERDA
+        # Botones navegación
         plate_nav_layout = QHBoxLayout()
-        plate_nav_layout.setAlignment(Qt.AlignLeft)  # Alinear a la izquierda
 
         back_config_btn = QPushButton("◀ Volver: Configuración")
         back_config_btn.setStyleSheet("""
@@ -355,16 +392,16 @@ class ASTWorkflow(QWidget):
                 font-size: 14px;
                 padding: 12px;
                 border-radius: 5px;
-                min-width: 150px;
+                min-width: 180px;
             }
             QPushButton:hover {
                 background-color: #7f8c8d;
             }
         """)
+        back_config_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         back_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         plate_nav_layout.addWidget(back_config_btn)
 
-        # Espacio entre botones
         plate_nav_layout.addSpacing(20)
 
         next_results_btn = QPushButton("Siguiente: Ver Resultados ➔")
@@ -382,18 +419,27 @@ class ASTWorkflow(QWidget):
                 background-color: #229954;
             }
         """)
+        next_results_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         next_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         plate_nav_layout.addWidget(next_results_btn)
 
-        plate_layout.addLayout(plate_nav_layout)
+        plate_nav_layout.addStretch()
 
-        self.main_tabs.addTab(plate_tab, "Placa AST")
+        layout.addLayout(plate_nav_layout)
 
-        # === TAB 4: Resultados MIC ===
-        results_tab = QWidget()
-        results_layout = QVBoxLayout(results_tab)
-        results_layout.setContentsMargins(15, 15, 15, 15)
-        results_layout.setSpacing(10)
+        scroll_area.setWidget(tab_widget)
+        return scroll_area
+
+    def _create_results_tab(self):
+        """Crea la pestaña de resultados MIC."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
 
         # Instrucciones
         results_instructions = QLabel(
@@ -408,26 +454,16 @@ class ASTWorkflow(QWidget):
                 border-left: 4px solid #27ae60;
                 border-radius: 3px;
                 font-size: 11px;
-                min-width: 740px;  
             }
         """)
-        results_instructions.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        results_instructions.setAlignment(Qt.AlignLeft)
-
-        # Contenedor para alinear a la izquierda
-        instructions_container = QHBoxLayout()
-        instructions_container.setAlignment(Qt.AlignLeft)
-        instructions_container.addWidget(results_instructions)
-        instructions_container.addStretch()
-
-        results_layout.addLayout(instructions_container)
+        results_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(results_instructions)
 
         self.results_table = ASTResultsTable()
-        results_layout.addWidget(self.results_table)
+        layout.addWidget(self.results_table, stretch=1)
 
-        # Botones navegación - ALINEADOS A LA IZQUIERDA
+        # Botones navegación
         results_nav_layout = QHBoxLayout()
-        results_nav_layout.setAlignment(Qt.AlignLeft)  # Alinear a la izquierda
 
         back_plate_btn = QPushButton("◀ Volver: Placa")
         back_plate_btn.setStyleSheet("""
@@ -443,10 +479,10 @@ class ASTWorkflow(QWidget):
                 background-color: #7f8c8d;
             }
         """)
+        back_plate_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         back_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         results_nav_layout.addWidget(back_plate_btn)
 
-        # Espacio entre botones
         results_nav_layout.addSpacing(20)
 
         next_curves_btn = QPushButton("Siguiente: Ver Curvas ➔")
@@ -464,18 +500,27 @@ class ASTWorkflow(QWidget):
                 background-color: #8e44ad;
             }
         """)
+        next_curves_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         next_curves_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(5))
         results_nav_layout.addWidget(next_curves_btn)
 
-        results_layout.addLayout(results_nav_layout)
+        results_nav_layout.addStretch()
 
-        self.main_tabs.addTab(results_tab, "Resultados MIC")
+        layout.addLayout(results_nav_layout)
 
-        # === TAB 5: Curvas de Crecimiento ===
-        curves_tab = QWidget()
-        curves_layout = QVBoxLayout(curves_tab)
-        curves_layout.setContentsMargins(15, 15, 15, 15)
-        curves_layout.setSpacing(10)
+        scroll_area.setWidget(tab_widget)
+        return scroll_area
+
+    def _create_curves_tab(self):
+        """Crea la pestaña de curvas de crecimiento."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
 
         # Instrucciones
         curves_instructions = QLabel(
@@ -490,26 +535,16 @@ class ASTWorkflow(QWidget):
                 border-left: 4px solid #9b59b6;
                 border-radius: 3px;
                 font-size: 11px;
-                min-width: 1080px;  
             }
         """)
-        curves_instructions.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        curves_instructions.setAlignment(Qt.AlignLeft)
-
-        # Contenedor para alinear a la izquierda
-        instructions_container = QHBoxLayout()
-        instructions_container.setAlignment(Qt.AlignLeft)
-        instructions_container.addWidget(curves_instructions)
-        instructions_container.addStretch()
-
-        curves_layout.addLayout(instructions_container)
+        curves_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(curves_instructions)
 
         self.growth_curve_widget = GrowthCurveWidget()
-        curves_layout.addWidget(self.growth_curve_widget, stretch=1)
+        layout.addWidget(self.growth_curve_widget, stretch=1)
 
-        # Botones navegación - ALINEADOS A LA IZQUIERDA
+        # Botones navegación
         curves_nav_layout = QHBoxLayout()
-        curves_nav_layout.setAlignment(Qt.AlignLeft)  # Alinear a la izquierda
 
         back_results_btn = QPushButton("◀ Volver: Resultados")
         back_results_btn.setStyleSheet("""
@@ -519,16 +554,16 @@ class ASTWorkflow(QWidget):
                 font-size: 14px;
                 padding: 12px;
                 border-radius: 5px;
-                min-width: 140px;
+                min-width: 160px;
             }
             QPushButton:hover {
                 background-color: #7f8c8d;
             }
         """)
+        back_results_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         back_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         curves_nav_layout.addWidget(back_results_btn)
 
-        # Espacio entre botones
         curves_nav_layout.addSpacing(20)
 
         restart_btn = QPushButton("🔄 Nueva Simulación")
@@ -540,28 +575,22 @@ class ASTWorkflow(QWidget):
                 font-weight: bold;
                 padding: 12px;
                 border-radius: 5px;
-                min-width: 160px;
+                min-width: 180px;
             }
             QPushButton:hover {
                 background-color: #c0392b;
             }
         """)
+        restart_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         restart_btn.clicked.connect(self._restart_workflow)
         curves_nav_layout.addWidget(restart_btn)
 
-        curves_layout.addLayout(curves_nav_layout)
+        curves_nav_layout.addStretch()
 
-        self.main_tabs.addTab(curves_tab, "Curvas de Crecimiento")
+        layout.addLayout(curves_nav_layout)
 
-        # Agregar tabs al layout principal
-        main_layout.addWidget(self.main_tabs, stretch=1)
-
-        # Deshabilitar tabs hasta que se complete el flujo
-        self.main_tabs.setTabEnabled(1, False)  # Perfil Bacteriano
-        self.main_tabs.setTabEnabled(2, False)  # Configurar AST
-        self.main_tabs.setTabEnabled(3, False)  # Placa
-        self.main_tabs.setTabEnabled(4, False)  # Resultados
-        self.main_tabs.setTabEnabled(5, False)  # Curvas
+        scroll_area.setWidget(tab_widget)
+        return scroll_area
 
     def _setup_controllers(self):
         """
@@ -700,7 +729,7 @@ class ASTWorkflow(QWidget):
         concentracion = well_data.get("concentracion", 0)
         od_final = well_data.get("od_final", 0)
 
-        status_msg = f" Pocillo {well_id}: {antibiotico} ({concentracion:.2f} µg/mL) - OD: {od_final:.3f}"
+        status_msg = f"🔬 Pocillo {well_id}: {antibiotico} ({concentracion:.2f} µg/mL) - OD: {od_final:.3f}"
 
         main_window = self.window()
         if hasattr(main_window, "statusBar"):
@@ -714,7 +743,7 @@ class ASTWorkflow(QWidget):
         interpretacion = data.get("interpretacion", "N/A")
 
         status_msg = (
-            f" {antibiotico}: MIC = {mic:.2f} µg/mL, Interpretación: {interpretacion}"
+            f"💊 {antibiotico}: MIC = {mic:.2f} µg/mL, Interpretación: {interpretacion}"
         )
 
         main_window = self.window()

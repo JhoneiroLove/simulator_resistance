@@ -24,6 +24,8 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QSizePolicy,
     QProgressBar,
+    QScrollArea,
+    QFrame,
 )
 from PyQt5.QtCore import pyqtSignal, QThread, QTimer
 from PyQt5.QtCore import Qt
@@ -119,9 +121,16 @@ class BacteriaProfileWidget(QWidget):
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
-        layout = QVBoxLayout(self)
+
+        # Crear scroll area principal
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        main_widget = QWidget()
+        layout = QVBoxLayout(main_widget)
         layout.setSpacing(15)
-        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear todo a la izquierda
+        layout.setContentsMargins(20, 20, 20, 20)
 
         # === Título ===
         title_label = QLabel("🦠 Generar Perfil Bacteriano")
@@ -135,21 +144,15 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 3px;
             }
         """)
-        title_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(title_label)
 
         # === Contenedor principal con columnas ===
         columns_container = QHBoxLayout()
         columns_container.setSpacing(20)
-        columns_container.setAlignment(Qt.AlignLeft)  # Alinear columnas a la izquierda
 
         # === COLUMNA 1: Tipo de perfil ===
-        profile_column = QVBoxLayout()
-        profile_column.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
         profile_type_group = QGroupBox("Tipo de Perfil")
-        profile_type_group.setFixedHeight(200)  # ALTURA AUMENTADA
-        profile_type_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         profile_type_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -157,7 +160,6 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
-                min-width: 300px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -166,8 +168,8 @@ class BacteriaProfileWidget(QWidget):
                 color: #3498db;
             }
         """)
+        profile_type_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         profile_type_layout = QVBoxLayout()
-        profile_type_layout.setAlignment(Qt.AlignLeft)
 
         self.profile_type_group = QButtonGroup()
 
@@ -177,7 +179,7 @@ class BacteriaProfileWidget(QWidget):
             "Bacteria comunitaria sin exposición previa a antibióticos\n"
             "Todas las MICs en rango sensible"
         )
-        self.wildtype_radio.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.wildtype_radio.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.profile_type_group.addButton(self.wildtype_radio, 1)
         profile_type_layout.addWidget(self.wildtype_radio)
 
@@ -186,26 +188,18 @@ class BacteriaProfileWidget(QWidget):
             "Bacteria hospitalaria con exposición a antibióticos\n"
             "Genera mutaciones según historial de tratamientos"
         )
-        self.resistant_radio.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.resistant_radio.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.profile_type_group.addButton(self.resistant_radio, 2)
         profile_type_layout.addWidget(self.resistant_radio)
 
-        # Agregar más espacio entre los radio buttons
         profile_type_layout.addSpacing(10)
-
-        # Agregar espacio flexible para empujar el contenido hacia arriba
         profile_type_layout.addStretch()
 
         profile_type_group.setLayout(profile_type_layout)
-        profile_column.addWidget(profile_type_group)
+        columns_container.addWidget(profile_type_group, stretch=1)
 
         # === COLUMNA 2: Antibióticos previos ===
-        antibiotics_column = QVBoxLayout()
-        antibiotics_column.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
         self.antibiotics_group = QGroupBox("Antibióticos Previos (Exposición)")
-        self.antibiotics_group.setFixedHeight(200)  # ALTURA AUMENTADA
-        self.antibiotics_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.antibiotics_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -213,7 +207,6 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
-                min-width: 300px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -222,8 +215,8 @@ class BacteriaProfileWidget(QWidget):
                 color: #27ae60;
             }
         """)
+        self.antibiotics_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         antibiotics_layout = QVBoxLayout()
-        antibiotics_layout.setAlignment(Qt.AlignLeft)
 
         # Mensaje informativo para Wild-type
         self.info_label = QLabel(
@@ -241,11 +234,9 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 5px;
                 border: 1px solid #27ae60;
                 font-size: 11px;
-                min-width: 270px;
-                max-height: 80px; 
             }
         """)
-        self.info_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         antibiotics_layout.addWidget(self.info_label)
 
         # Lista de antibióticos (inicialmente oculta)
@@ -253,15 +244,13 @@ class BacteriaProfileWidget(QWidget):
         self.antibiotics_list.setSelectionMode(QListWidget.MultiSelection)
         self.antibiotics_list.addItems(self.available_antibiotics)
         self.antibiotics_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.antibiotics_list.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.antibiotics_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.antibiotics_list.setVisible(False)
         self.antibiotics_list.setStyleSheet("""
             QListWidget {
                 background-color: white;
                 border: 1px solid #bdc3c7;
                 border-radius: 3px;
-                min-width: 270px;
-                max-height: 140px;  
             }
             QListWidget::item {
                 padding: 5px;
@@ -276,26 +265,19 @@ class BacteriaProfileWidget(QWidget):
         antibiotics_layout.addWidget(self.antibiotics_list)
 
         self.antibiotics_group.setLayout(antibiotics_layout)
-        antibiotics_column.addWidget(self.antibiotics_group)
+        columns_container.addWidget(self.antibiotics_group, stretch=1)
 
-        # Agregar ambas columnas al contenedor principal
-        columns_container.addLayout(profile_column)
-        columns_container.addLayout(antibiotics_column)
-        columns_container.addStretch()
-
-        # Agregar el contenedor de columnas al layout principal
+        # Agregar columnas al layout
         layout.addLayout(columns_container)
 
         # === FILA DE BOTÓN Y BARRA DE CARGA ===
         button_progress_container = QHBoxLayout()
         button_progress_container.setSpacing(20)
-        button_progress_container.setAlignment(Qt.AlignLeft)
 
-        # === BOTÓN GENERAR (mismo ancho que Tipo de Perfil) ===
+        # === BOTÓN GENERAR ===
         self.generate_button = QPushButton("⚡ Generar Perfil")
-        self.generate_button.setFixedWidth(300)  # Mismo ancho que el groupbox de Tipo de Perfil
-        self.generate_button.setFixedHeight(40)  # Altura consistente
-        self.generate_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.generate_button.setMinimumHeight(40)
+        self.generate_button.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.generate_button.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60; 
@@ -318,14 +300,12 @@ class BacteriaProfileWidget(QWidget):
             }
         """)
         self.generate_button.clicked.connect(self._on_generate_clicked)
-        button_progress_container.addWidget(self.generate_button)
+        button_progress_container.addWidget(self.generate_button, stretch=1)
 
-        # === BARRA DE CARGA (mismo tamaño que Antibióticos Previos) - SIEMPRE VISIBLE ===
+        # === BARRA DE CARGA ===
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFixedWidth(520)  # Mismo ancho que el groupbox de Antibióticos Previos
-        self.progress_bar.setFixedHeight(40)  # Misma altura que el botón
-        self.progress_bar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.progress_bar.setVisible(True)  # SIEMPRE VISIBLE
+        self.progress_bar.setMinimumHeight(40)
+        self.progress_bar.setVisible(True)
         self.progress_bar.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #27ae60;
@@ -342,19 +322,16 @@ class BacteriaProfileWidget(QWidget):
         """)
         self.progress_bar.setAlignment(Qt.AlignCenter)
         self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)  # Inicia en 0%
+        self.progress_bar.setValue(0)
         self.progress_bar.setFormat("0% - Listo")
-        button_progress_container.addWidget(self.progress_bar)
+        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        button_progress_container.addWidget(self.progress_bar, stretch=2)
 
-        # Agregar stretch para alinear a la izquierda
-        button_progress_container.addStretch()
-
-        # Agregar el contenedor de botón y barra al layout principal
         layout.addLayout(button_progress_container)
 
         # === Resumen del perfil generado ===
         summary_group = QGroupBox("📋 Perfil Actual")
-        summary_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        summary_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         summary_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -362,7 +339,6 @@ class BacteriaProfileWidget(QWidget):
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
-                min-width: 620px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -372,11 +348,10 @@ class BacteriaProfileWidget(QWidget):
             }
         """)
         summary_layout = QVBoxLayout()
-        summary_layout.setAlignment(Qt.AlignLeft)
 
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
-        self.summary_text.setMaximumHeight(150)
+        self.summary_text.setMinimumHeight(150)
         self.summary_text.setPlaceholderText("Ningún perfil generado aún...")
         self.summary_text.setStyleSheet("""
             QTextEdit {
@@ -386,16 +361,23 @@ class BacteriaProfileWidget(QWidget):
                 padding: 5px;
                 font-family: 'Courier New', monospace;
                 font-size: 12px;
-                min-width: 630px;
             }
         """)
-        self.summary_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.summary_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         summary_layout.addWidget(self.summary_text)
 
         summary_group.setLayout(summary_layout)
         layout.addWidget(summary_group)
 
         layout.addStretch()
+
+        # Configurar scroll area
+        scroll_area.setWidget(main_widget)
+
+        # Layout principal del widget
+        widget_layout = QVBoxLayout(self)
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.addWidget(scroll_area)
 
         # Conectar señal para habilitar/deshabilitar selector de antibióticos
         self.wildtype_radio.toggled.connect(self._on_profile_type_changed)

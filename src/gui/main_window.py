@@ -32,13 +32,20 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SRB - AST Simulator")
-        self.resize(1280, 720)
 
-        # Centrar la ventana en la pantalla
+        # En lugar de resize fijo, usar porcentaje de pantalla
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.resize(int(screen.width() * 0.8), int(screen.height() * 0.8))
+
+        # Establecer tamaño mínimo razonable
+        self.setMinimumSize(1024, 768)
+
+        # Centrar
         qr = self.frameGeometry()
-        cp = QApplication.primaryScreen().availableGeometry().center()
+        cp = screen.center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
+
         self.setWindowIcon(get_app_icon())
 
         # ---- Tab AST (único workflow científico) ----

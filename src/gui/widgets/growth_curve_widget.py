@@ -17,9 +17,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QComboBox,
     QLabel,
-    QPushButton,
     QGroupBox,
     QSizePolicy,
+    QScrollArea,
+    QFrame,
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 from pyqtgraph import PlotWidget, mkPen, InfiniteLine
@@ -53,10 +54,15 @@ class GrowthCurveWidget(QWidget):
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)  # Márgenes consistentes
+        # Crear scroll area principal
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        main_widget = QWidget()
+        layout = QVBoxLayout(main_widget)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
-        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Alinear a la izquierda
 
         # === TÍTULO ===
         title_label = QLabel("📈 Curvas de Crecimiento Bacteriano")
@@ -70,23 +76,16 @@ class GrowthCurveWidget(QWidget):
                 border-radius: 3px;
             }
         """)
-        title_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(title_label)
 
-        # === CONTENEDOR PRINCIPAL CON COLUMNAS ===
+        # === CONTENEDOR PRINCIPAL ===
         main_container = QHBoxLayout()
         main_container.setSpacing(20)
-        main_container.setAlignment(Qt.AlignLeft)
 
         # === COLUMNA IZQUIERDA: GRÁFICO ===
-        left_column = QVBoxLayout()
-        left_column.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-
-        # Contenedor para el gráfico
-        plot_container = QGroupBox("Gráfico de Crecimiento")
-        plot_container.setFixedWidth(700)  # Ancho fijo
-        plot_container.setFixedHeight(500)  # Alto fijo
-        plot_container.setStyleSheet("""
+        plot_group = QGroupBox("Gráfico de Crecimiento")
+        plot_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
                 border: 2px solid #3498db;
@@ -101,20 +100,21 @@ class GrowthCurveWidget(QWidget):
                 color: #3498db;
             }
         """)
-        plot_layout = QVBoxLayout(plot_container)
+        plot_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        plot_layout = QVBoxLayout(plot_group)
         plot_layout.setContentsMargins(5, 5, 5, 5)
 
         # Widget de gráfico
         self.plot_widget = PlotWidget()
         self.plot_widget.setBackground("w")
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.setMinimumSize(680, 450)  # Tamaño mínimo
-        self.plot_widget.setMaximumSize(680, 450)  # Tamaño máximo
+        self.plot_widget.setMinimumSize(500, 400)
+        self.plot_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # DESHABILITAR ZOOM Y ARRASTRE
-        self.plot_widget.setMouseEnabled(x=False, y=False)  # Deshabilitar zoom con mouse
-        self.plot_widget.setMenuEnabled(False)  # Deshabilitar menú contextual
-        self.plot_widget.hideButtons()  # Ocultar botones de zoom
+        self.plot_widget.setMouseEnabled(x=False, y=False)
+        self.plot_widget.setMenuEnabled(False)
+        self.plot_widget.hideButtons()
 
         # Configurar ejes
         self.plot_widget.setLabel(
@@ -137,17 +137,10 @@ class GrowthCurveWidget(QWidget):
         self.plot_widget.addLegend(offset=(10, 10), verSpacing=-5, horSpacing=5)
 
         plot_layout.addWidget(self.plot_widget)
-        left_column.addWidget(plot_container)
-        left_column.addStretch()
+        main_container.addWidget(plot_group, stretch=2)
 
-        # === COLUMNA DERECHA: CONTROLES E INFORMACIÓN (UN SOLO GRUPO) ===
-        right_column = QVBoxLayout()
-        right_column.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-
-        # Grupo único para controles e información
+        # === COLUMNA DERECHA: CONTROLES E INFORMACIÓN ===
         controls_group = QGroupBox("Controles e Información")
-        controls_group.setFixedWidth(350)  # Ancho fijo
-        controls_group.setFixedHeight(500)  # Alto fijo para coincidir con gráfico
         controls_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -163,21 +156,25 @@ class GrowthCurveWidget(QWidget):
                 color: #27ae60;
             }
         """)
+        controls_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        controls_group.setMinimumWidth(300)
+        controls_group.setMaximumWidth(400)
         controls_layout = QVBoxLayout(controls_group)
         controls_layout.setSpacing(15)
-        controls_layout.setAlignment(Qt.AlignTop)
 
         # === SECCIÓN DE CONTROLES ===
         controls_section = QVBoxLayout()
         controls_section.setSpacing(15)
 
         # Selector de antibiótico
-        antibiotic_layout = QHBoxLayout()
-        antibiotic_layout.setSpacing(10)
+        antibiotic_layout = QVBoxLayout()
+        antibiotic_layout.setSpacing(5)
         
-        antibiotic_layout.addWidget(QLabel("Antibiótico:"))
+        antibiotic_label = QLabel("Antibiótico:")
+        antibiotic_label.setStyleSheet("font-weight: bold; font-size: 11px;")
+        antibiotic_layout.addWidget(antibiotic_label)
+        
         self.antibiotic_combo = QComboBox()
-        self.antibiotic_combo.setFixedWidth(220)  # Un poco más ancho sin el botón
         self.antibiotic_combo.setStyleSheet("""
             QComboBox {
                 padding: 8px;
@@ -189,12 +186,11 @@ class GrowthCurveWidget(QWidget):
                 border-color: #3498db;
             }
         """)
+        self.antibiotic_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.antibiotic_combo.currentTextChanged.connect(self._on_antibiotic_changed)
         antibiotic_layout.addWidget(self.antibiotic_combo)
 
-        antibiotic_layout.addStretch()
         controls_section.addLayout(antibiotic_layout)
-
         controls_layout.addLayout(controls_section)
 
         # Línea separadora
@@ -235,27 +231,28 @@ class GrowthCurveWidget(QWidget):
                 background-color: #f8f9fa;
                 border-radius: 5px;
                 border: 1px solid #dee2e6;
-                min-height: 200px;  
-                max-height: 200px; 
             }
         """)
-        self.info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_section.addWidget(self.info_label)
 
         controls_layout.addLayout(info_section)
         controls_layout.addStretch()
 
-        right_column.addWidget(controls_group)
-        right_column.addStretch()
-
-        # Agregar columnas al contenedor principal
-        main_container.addLayout(left_column)
-        main_container.addLayout(right_column)
-        main_container.addStretch()
+        main_container.addWidget(controls_group, stretch=1)
 
         # Agregar contenedor principal al layout
         layout.addLayout(main_container)
+
         layout.addStretch()
+
+        # Configurar scroll area
+        scroll_area.setWidget(main_widget)
+        
+        # Layout principal del widget
+        widget_layout = QVBoxLayout(self)
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.addWidget(scroll_area)
 
     def load_growth_data(self, growth_data: Dict[str, List[Dict]]):
         """

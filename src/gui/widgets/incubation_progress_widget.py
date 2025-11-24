@@ -14,7 +14,7 @@ Fecha: 17 de noviembre de 2025
 Version: 1.0 - Simulacion Temporal
 """
 
-from typing import Optional, Dict, List
+from typing import Optional
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -26,6 +26,8 @@ from PyQt5.QtWidgets import (
     QFrame,
     QButtonGroup,
     QRadioButton,
+    QScrollArea,
+    QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt5.QtGui import QFont
@@ -69,22 +71,31 @@ class IncubationProgressWidget(QWidget):
 
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
-        layout = QVBoxLayout(self)
+
+        # Crear scroll area principal
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+
+        main_widget = QWidget()
+        layout = QVBoxLayout(main_widget)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
         # Titulo
-        title = QLabel("Incubacion en Progreso")
+        title = QLabel("🔬 Incubación en Progreso")
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("color: #2c3e50; padding: 10px;")
+        title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(title)
 
         # Grupo: Reloj Digital
         clock_group = QGroupBox("Tiempo Transcurrido")
+        clock_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         clock_layout = QVBoxLayout(clock_group)
 
         self.time_display = QLabel("00:00:00")
@@ -102,10 +113,11 @@ class IncubationProgressWidget(QWidget):
                 padding: 20px;
             }
         """)
+        self.time_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         clock_layout.addWidget(self.time_display)
 
         # Indicador de fase
-        self.phase_label = QLabel("Fase: Lag inicial (adaptacion bacteriana)")
+        self.phase_label = QLabel("Fase: Lag inicial (adaptación bacteriana)")
         self.phase_label.setAlignment(Qt.AlignCenter)
         self.phase_label.setStyleSheet("""
             QLabel {
@@ -116,12 +128,14 @@ class IncubationProgressWidget(QWidget):
                 border-radius: 5px;
             }
         """)
+        self.phase_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         clock_layout.addWidget(self.phase_label)
 
         layout.addWidget(clock_group)
 
         # Barra de progreso
-        progress_group = QGroupBox("Progreso de Incubacion")
+        progress_group = QGroupBox("Progreso de Incubación")
+        progress_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         progress_layout = QVBoxLayout(progress_group)
 
         self.progress_bar = QProgressBar()
@@ -148,6 +162,7 @@ class IncubationProgressWidget(QWidget):
                 border-radius: 3px;
             }
         """)
+        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         progress_layout.addWidget(self.progress_bar)
 
         # Marcadores de tiempo
@@ -168,7 +183,8 @@ class IncubationProgressWidget(QWidget):
         layout.addWidget(progress_group)
 
         # Controles de velocidad
-        speed_group = QGroupBox("Velocidad de Simulacion")
+        speed_group = QGroupBox("Velocidad de Simulación")
+        speed_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         speed_layout = QHBoxLayout(speed_group)
 
         speed_label = QLabel("Velocidad:")
@@ -178,17 +194,15 @@ class IncubationProgressWidget(QWidget):
         self.speed_button_group = QButtonGroup(self)
         speeds = [
             ("1x (Real)", 1),
-            ("2x (Rapido)", 2),
-            ("4x (Muy rapido)", 4),
+            ("2x (Rápido)", 2),
+            ("4x (Muy rápido)", 4),
         ]
 
         for text, multiplier in speeds:
             radio = QRadioButton(text)
             radio.setProperty("multiplier", multiplier)
             radio.toggled.connect(
-                lambda checked, m=multiplier: self._on_speed_changed(m)
-                if checked
-                else None
+                lambda checked, m=multiplier: self._on_speed_changed(m) if checked else None
             )
             self.speed_button_group.addButton(radio)
             speed_layout.addWidget(radio)
@@ -199,10 +213,10 @@ class IncubationProgressWidget(QWidget):
         speed_layout.addStretch()
         layout.addWidget(speed_group)
 
-        # Controles de reproduccion
+        # Controles de reproducción
         controls_layout = QHBoxLayout()
 
-        self.start_button = QPushButton(" Iniciar Incubacion")
+        self.start_button = QPushButton("▶ Iniciar Incubación")
         self.start_button.setIcon(self.style().standardIcon(self.style().SP_MediaPlay))
         self.start_button.setStyleSheet("""
             QPushButton {
@@ -220,10 +234,11 @@ class IncubationProgressWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
+        self.start_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.start_button.clicked.connect(self._on_start_clicked)
         controls_layout.addWidget(self.start_button)
 
-        self.pause_button = QPushButton(" Pausar")
+        self.pause_button = QPushButton("⏸ Pausar")
         self.pause_button.setIcon(self.style().standardIcon(self.style().SP_MediaPause))
         self.pause_button.setEnabled(False)
         self.pause_button.setStyleSheet("""
@@ -242,6 +257,7 @@ class IncubationProgressWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
+        self.pause_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.pause_button.clicked.connect(self._on_pause_clicked)
         controls_layout.addWidget(self.pause_button)
 
@@ -262,13 +278,14 @@ class IncubationProgressWidget(QWidget):
                 background-color: #95a5a6;
             }
         """)
+        self.skip_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.skip_button.clicked.connect(self._on_skip_clicked)
         controls_layout.addWidget(self.skip_button)
 
         layout.addLayout(controls_layout)
 
-        # Informacion de estado
-        self.status_label = QLabel("Esperando inicio de incubacion...")
+        # Información de estado
+        self.status_label = QLabel("Esperando inicio de incubación...")
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setStyleSheet("""
             QLabel {
@@ -280,9 +297,19 @@ class IncubationProgressWidget(QWidget):
                 font-size: 12px;
             }
         """)
+        self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
         layout.addStretch()
+
+        # Configurar scroll area
+        scroll_area.setWidget(main_widget)
+
+        # Layout principal del widget
+        widget_layout = QVBoxLayout(self)
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.addWidget(scroll_area)
 
     def _on_start_clicked(self):
         """Inicia o reanuda la incubacion."""
