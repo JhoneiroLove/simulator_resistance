@@ -12,6 +12,7 @@ def get_paths():
     - user_data_dir: ruta persistente para base de datos (APPDATA).
     """
     if getattr(sys, "frozen", False):
+        # En PyInstaller, _MEIPASS contiene los recursos extraídos
         base_path = sys._MEIPASS
 
         user_data_dir = os.path.join(
