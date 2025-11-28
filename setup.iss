@@ -1,20 +1,26 @@
 ; Script para Inno Setup - Instalador Simulador Evolutivo
 
 [Setup]
-; Información básica
-AppName=Simulador Evolutivo
-AppVersion=1.0
-DefaultDirName={pf}\SimuladorEvolutivo
+AppName=Simulador Evolutivo - AST
+AppVersion=1.0.0
+AppPublisher=Sistema de Resistencia Bacteriana
+AppPublisherURL=https://github.com/JhoneiroLove/simulator_resistance
+AppSupportURL=https://github.com/JhoneiroLove/simulator_resistance/issues
+AppUpdatesURL=https://github.com/JhoneiroLove/simulator_resistance/releases
+DefaultDirName={autopf}\SimuladorEvolutivo
 DefaultGroupName=Simulador Evolutivo
-OutputBaseFilename=SimuladorEvolutivo_Instalador
-Compression=lzma
+AllowNoIcons=yes
+LicenseFile=LICENSE
+OutputDir=Output
+OutputBaseFilename=SimuladorEvolutivo_v1.0.0_Setup
+Compression=lzma2/max
 SolidCompression=yes
-
-; Icono del instalador
 SetupIconFile=simulador_evolutivo.ico
-
-; Permitir elevación de privilegios para crear accesos y escribir en Archivos de Programa
+UninstallDisplayIcon={app}\simulador_evolutivo.ico
 PrivilegesRequired=admin
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
+WizardStyle=modern
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"

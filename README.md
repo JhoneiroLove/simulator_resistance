@@ -59,39 +59,152 @@ Para evitar conflictos y mantener las dependencias del proyecto aisladas, se rec
 ## Uso
 - Al iniciar la aplicación, configura los parámetros de simulación y selecciona el tratamiento a analizar.
 - Visualiza los resultados en tiempo real y explora los diferentes módulos disponibles.
-- Para más detalles, consulta la documentación integrada o el menú de ayuda.
+- Para más detalles, consulta la documentación integrada.
 
 ## Dependencias
-- Python 3.8+
-- PyQt5
-- numpy
-- pandas
-- matplotlib
-- (Ver `requirements.txt` para la lista completa)
+
+### Principales
+
+- **Python**: 3.8 o superior
+- **PyQt5** >=5.15.10 - Framework de interfaz gráfica
+- **NumPy** >=1.24.0 - Cálculos numéricos y vectorización
+- **pandas** >=2.0.0 - Análisis y manipulación de datos
+- **matplotlib** >=3.7.0 - Visualización de gráficos
+- **SQLAlchemy** >=2.0.0 - ORM y gestión de base de datos
+- **scipy** >=1.10.0 - Algoritmos científicos
+- **PyQtGraph** >=0.13.3 - Gráficos en tiempo real
+- **seaborn** >=0.12.0 - Visualizaciones estadísticas
+
+### Dependencias de Build
+
+- **PyInstaller** >=6.3.0 - Empaquetado de ejecutables
+- **Inno Setup** 6.x - Creación de instaladores (solo Windows)
+
+Ver `requirements.txt` para la lista completa con versiones exactas.
 
 ## Compilación y Distribución
-El proceso para generar el ejecutable y el instalador se divide en dos pasos manuales para asegurar la máxima compatibilidad.
 
-### Paso 1: Generar el ejecutable con PyInstaller
+### Método Rápido (Windows)
 
-1.  **Asegúrate de tener un entorno virtual activado** con todas las dependencias del proyecto instaladas (ver sección de [Instalación](#instalación)).
-2.  Ejecuta el script de compilación:
-    ```bash
-    build_simulador.bat
-    ```
-3.  Este script utilizará **PyInstaller** para empaquetar la aplicación. Al finalizar, encontrarás todos los archivos del programa en la carpeta `dist\SimuladorEvolutivo`.
+```bash
+# 1. Instala dependencias
+pip install -r requirements.txt
 
-### Paso 2: Crear el instalador con Inno Setup
+# 2. Genera el ejecutable
+./build_simulador.bat
+```
 
-Una vez que los archivos del programa han sido creados en la carpeta `dist/`, puedes empaquetarlos en un instalador.
+El ejecutable estará en `dist/SimuladorEvolutivo/SimuladorEvolutivo.exe`
 
-1.  **Requisito:** Debes tener [Inno Setup](https://jrsoftware.org/isinfo.php) instalado en tu sistema.
-2.  Abre la aplicación **Inno Setup Compiler**.
-3.  Ve a `File > Open` y selecciona el archivo `setup.iss` que se encuentra en la raíz del proyecto.
-4.  Una vez abierto el script, ve al menú `Build > Compile` (o presiona `Ctrl+F9`).
-5.  Inno Setup tomará los archivos de la carpeta `dist\SimuladorEvolutivo`, los comprimirá y generará el instalador final (`SimuladorEvolutivo_Instalador.exe`) en una nueva carpeta llamada `Output`.
+### Crear Instalador Windows
+
+**Prerequisito:** [Inno Setup 6.x](https://jrsoftware.org/isinfo.php)
+
+1. Genera el ejecutable primero (paso anterior)
+2. Abre `setup.iss` con Inno Setup Compiler
+3. `Build > Compile` (o `Ctrl+F9`)
+4. El instalador se creará en `Output/SimuladorEvolutivo_v1.0.0_Setup.exe`
+
+### Build Manual (Todas las plataformas)
+
+```bash
+# Usando la configuración personalizada
+pyinstaller --clean --noconfirm simulador.spec
+
+# O build básico desde cero
+pyinstaller --clean --onedir --windowed --icon=simulador_evolutivo.ico main.py
+```
+
+### Estructura del Build
+
+```text
+SimuladorEvolutivo/
+├── simulador.spec          # Configuración PyInstaller optimizada
+├── build_simulador.bat     # Script automatizado (Windows)
+├── setup.iss               # Script Inno Setup (instalador)
+├── version_info.txt        # Metadatos del ejecutable
+├── requirements.txt        # Dependencias Python
+└── dist/                   # Salida del build
+    └── SimuladorEvolutivo/
+        ├── SimuladorEvolutivo.exe
+        ├── _internal/      # Librerías y recursos
+        └── data/           # Base de datos SQLite
+```
+
+### Configuración Avanzada
+
+**simulador.spec** incluye:
+
+- `optimize=2`: Bytecode Python optimizado
+- `upx=True`: Compresión binaria
+- `hiddenimports`: Módulos detectados automáticamente (PyQt5, NumPy, SciPy, etc.)
+- `excludes`: Librerías no usadas eliminadas (tkinter, test, unittest)
+
+**build_simulador.bat** verifica:
+
+1. ✓ Python instalado y versión
+2. ✓ PyInstaller disponible
+3. ✓ Limpieza de builds previos
+4. ✓ Compilación exitosa
+5. ✓ Validación del ejecutable generado
+
+**setup.iss** configura:
+
+- Compresión LZMA2/max (~40% reducción)
+- Wizard moderno con splash screen
+- Registro de desinstalación
+- Asociaciones de archivos opcionales
+
+### Troubleshooting
+
+#### Error: `PyInstaller no encontrado`
+
+```bash
+pip install pyinstaller>=6.3.0
+```
+
+#### Error: `Módulo no encontrado` al ejecutar .exe
+
+Agrega el módulo a `hiddenimports` en `simulador.spec`:
+
+```python
+hiddenimports=[
+    'tu_modulo_faltante',
+    # ...
+]
+```
+
+#### Ejecutable muy grande (>200MB)
+
+- **Normal**: NumPy, SciPy y Matplotlib ocupan ~100-150MB
+- **Reducir**: Comenta librerías no usadas en `requirements.txt` y reconstruye
+
+#### Error al crear instalador
+
+- Verifica que `dist/SimuladorEvolutivo/SimuladorEvolutivo.exe` exista
+- Asegúrate de tener Inno Setup instalado
+- Comprueba que las rutas en `setup.iss` sean correctas
+
+#### Aplicación lenta en primera ejecución
+
+- **Causa**: Inicialización de NumPy/SciPy y creación de base de datos
+- **Solución**: Implementado lazy loading y connection pooling (optimización verde)
+
+### Build Multiplataforma
+
+**Linux/macOS:**
+
+```bash
+# Mismo proceso, el script .spec es portable
+pyinstaller --clean --noconfirm simulador.spec
+
+# El ejecutable estará en dist/SimuladorEvolutivo/
+```
+
+**Nota:** En Linux/macOS no se genera instalador automáticamente. Distribuye la carpeta `dist/SimuladorEvolutivo/` completa o crea un AppImage/DMG manualmente.
 
 ## Contribuir
+
 ¡Las contribuciones son bienvenidas! Por favor, abre un Issue o Pull Request para sugerir mejoras, reportar errores o proponer nuevas funcionalidades.
 
 1. Haz un fork del proyecto.
@@ -100,9 +213,11 @@ Una vez que los archivos del programa han sido creados en la carpeta `dist/`, pu
 4. Envía un Pull Request.
 
 ## Licencia
+
 Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
 
 ## Contacto
+
 - Autor: JhoneiroLove / DinoBudino
 - Email: [jhoneiro12@hotmail.com]
 - [DeepWiki](https://deepwiki.com/JhoneiroLove/simulator_resistance)
