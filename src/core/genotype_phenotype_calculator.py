@@ -25,6 +25,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Caché global compartida (singleton pattern para reducir memoria)
+_GLOBAL_MULTIPLIERS_CACHE: Optional[Dict[str, Dict[str, float]]] = None
+_GLOBAL_BASELINE_CACHE: Optional[Dict[str, float]] = None
+
 
 @dataclass
 class MICCalculationResult:
@@ -59,20 +63,21 @@ class GenotypePhenotypeCalculator:
     Calculador de MICs basado en genotipo bacteriano.
 
     Usa la matriz gen×clase para calcular MICs específicos por antibiótico.
-    Implementa caching para optimizar consultas repetidas.
+    Implementa caching GLOBAL (singleton) para optimizar memoria y consultas.
     """
 
     def __init__(self):
-        """Inicializa calculador con cache vacío."""
-        self._multipliers_cache: Optional[Dict[str, Dict[str, float]]] = None
-        self._baseline_mics: Optional[Dict[str, float]] = None
-        logger.info("GenotypePhenotypeCalculator initialized")
+        """Inicializa calculador con cache global compartido."""
+        # Usar caché global en lugar de caché por instancia (ahorro de memoria)
+        logger.debug(
+            "GenotypePhenotypeCalculator instance created (using global cache)"
+        )
 
     def get_baseline_mics(self) -> Dict[str, float]:
         """
         Obtiene MICs basales de P. aeruginosa wild-type desde la base de datos.
 
-        Los valores se cargan una sola vez y se cachean en memoria.
+        Los valores se cargan una sola vez y se cachean GLOBALMENTE.
         Todos los valores tienen referencias PMID verificadas (ver tabla baseline_mics).
 
         Returns:
@@ -81,7 +86,8 @@ class GenotypePhenotypeCalculator:
         Raises:
             RuntimeError: Si no hay datos en baseline_mics (migración no ejecutada).
         """
-        if self._baseline_mics is None:
+        global _GLOBAL_BASELINE_CACHE
+        if _GLOBAL_BASELINE_CACHE is None:
             from src.data.database import get_session
             from src.data.models import BaselineMIC
 
@@ -96,11 +102,11 @@ class GenotypePhenotypeCalculator:
                         "Run migration 019_baseline_mics.sql first."
                     )
 
-                self._baseline_mics = {
+                _GLOBAL_BASELINE_CACHE = {
                     record.antibiotico: record.mic_wt for record in baseline_records
                 }
-                logger.debug(
-                    f"Loaded {len(self._baseline_mics)} baseline MICs from database"
+                logger.info(
+                    f"Loaded {len(_GLOBAL_BASELINE_CACHE)} baseline MICs from database (global cache)"
                 )
 
             except Exception as e:
@@ -113,16 +119,16 @@ class GenotypePhenotypeCalculator:
                     "Using fallback function. Please run migration 019.",
                     UserWarning,
                 )
-                self._baseline_mics = get_baseline_mics()
+                _GLOBAL_BASELINE_CACHE = get_baseline_mics()
                 logger.debug(
-                    f"Loaded {len(self._baseline_mics)} baseline MICs (fallback)"
+                    f"Loaded {len(_GLOBAL_BASELINE_CACHE)} baseline MICs (fallback)"
                 )
 
-        return self._baseline_mics
+        return _GLOBAL_BASELINE_CACHE
 
     def load_multipliers_from_db(self) -> Dict[str, Dict[str, float]]:
         """
-        Carga matriz gen×clase desde base de datos con cache.
+        Carga matriz gen×clase desde base de datos con cache GLOBAL.
 
         Estructura retornada:
             {
@@ -143,14 +149,16 @@ class GenotypePhenotypeCalculator:
         Returns:
             Diccionario anidado: antibiotico → gen → multiplicador
         """
-        if self._multipliers_cache is not None:
-            return self._multipliers_cache
+        global _GLOBAL_MULTIPLIERS_CACHE
+        if _GLOBAL_MULTIPLIERS_CACHE is not None:
+            return _GLOBAL_MULTIPLIERS_CACHE
 
         from src.data.database import get_session
         from sqlalchemy import text
 
         session = get_session()
 
+        # Query optimizada: filtrar valores irrelevantes en BD (multiplicador <= 1.0)
         query = text("""
             SELECT 
                 ac.antibiotico,
@@ -162,18 +170,20 @@ class GenotypePhenotypeCalculator:
             ORDER BY ac.antibiotico, gcm.multiplicador_mic DESC
         """)
 
-        result = {}
         rows = session.execute(query).fetchall()
+        session.close()  # Cerrar conexión inmediatamente después de query
 
+        # Construir diccionario con comprensión (más eficiente)
+        result = {}
         for antibiotico, gen, multiplicador in rows:
             if antibiotico not in result:
                 result[antibiotico] = {}
             result[antibiotico][gen] = multiplicador
 
-        session.close()
-
-        self._multipliers_cache = result
-        logger.info(f"Loaded multipliers for {len(result)} antibiotics from DB")
+        _GLOBAL_MULTIPLIERS_CACHE = result
+        logger.info(
+            f"Loaded multipliers for {len(result)} antibiotics from DB (global cache)"
+        )
 
         return result
 
@@ -324,10 +334,11 @@ class GenotypePhenotypeCalculator:
         return {ab: result.mic_calculado for ab, result in results.items()}
 
     def clear_cache(self):
-        """Limpia cache de multiplicadores (útil para testing)."""
-        self._multipliers_cache = None
-        self._baseline_mics = None
-        logger.info("Cache cleared")
+        """Limpia cache GLOBAL de multiplicadores (útil para testing)."""
+        global _GLOBAL_MULTIPLIERS_CACHE, _GLOBAL_BASELINE_CACHE
+        _GLOBAL_MULTIPLIERS_CACHE = None
+        _GLOBAL_BASELINE_CACHE = None
+        logger.info("Global cache cleared")
 
     def _round_to_standard_dilution(self, mic_value: float) -> float:
         """

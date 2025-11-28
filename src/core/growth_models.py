@@ -417,6 +417,7 @@ def simulate_well_growth_curve(
     generar una serie temporal realista de lecturas de OD.
 
     **NUEVO v2.0**: Soporta ruido experimental multicapa realista.
+    **OPTIMIZADO**: Usa vectorización NumPy para reducir tiempo de CPU.
 
     Args:
         mic_value: MIC de la bacteria (µg/mL)
@@ -466,20 +467,29 @@ def simulate_well_growth_curve(
         if noise_model.is_well_failed():
             return [max(0.01, random.gauss(0.05, 0.02)) for _ in time_points]
 
-    # Generar curva de crecimiento
-    od_values = []
-    for idx, t in enumerate(time_points):
-        od = logistic_growth(t, od_max, k, t_mid, od_initial)
+    # OPTIMIZADO: Vectorizar cálculo logístico con NumPy (más rápido)
+    time_array = np.array(time_points, dtype=np.float32)
+    exponente = -k * (time_array - t_mid)
 
-        # Aplicar ruido experimental
-        if add_noise:
-            if use_realistic_noise and noise_model:
-                # NUEVO: Ruido experimental multicapa
-                od = noise_model.apply_noise_to_od(od, time_index=idx)
-            else:
-                # LEGACY: Ruido simple
-                od = add_measurement_noise(od, noise_level)
+    # Clip para evitar overflow
+    exponente = np.clip(exponente, -100, 100)
 
-        od_values.append(od)
+    # Curva logística vectorizada
+    od_values = od_initial + (od_max - od_initial) / (1 + np.exp(exponente))
 
-    return od_values
+    # Aplicar ruido experimental
+    if add_noise:
+        if use_realistic_noise and noise_model:
+            # NUEVO: Ruido experimental multicapa (debe aplicarse punto por punto)
+            od_values = np.array(
+                [
+                    noise_model.apply_noise_to_od(od, idx)
+                    for idx, od in enumerate(od_values)
+                ]
+            )
+        else:
+            # LEGACY: Ruido simple vectorizado
+            noise = np.random.normal(0, noise_level * od_values, len(od_values))
+            od_values = np.maximum(0.0, od_values + noise)
+
+    return od_values.tolist()

@@ -33,7 +33,15 @@ base_path, user_data_dir = get_paths()
 db_path = os.path.join(user_data_dir, "resistencia.db")
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Pool de conexiones optimizado para reducir overhead de I/O
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    pool_size=5,  # Pool de 5 conexiones reutilizables
+    max_overflow=10,  # Hasta 10 conexiones adicionales si es necesario
+    pool_pre_ping=True,  # Verificar conexiones antes de usar (evita errores)
+    pool_recycle=3600,  # Reciclar conexiones cada hora
+)
 Session = scoped_session(sessionmaker(bind=engine))
 
 

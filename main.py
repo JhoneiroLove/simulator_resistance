@@ -3,6 +3,7 @@ from PyQt5.QtCore import QTimer, QThread, pyqtSignal
 import sys
 import os
 
+
 class ApplicationLoader(QThread):
     """Thread para cargar la aplicación en segundo plano"""
 
@@ -11,13 +12,13 @@ class ApplicationLoader(QThread):
 
     def run(self):
         """Carga solo los componentes que no requieren Qt"""
-        # Paso 1: Configurar logging
+        # Paso 1: Configurar logging (lazy import)
         self.progress_updated.emit(20, "Configurando logging...")
         from src.utils.logging_config import setup_logging
 
         setup_logging()
 
-        # Paso 2: Inicializar base de datos
+        # Paso 2: Inicializar base de datos (lazy import)
         self.progress_updated.emit(60, "Inicializando base de datos...")
         from src.data.database import init_db
 
@@ -25,8 +26,8 @@ class ApplicationLoader(QThread):
 
         # Paso 3: Finalizar
         self.progress_updated.emit(100, "¡Listo!")
-
         self.loading_complete.emit()
+
 
 if __name__ == "__main__":
     # Crear aplicación
@@ -61,14 +62,13 @@ if __name__ == "__main__":
         splash.finish(main_window)
         main_window.show()
 
-    # Aplicar estilos después de que todo esté cargado
+    # Aplicar estilos solo si existe (I/O optimizado)
     def apply_styles():
         qss_path = os.path.join(os.path.dirname(__file__), "style.qss")
         if os.path.exists(qss_path):
             with open(qss_path, "r", encoding="utf-8") as f:
                 app.setStyleSheet(f.read())
 
-    # Aplicar estilos cuando se complete la carga
     apply_styles()
 
     # Crear y configurar loader

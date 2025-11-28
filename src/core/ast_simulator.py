@@ -125,7 +125,9 @@ class ASTSimulator:
         )
         self.well_issues: Dict[str, WellIssue] = {}
 
+        # Precalcular MICs para evitar parsing JSON repetido
         self._load_bacteria_profile()
+        self._mics_dict = None  # Cache de MICs parseados
         self._load_panel_layout()
 
     def _load_bacteria_profile(self):
@@ -234,10 +236,13 @@ class ASTSimulator:
         Returns:
             Lectura óptica en ese tiempo
         """
-        import json
+        # Cachear parsing de JSON para evitar repetir operación costosa
+        if self._mics_dict is None:
+            import json
 
-        mics_calculated = json.loads(self.bacteria_profile.mics_calculated)
-        mic_bacteria = mics_calculated.get(well.antibiotico, 1.0)
+            self._mics_dict = json.loads(self.bacteria_profile.mics_calculated)
+
+        mic_bacteria = self._mics_dict.get(well.antibiotico, 1.0)
 
         # NUEVO v2.0: Inóculo real afecta OD inicial y parámetros de crecimiento
         # Inóculo más alto → más células → mayor OD inicial y final
@@ -463,6 +468,7 @@ class ASTSimulator:
         Returns:
             "S" (sensible) o "R" (resistente)
         """
+        # Reutilizar sesión existente (ya creada en __init__)
         breakpoint = (
             self.session.query(Breakpoint)
             .filter_by(antibiotico=antibiotico, standard="EUCAST")
@@ -655,3 +661,28 @@ class ASTSimulator:
                 "qc_passed": self.qc_passed,
             },
         }
+
+    def cleanup(self):
+        """Libera recursos y cierra sesión de BD (Software Verde: gestión eficiente de memoria)."""
+        if self.session:
+            self.session.close()
+            self.session = None
+
+        # Limpiar referencias pesadas
+        self._mics_dict = None
+        self.panel_wells = []
+        self.mic_results = []
+        self.well_issues = {}
+
+    def __enter__(self):
+        """Context manager support."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup automático al salir del contexto."""
+        self.cleanup()
+        return False
+
+    def __del__(self):
+        """Destructor: asegurar limpieza si no se usó context manager."""
+        self.cleanup()
