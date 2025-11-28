@@ -204,14 +204,19 @@ class ASTWorkflow(QWidget):
         instructions_label.setWordWrap(True)
         instructions_label.setStyleSheet("""
             QLabel {
-                background-color: #e8f4f8;
-                color: #2c3e50;
-                padding: 10px;
-                border-left: 4px solid #3498db;
-                border-radius: 3px;
-                font-size: 11px;
+                background-color: #E8F4F8;
+                color: #1A5276;
+                padding: 14px 16px;
+                border-left: 5px solid #3498DB;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
             }
         """)
+        instructions_label.setToolTip(
+            "Genere un perfil de Pseudomonas aeruginosa seleccionando\n"
+            "entre bacteria sensible (wild-type) o con resistencias adquiridas."
+        )
         instructions_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(instructions_label)
 
@@ -223,6 +228,10 @@ class ASTWorkflow(QWidget):
 
         self.next_config_btn = QPushButton("Siguiente: Configurar AST ➔")
         self.next_config_btn.setEnabled(False)
+        self.next_config_btn.setToolTip(
+            "Continúe al paso de configuración del panel AST\n"
+            "(Disponible después de generar un perfil bacteriano)"
+        )
         self.next_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         next_config_layout.addWidget(self.next_config_btn)
         next_config_layout.addStretch()
@@ -250,14 +259,19 @@ class ASTWorkflow(QWidget):
         config_instructions.setWordWrap(True)
         config_instructions.setStyleSheet("""
             QLabel {
-                background-color: #fef5e7;
-                color: #2c3e50;
-                padding: 10px;
-                border-left: 4px solid #f39c12;
-                border-radius: 3px;
-                font-size: 11px;
+                background-color: #FEF5E7;
+                color: #7D6608;
+                padding: 14px 16px;
+                border-left: 5px solid #F39C12;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
             }
         """)
+        config_instructions.setToolTip(
+            "Configure el panel de prueba, inóculo y condiciones de incubación.\n"
+            "Después ejecute la simulación para obtener resultados MIC."
+        )
         config_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(config_instructions)
 
@@ -288,11 +302,18 @@ class ASTWorkflow(QWidget):
 
         back_profile_btn = QPushButton("◀ Volver")
         back_profile_btn.setProperty("secondary", True)
+        back_profile_btn.setToolTip(
+            "Regresar al paso de generación de perfil bacteriano"
+        )
         back_profile_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(1))
         nav_layout.addWidget(back_profile_btn)
 
         self.next_plate_btn = QPushButton("Siguiente: Ver Placa ➔")
         self.next_plate_btn.setEnabled(False)
+        self.next_plate_btn.setToolTip(
+            "Visualizar la placa de 96 pocillos con resultados\n"
+            "(Disponible después de ejecutar la simulación AST)"
+        )
         self.next_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         nav_layout.addWidget(self.next_plate_btn)
 
@@ -321,14 +342,19 @@ class ASTWorkflow(QWidget):
         plate_instructions.setWordWrap(True)
         plate_instructions.setStyleSheet("""
             QLabel {
-                background-color: #eaf2f8;
-                color: #2c3e50;
-                padding: 10px;
-                border-left: 4px solid #5dade2;
-                border-radius: 3px;
-                font-size: 11px;
+                background-color: #EAF2F8;
+                color: #1B4F72;
+                padding: 14px 16px;
+                border-left: 5px solid #5DADE2;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
             }
         """)
+        plate_instructions.setToolTip(
+            "Haga clic en cualquier pocillo para ver detalles de\n"
+            "antibiótico, concentración y densidad óptica final."
+        )
         plate_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(plate_instructions)
 
@@ -337,43 +363,18 @@ class ASTWorkflow(QWidget):
 
         # Botones navegación
         plate_nav_layout = QHBoxLayout()
+        plate_nav_layout.setSpacing(10)
 
-        back_config_btn = QPushButton("◀ Volver: Configuración")
-        back_config_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                font-size: 14px;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 180px;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
-        back_config_btn.setFixedWidth(180)
+        back_config_btn = QPushButton("◀ Volver")
+        back_config_btn.setProperty("secondary", True)
+        back_config_btn.setToolTip("Regresar a la configuración del panel AST")
         back_config_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(2))
         plate_nav_layout.addWidget(back_config_btn)
 
-        plate_nav_layout.addSpacing(20)
-
         next_results_btn = QPushButton("Siguiente: Ver Resultados ➔")
-        next_results_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                min-width: 200px;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-        """)
-        next_results_btn.setFixedWidth(200)
+        next_results_btn.setToolTip(
+            "Continuar a la tabla de resultados MIC con interpretaciones clínicas"
+        )
         next_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         plate_nav_layout.addWidget(next_results_btn)
 
@@ -402,14 +403,19 @@ class ASTWorkflow(QWidget):
         results_instructions.setWordWrap(True)
         results_instructions.setStyleSheet("""
             QLabel {
-                background-color: #eafaf1;
-                color: #2c3e50;
-                padding: 10px;
-                border-left: 4px solid #27ae60;
-                border-radius: 3px;
-                font-size: 11px;
+                background-color: #EAFAF1;
+                color: #145A32;
+                padding: 14px 16px;
+                border-left: 5px solid #27AE60;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
             }
         """)
+        results_instructions.setToolTip(
+            "Revise los valores MIC calculados y las interpretaciones S/R\n"
+            "según guidelines EUCAST/CLSI. Puede exportar los resultados."
+        )
         results_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(results_instructions)
 
@@ -422,10 +428,16 @@ class ASTWorkflow(QWidget):
 
         back_plate_btn = QPushButton("◀ Volver")
         back_plate_btn.setProperty("secondary", True)
+        back_plate_btn.setToolTip(
+            "Regresar a la visualización de la placa de 96 pocillos"
+        )
         back_plate_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(3))
         results_nav_layout.addWidget(back_plate_btn)
 
         next_curves_btn = QPushButton("Siguiente: Ver Curvas ➔")
+        next_curves_btn.setToolTip(
+            "Ver curvas de crecimiento detalladas por antibiótico y concentración"
+        )
         next_curves_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(5))
         results_nav_layout.addWidget(next_curves_btn)
 
@@ -454,14 +466,19 @@ class ASTWorkflow(QWidget):
         curves_instructions.setWordWrap(True)
         curves_instructions.setStyleSheet("""
             QLabel {
-                background-color: #f4ecf7;
-                color: #2c3e50;
-                padding: 10px;
-                border-left: 4px solid #9b59b6;
-                border-radius: 3px;
-                font-size: 11px;
+                background-color: #F4ECF7;
+                color: #512E5F;
+                padding: 14px 16px;
+                border-left: 5px solid #9B59B6;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
             }
         """)
+        curves_instructions.setToolTip(
+            "Seleccione un antibiótico para visualizar las curvas de crecimiento\n"
+            "a diferentes concentraciones durante las 18 horas de incubación."
+        )
         curves_instructions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(curves_instructions)
 
@@ -474,10 +491,15 @@ class ASTWorkflow(QWidget):
 
         back_results_btn = QPushButton("◀ Volver")
         back_results_btn.setProperty("secondary", True)
+        back_results_btn.setToolTip("Regresar a la tabla de resultados MIC")
         back_results_btn.clicked.connect(lambda: self.main_tabs.setCurrentIndex(4))
         curves_nav_layout.addWidget(back_results_btn)
 
         restart_btn = QPushButton("🔄 Nueva Simulación")
+        restart_btn.setToolTip(
+            "Reiniciar el workflow completo para crear una nueva simulación AST\n"
+            "(Se perderán todos los datos actuales)"
+        )
         restart_btn.clicked.connect(self._restart_workflow)
         curves_nav_layout.addWidget(restart_btn)
 

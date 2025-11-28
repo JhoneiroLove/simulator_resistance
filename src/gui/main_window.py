@@ -64,11 +64,33 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.ast_tab, "🧬 AST Antibiograma")
         self.setCentralWidget(self.tabs)
-        self.setStatusBar(QStatusBar())
+
+        # Status bar con mensaje inicial
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage(
+            "✓ Aplicación lista | Navegación: Ctrl+Tab (siguiente) | Ayuda: F1", 5000
+        )
 
     def closeEvent(self, event):
         """Limpiar recursos al cerrar."""
         event.accept()
+
+    def keyPressEvent(self, event):
+        """Manejar atajos de teclado globales."""
+        # F1: Mostrar ayuda rápida
+        if event.key() == Qt.Key_F1:
+            self.status_bar.showMessage(
+                "Atajos: Ctrl+Tab (siguiente tab) | Shift+Ctrl+Tab (tab anterior) | "
+                "Ctrl+N (nueva simulación) | ESC (cancelar)",
+                8000,
+            )
+        # Ctrl+N: Nueva simulación (reiniciar workflow)
+        elif event.key() == Qt.Key_N and event.modifiers() == Qt.ControlModifier:
+            if hasattr(self.ast_tab, "_restart_workflow"):
+                self.ast_tab._restart_workflow()
+        else:
+            super().keyPressEvent(event)
 
 
 if __name__ == "__main__":
