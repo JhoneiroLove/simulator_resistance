@@ -66,34 +66,8 @@ def calculate_od_max_with_antibiotic(
     concentration: float,
     mic_real: float,
     hill_coefficient: float = 4.0,
+    e_max: float = 1.0,
 ) -> float:
-    """
-    Calcula OD máxima reducida por efecto del antibiótico.
-
-    Usa la ecuación de Hill para modelar la inhibición del crecimiento
-    bacteriano por antibióticos. A mayor concentración relativa al MIC,
-    menor será la densidad máxima alcanzable.
-
-    Ecuación de Hill:
-        Supervivencia = 1 / (1 + (C/MIC)^n)
-        OD_max_inhibido = OD_max_base × Supervivencia
-
-    Args:
-        base_od_max: OD máxima sin antibiótico (típicamente 2.0)
-        concentration: Concentración de antibiótico en µg/mL
-        mic_real: MIC real de la bacteria para ese antibiótico
-        hill_coefficient: Coeficiente de Hill (n), típicamente 2-4
-                         Valores altos = inhibición más abrupta
-
-    Returns:
-        OD máxima inhibida por el antibiótico
-
-    Ejemplo:
-        >>> # Bacteria con MIC=8, concentración del well=16
-        >>> od_inhibido = calculate_od_max_with_antibiotic(2.0, 16.0, 8.0)
-        >>> print(f"OD máxima inhibida: {od_inhibido:.3f}")
-        OD máxima inhibida: 0.118
-    """
     if mic_real <= 0:
         raise ValueError("MIC debe ser mayor que 0")
 
@@ -101,7 +75,8 @@ def calculate_od_max_with_antibiotic(
         return base_od_max
 
     ratio = concentration / mic_real
-    survival_fraction = 1.0 / (1.0 + math.pow(ratio, hill_coefficient))
+    inhibition = e_max * (ratio**hill_coefficient) / (1.0 + ratio**hill_coefficient)
+    survival_fraction = 1.0 - min(inhibition, 1.0)
     od_max_inhibited = base_od_max * survival_fraction
 
     return od_max_inhibited
