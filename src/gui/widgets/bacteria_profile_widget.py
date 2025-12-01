@@ -40,6 +40,7 @@ from src.core.bacteria_profile_generator import (
 )
 from src.core.genotype_phenotype_calculator import GenotypePhenotypeCalculator
 from src.utils.security import InputValidator, SecurityLogger, safe_format_error_message
+from src.utils.error_handler import ErrorHandler, safe_method, DatabaseErrorHandler
 
 
 class ProfileGenerationThread(QThread):
@@ -548,7 +549,7 @@ class BacteriaProfileWidget(QWidget):
 
     def _save_profile_to_db(self, profile: BacteriaProfile) -> int:
         """
-        Guarda el perfil en la base de datos.
+        Guarda el perfil en la base de datos con rollback automático.
 
         Args:
             profile: Objeto BacteriaProfile a guardar
@@ -575,33 +576,41 @@ class BacteriaProfileWidget(QWidget):
                 f"Error al validar datos del perfil: {safe_format_error_message(e)}"
             )
 
-        # Crear registro
-        db_profile = BacteriaProfileModel(
-            organismo=sanitized_organismo,
-            genotipo=json.dumps(profile.genotipo),
-            mics_calculated=json.dumps(profile.mics_calculated),
-            escenario=sanitized_escenario,
-            origen_muestra=sanitized_origen,
-            antibioticos_previos=(
-                json.dumps(profile.antibioticos_previos)
-                if profile.antibioticos_previos
-                else None
-            ),
-            mutaciones_aplicadas=(
-                json.dumps(profile.mutaciones_aplicadas)
-                if profile.mutaciones_aplicadas
-                else None
-            ),
+        # RNF-4: Transacción con rollback automático
+        bacteria_profile_id = None
+
+        def save_operations():
+            nonlocal bacteria_profile_id
+            # Crear registro
+            db_profile = BacteriaProfileModel(
+                organismo=sanitized_organismo,
+                genotipo=json.dumps(profile.genotipo),
+                mics_calculated=json.dumps(profile.mics_calculated),
+                escenario=sanitized_escenario,
+                origen_muestra=sanitized_origen,
+                antibioticos_previos=(
+                    json.dumps(profile.antibioticos_previos)
+                    if profile.antibioticos_previos
+                    else None
+                ),
+                mutaciones_aplicadas=(
+                    json.dumps(profile.mutaciones_aplicadas)
+                    if profile.mutaciones_aplicadas
+                    else None
+                ),
+            )
+
+            # Guardar
+            self.session.add(db_profile)
+            self.session.flush()  # Obtener ID antes de commit
+            bacteria_profile_id = db_profile.id
+
+        success = DatabaseErrorHandler.safe_transaction(
+            self.session, save_operations, "BacteriaProfileWidget._save_profile_to_db"
         )
 
-        # Guardar
-        self.session.add(db_profile)
-        self.session.commit()
-
-        bacteria_profile_id = db_profile.id
-
-        # Refrescar sesión
-        self.session.refresh(db_profile)
+        if not success or bacteria_profile_id is None:
+            raise RuntimeError("Error al guardar perfil en base de datos")
 
         return bacteria_profile_id
 

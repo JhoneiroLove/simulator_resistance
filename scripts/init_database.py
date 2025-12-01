@@ -38,6 +38,18 @@ print("=" * 60 + "\n")
 # Ejecutar init_db que aplica todas las migraciones
 try:
     init_db()
+
+    # RNF-5: Optimizar índices para queries frecuentes
+    print("\n🔧 Optimizando índices de base de datos...")
+    from src.utils.green_optimization import QueryOptimizer
+    from src.data.models import BacteriaProfile, PanelLayout
+
+    session = get_session()
+    QueryOptimizer.add_indexes(session, BacteriaProfile, ["id", "organismo"])
+    QueryOptimizer.add_indexes(session, PanelLayout, ["id", "panel_name"])
+    session.close()
+    print("✅ Índices optimizados")
+
     print("\n" + "=" * 60)
     print("✅ Base de datos inicializada correctamente")
     print("=" * 60)

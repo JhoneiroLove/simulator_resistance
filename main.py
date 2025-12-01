@@ -15,11 +15,11 @@ class ApplicationLoader(QThread):
     def run(self):
         """Carga solo los componentes que no requieren Qt"""
         try:
-            # Paso 1: Configurar logging (lazy import)
+            # Paso 1: Configurar logging (RNF-4)
             self.progress_updated.emit(20, "Configurando logging...")
-            from src.utils.logging_config import setup_logging
+            from src.utils.error_handler import ErrorHandler
 
-            setup_logging()
+            ErrorHandler.setup_logging()
 
             # Paso 2: Inicializar base de datos (lazy import)
             self.progress_updated.emit(60, "Inicializando base de datos...")

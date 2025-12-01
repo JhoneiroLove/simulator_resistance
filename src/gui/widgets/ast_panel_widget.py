@@ -37,6 +37,7 @@ from src.core.ast_simulator import ASTSimulator
 from src.gui.widgets.incubation_progress_widget import IncubationProgressWidget
 from src.gui.styles.theme_manager import get_theme_manager
 from src.utils.security import InputValidator, safe_format_error_message, SecurityLogger
+from src.utils.error_handler import ErrorHandler, safe_method, ThreadErrorHandler
 
 
 class ASTWorker(QThread):
@@ -428,6 +429,7 @@ class ASTPanelWidget(QWidget):
         widget_layout.setContentsMargins(0, 0, 0, 0)
         widget_layout.addWidget(central_container)
 
+    @safe_method(component="ASTPanelWidget._load_panels", fallback_value=None)
     def _load_panels(self):
         """Carga paneles disponibles desde la base de datos."""
         try:
@@ -477,13 +479,9 @@ class ASTPanelWidget(QWidget):
             )
             self.run_button.setEnabled(False)
 
+    @safe_method(component="ASTPanelWidget.set_bacteria_profile", fallback_value=None)
     def set_bacteria_profile(self, bacteria_profile_id: int):
-        """
-        Establece el perfil bacteriano para la simulación.
-
-        Args:
-            bacteria_profile_id: ID del perfil en tabla bacteria_profiles
-        """
+        """Establece el perfil bacteriano para la simulación."""
         # RNF-3: Validar ID de perfil
         try:
             validated_id = InputValidator.validate_bacteria_profile_id(
