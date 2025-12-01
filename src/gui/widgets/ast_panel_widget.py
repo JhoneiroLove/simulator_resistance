@@ -254,20 +254,30 @@ class ASTPanelWidget(QWidget):
         # Panel selector
         self.panel_combo = QComboBox()
         self.panel_combo.setMinimumWidth(250)  # Ancho mínimo para evitar truncamiento
-        self.panel_combo.setToolTip("Seleccione el panel de antibióticos a simular")
+        self.panel_combo.setToolTip(
+            "Seleccione el panel de antibióticos a simular (Alt+P)"
+        )
+        self.panel_combo.setAccessibleName("Selector de panel de antibióticos")
+        self.panel_combo.setAccessibleDescription(
+            "Seleccione el panel de antibióticos a utilizar en la prueba AST"
+        )
         self.panel_combo.setStyleSheet("""
             QComboBox {
                 padding: 8px;
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
-                font-size: 12px;
+                font-size: 13px;
             }
             QComboBox:focus {
                 border-color: #3498db;
+                border-width: 3px;
             }
         """)
         self.panel_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        config_layout.addRow("Panel:", self.panel_combo)
+
+        panel_label = QLabel("&Panel:")
+        panel_label.setBuddy(self.panel_combo)
+        config_layout.addRow(panel_label, self.panel_combo)
 
         # Inóculo (McFarland)
         self.inoculo_spin = QDoubleSpinBox()
@@ -278,21 +288,29 @@ class ASTPanelWidget(QWidget):
         self.inoculo_spin.setSuffix(" McF")
         self.inoculo_spin.setFixedWidth(120)
         self.inoculo_spin.setToolTip(
-            "Densidad del inóculo bacteriano (0.5 McFarland estándar)"
+            "Densidad del inóculo bacteriano (0.5 McFarland estándar). Use flechas arriba/abajo o Alt+I (Alt+I)"
+        )
+        self.inoculo_spin.setAccessibleName("Inóculo bacteriano")
+        self.inoculo_spin.setAccessibleDescription(
+            "Densidad del inóculo en unidades McFarland, rango 0.3 a 0.7"
         )
         self.inoculo_spin.setStyleSheet("""
             QDoubleSpinBox {
                 padding: 8px;
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
-                font-size: 12px;
+                font-size: 13px;
             }
             QDoubleSpinBox:focus {
                 border-color: #3498db;
+                border-width: 3px;
             }
         """)
         self.inoculo_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        config_layout.addRow("Inóculo:", self.inoculo_spin)
+
+        inoculo_label = QLabel("&Inóculo:")
+        inoculo_label.setBuddy(self.inoculo_spin)
+        config_layout.addRow(inoculo_label, self.inoculo_spin)
 
         # Temperatura
         self.temperatura_spin = QDoubleSpinBox()
@@ -302,20 +320,30 @@ class ASTPanelWidget(QWidget):
         self.temperatura_spin.setDecimals(1)
         self.temperatura_spin.setSuffix(" °C")
         self.temperatura_spin.setFixedWidth(120)
-        self.temperatura_spin.setToolTip("Temperatura de incubación (37°C estándar)")
+        self.temperatura_spin.setToolTip(
+            "Temperatura de incubación (37°C estándar). Use flechas o Alt+T (Alt+T)"
+        )
+        self.temperatura_spin.setAccessibleName("Temperatura de incubación")
+        self.temperatura_spin.setAccessibleDescription(
+            "Temperatura en grados Celsius, rango 35.0 a 37.0"
+        )
         self.temperatura_spin.setStyleSheet("""
             QDoubleSpinBox {
                 padding: 8px;
                 border: 2px solid #bdc3c7;
                 border-radius: 5px;
-                font-size: 12px;
+                font-size: 13px;
             }
             QDoubleSpinBox:focus {
                 border-color: #3498db;
+                border-width: 3px;
             }
         """)
         self.temperatura_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        config_layout.addRow("Temperatura:", self.temperatura_spin)
+
+        temperatura_label = QLabel("&Temperatura:")
+        temperatura_label.setBuddy(self.temperatura_spin)
+        config_layout.addRow(temperatura_label, self.temperatura_spin)
 
         # Duración (fija)
         duracion_label = QLabel("<b>18.0 h</b> (estándar)")
@@ -325,10 +353,14 @@ class ASTPanelWidget(QWidget):
         config_layout.addRow("Duración:", duracion_label)
 
         # Modo temporal
-        self.progressive_mode_check = QCheckBox("Simulación temporal (hora por hora)")
+        self.progressive_mode_check = QCheckBox("Simulación &temporal (hora por hora)")
         self.progressive_mode_check.setToolTip(
             "Simula el crecimiento bacteriano hora por hora (18h reales aceleradas)\n"
-            "Desactivado: simulación instantánea"
+            "Desactivado: simulación instantánea (Alt+T para alternar)"
+        )
+        self.progressive_mode_check.setAccessibleName("Modo de simulación temporal")
+        self.progressive_mode_check.setAccessibleDescription(
+            "Activa o desactiva la simulación temporal hora por hora"
         )
         self.progressive_mode_check.setChecked(False)
         self.progressive_mode_check.setSizePolicy(
@@ -344,13 +376,18 @@ class ASTPanelWidget(QWidget):
         button_progress_container.setSpacing(20)
 
         # Botón ejecutar
-        self.run_button = QPushButton("▶ Ejecutar AST")
+        self.run_button = QPushButton("▶ &Ejecutar AST")
         self.run_button.setMinimumHeight(40)
+        self.run_button.setToolTip("Ejecutar simulación AST (Alt+E o Enter)")
+        self.run_button.setAccessibleName("Botón ejecutar simulación AST")
+        self.run_button.setAccessibleDescription(
+            "Inicia la simulación del antibiograma con los parámetros configurados"
+        )
         self.run_button.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
                 color: white;
-                font-size: 14px;
+                font-size: 15px;
                 font-weight: bold;
                 padding: 12px;
                 border-radius: 5px;
@@ -362,8 +399,12 @@ class ASTPanelWidget(QWidget):
             QPushButton:disabled {
                 background-color: #95a5a6;
             }
+            QPushButton:focus {
+                border: 3px solid #1e8449;
+            }
         """)
         self.run_button.setFixedWidth(180)
+        self.run_button.setDefault(True)
         self.run_button.clicked.connect(self._on_run_clicked)
         button_progress_container.addWidget(self.run_button)
 
