@@ -141,7 +141,7 @@ class ASTWorkflow(QWidget):
 
         # === TAB 5: Curvas de Crecimiento ===
         curves_tab = self._create_curves_tab()
-        self.main_tabs.addTab(curves_tab, "Curvas de Crecimiento")
+        self.main_tabs.addTab(curves_tab, "Curvas Crecimiento")
 
         # Agregar tabs al layout principal
         main_layout.addWidget(self.main_tabs, stretch=1)
@@ -243,14 +243,13 @@ class ASTWorkflow(QWidget):
 
     def _create_config_tab(self):
         """Crea la pestaña de configuración AST."""
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-
         tab_widget = QWidget()
         layout = QVBoxLayout(tab_widget)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(15)
+
+        # Agregar espacio superior para centrar verticalmente
+        layout.addStretch(1)
 
         # Instrucciones
         config_instructions = QLabel(
@@ -321,8 +320,10 @@ class ASTWorkflow(QWidget):
 
         layout.addLayout(nav_layout)
 
-        scroll_area.setWidget(tab_widget)
-        return scroll_area
+        # Agregar espacio inferior para centrar verticalmente
+        layout.addStretch(1)
+
+        return tab_widget
 
     def _create_plate_tab(self):
         """Crea la pestaña de visualización de placa."""

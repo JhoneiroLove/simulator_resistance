@@ -27,8 +27,6 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QStackedWidget,
     QSizePolicy,
-    QScrollArea,
-    QFrame,
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import time
@@ -206,12 +204,7 @@ class ASTPanelWidget(QWidget):
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
 
-        # Crear scroll area principal
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-
-        # Contenedor central con ancho máximo
+        # Contenedor central con ancho máximo (sin scroll area)
         central_container = QWidget()
         central_layout = QHBoxLayout(central_container)
         central_layout.setContentsMargins(0, 0, 0, 0)
@@ -247,7 +240,10 @@ class ASTPanelWidget(QWidget):
         config_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         config_layout = QFormLayout()
         config_layout.setLabelAlignment(Qt.AlignLeft)
-        config_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        config_layout.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
+        config_layout.setHorizontalSpacing(
+            20
+        )  # Espacio entre label y widget para evitar truncamiento
 
         # Organismo (fijo, no editable)
         organism_label = QLabel("<b>Pseudomonas aeruginosa</b>")
@@ -257,6 +253,7 @@ class ASTPanelWidget(QWidget):
 
         # Panel selector
         self.panel_combo = QComboBox()
+        self.panel_combo.setMinimumWidth(250)  # Ancho mínimo para evitar truncamiento
         self.panel_combo.setToolTip("Seleccione el panel de antibióticos a simular")
         self.panel_combo.setStyleSheet("""
             QComboBox {
@@ -269,7 +266,7 @@ class ASTPanelWidget(QWidget):
                 border-color: #3498db;
             }
         """)
-        self.panel_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.panel_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         config_layout.addRow("Panel:", self.panel_combo)
 
         # Inóculo (McFarland)
@@ -279,6 +276,7 @@ class ASTPanelWidget(QWidget):
         self.inoculo_spin.setValue(0.5)
         self.inoculo_spin.setDecimals(1)
         self.inoculo_spin.setSuffix(" McF")
+        self.inoculo_spin.setFixedWidth(120)
         self.inoculo_spin.setToolTip(
             "Densidad del inóculo bacteriano (0.5 McFarland estándar)"
         )
@@ -293,7 +291,7 @@ class ASTPanelWidget(QWidget):
                 border-color: #3498db;
             }
         """)
-        self.inoculo_spin.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.inoculo_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         config_layout.addRow("Inóculo:", self.inoculo_spin)
 
         # Temperatura
@@ -303,6 +301,7 @@ class ASTPanelWidget(QWidget):
         self.temperatura_spin.setValue(37.0)
         self.temperatura_spin.setDecimals(1)
         self.temperatura_spin.setSuffix(" °C")
+        self.temperatura_spin.setFixedWidth(120)
         self.temperatura_spin.setToolTip("Temperatura de incubación (37°C estándar)")
         self.temperatura_spin.setStyleSheet("""
             QDoubleSpinBox {
@@ -315,7 +314,7 @@ class ASTPanelWidget(QWidget):
                 border-color: #3498db;
             }
         """)
-        self.temperatura_spin.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.temperatura_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         config_layout.addRow("Temperatura:", self.temperatura_spin)
 
         # Duración (fija)
@@ -431,13 +430,12 @@ class ASTPanelWidget(QWidget):
         self.progress_stack.setCurrentIndex(0)  # Por defecto: vacío
         layout.addWidget(self.progress_stack)
 
-        # Configurar scroll area
-        scroll_area.setWidget(central_container)
+        layout.addStretch()  # Compactar contenido
 
-        # Layout principal del widget
+        # Layout principal del widget (sin scroll area)
         widget_layout = QVBoxLayout(self)
         widget_layout.setContentsMargins(0, 0, 0, 0)
-        widget_layout.addWidget(scroll_area)
+        widget_layout.addWidget(central_container)
 
     def _load_panels(self):
         """Carga paneles disponibles desde la base de datos."""
@@ -658,14 +656,17 @@ class ASTPanelWidget(QWidget):
         # Emitir señal
         self.ast_completed.emit(report)
 
-        # Mostrar mensaje
-        QMessageBox.information(
-            self,
-            "Simulación completada",
+        # Mostrar mensaje en el centro de la ventana principal
+        msg_box = QMessageBox(self.window())  # Usar ventana principal como padre
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setWindowTitle("Simulación completada")
+        msg_box.setText(
             f"AST finalizado correctamente.\n\n"
             f"Antibióticos analizados: {len(report.get('mic_results', []))}\n"
-            f"Estado QC: {report.get('qc', {}).get('overall_status', 'UNKNOWN')}",
+            f"Estado QC: {report.get('qc', {}).get('overall_status', 'UNKNOWN')}"
         )
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
 
     def _on_error(self, error_msg: str):
         """Maneja errores en la simulación."""

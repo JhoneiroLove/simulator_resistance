@@ -107,7 +107,9 @@ class WellWidget(QFrame):
         self.position_label = QLabel(position)
         self.position_label.setAlignment(Qt.AlignCenter)
         self.position_label.setStyleSheet("font-size: 9px; font-weight: bold;")
-        self.position_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Tamaño fijo
+        self.position_label.setSizePolicy(
+            QSizePolicy.Fixed, QSizePolicy.Fixed
+        )  # Tamaño fijo
         layout.addWidget(self.position_label)
 
         # Inicializar como vacío
@@ -477,7 +479,11 @@ class ASTPlateViewer(QWidget):
         # Actualizar ODs de pocillos si hay datos de serie temporal
         if self.time_series_data:
             for well_data in self.time_series_data:
-                position = well_data.posicion
+                # Soportar tanto diccionarios como objetos (igual que en load_well_data)
+                if isinstance(well_data, dict):
+                    position = well_data.get("well_id")
+                else:
+                    position = well_data.posicion
 
                 if position not in self.wells:
                     continue
