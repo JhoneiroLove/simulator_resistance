@@ -231,21 +231,19 @@ class ASTPanelWidget(QWidget):
         # Obtener theme manager para estilos adaptables (RNF-8: Portabilidad)
         theme = get_theme_manager()
 
-        # Contenedor central con ancho máximo (sin scroll area)
+        # Contenedor central - SIN límite de ancho, se adapta a la ventana
         central_container = QWidget()
         central_layout = QHBoxLayout(central_container)
-        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setContentsMargins(40, 0, 40, 0)  # Márgenes laterales
 
         main_widget = QWidget()
-        main_widget.setMaximumWidth(900)  # Limitar ancho máximo
+        # SIN setMaximumWidth - permitir que use todo el espacio disponible
         layout = QVBoxLayout(main_widget)
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # Centrar el contenido
-        central_layout.addStretch()
+        # NO centrar - usar todo el ancho
         central_layout.addWidget(main_widget)
-        central_layout.addStretch()
 
         # Grupo: Configuración AST
         config_group = QGroupBox("Configuración AST")

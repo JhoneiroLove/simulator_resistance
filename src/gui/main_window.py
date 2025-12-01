@@ -37,17 +37,17 @@ class MainWindow(QMainWindow):
         # Deshabilitar botón de maximizar/pantalla completa
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowMaximizeButtonHint)
 
-        # Tamaño inicial más compacto ajustado al contenido centrado
+        # Tamaño inicial más amplio para mejor legibilidad
         screen = QApplication.primaryScreen().availableGeometry()
 
-        # Ancho: 1100px (contenido 900px + márgenes + scrollbar)
-        # Alto: 85% de la pantalla para mantener altura cómoda
-        initial_width = min(1100, int(screen.width() * 0.7))
-        initial_height = int(screen.height() * 0.85)
+        # Ancho: 1280px para mostrar todo el contenido sin comprimir
+        # Alto: 90% de la pantalla para comodidad
+        initial_width = min(1280, int(screen.width() * 0.8))
+        initial_height = int(screen.height() * 0.90)
         self.resize(initial_width, initial_height)
 
-        # Establecer tamaño mínimo más compacto
-        self.setMinimumSize(950, 700)
+        # Establecer tamaño mínimo para que todo se vea correctamente
+        self.setMinimumSize(1100, 750)
 
         # Centrar
         qr = self.frameGeometry()
