@@ -35,6 +35,7 @@ from src.data.database import get_session
 from src.data.models import PanelLayout
 from src.core.ast_simulator import ASTSimulator
 from src.gui.widgets.incubation_progress_widget import IncubationProgressWidget
+from src.gui.styles.theme_manager import get_theme_manager
 
 
 class ASTWorker(QThread):
@@ -204,6 +205,9 @@ class ASTPanelWidget(QWidget):
     def _init_ui(self):
         """Inicializa la interfaz de usuario."""
 
+        # Obtener theme manager para estilos adaptables (RNF-8: Portabilidad)
+        theme = get_theme_manager()
+
         # Contenedor central con ancho máximo (sin scroll area)
         central_container = QWidget()
         central_layout = QHBoxLayout(central_container)
@@ -222,21 +226,7 @@ class ASTPanelWidget(QWidget):
 
         # Grupo: Configuración AST
         config_group = QGroupBox("Configuración AST")
-        config_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #3498db;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-                color: #3498db;
-            }
-        """)
+        config_group.setStyleSheet(theme.get_groupbox_style())
         config_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         config_layout = QFormLayout()
         config_layout.setLabelAlignment(Qt.AlignLeft)
@@ -247,7 +237,7 @@ class ASTPanelWidget(QWidget):
 
         # Organismo (fijo, no editable)
         organism_label = QLabel("<b>Pseudomonas aeruginosa</b>")
-        organism_label.setStyleSheet("color: #2c3e50;")
+        organism_label.setStyleSheet(theme.get_label_style("bold"))
         organism_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         config_layout.addRow("Organismo:", organism_label)
 
@@ -294,18 +284,7 @@ class ASTPanelWidget(QWidget):
         self.inoculo_spin.setAccessibleDescription(
             "Densidad del inóculo en unidades McFarland, rango 0.3 a 0.7"
         )
-        self.inoculo_spin.setStyleSheet("""
-            QDoubleSpinBox {
-                padding: 8px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                font-size: 13px;
-            }
-            QDoubleSpinBox:focus {
-                border-color: #3498db;
-                border-width: 3px;
-            }
-        """)
+        self.inoculo_spin.setStyleSheet(theme.get_spinbox_style())
         self.inoculo_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         inoculo_label = QLabel("&Inóculo:")
@@ -327,18 +306,7 @@ class ASTPanelWidget(QWidget):
         self.temperatura_spin.setAccessibleDescription(
             "Temperatura en grados Celsius, rango 35.0 a 37.0"
         )
-        self.temperatura_spin.setStyleSheet("""
-            QDoubleSpinBox {
-                padding: 8px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                font-size: 13px;
-            }
-            QDoubleSpinBox:focus {
-                border-color: #3498db;
-                border-width: 3px;
-            }
-        """)
+        self.temperatura_spin.setStyleSheet(theme.get_spinbox_style())
         self.temperatura_spin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         temperatura_label = QLabel("&Temperatura:")
@@ -347,7 +315,7 @@ class ASTPanelWidget(QWidget):
 
         # Duración (fija)
         duracion_label = QLabel("<b>18.0 h</b> (estándar)")
-        duracion_label.setStyleSheet("color: #7f8c8d;")
+        duracion_label.setStyleSheet(theme.get_label_style("muted"))
         duracion_label.setToolTip("Duración estándar para AST según CLSI M07")
         duracion_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         config_layout.addRow("Duración:", duracion_label)
@@ -383,26 +351,7 @@ class ASTPanelWidget(QWidget):
         self.run_button.setAccessibleDescription(
             "Inicia la simulación del antibiograma con los parámetros configurados"
         )
-        self.run_button.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                font-size: 15px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 5px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-            QPushButton:disabled {
-                background-color: #95a5a6;
-            }
-            QPushButton:focus {
-                border: 3px solid #1e8449;
-            }
-        """)
+        self.run_button.setStyleSheet(theme.get_button_style("success"))
         self.run_button.setFixedWidth(180)
         self.run_button.setDefault(True)
         self.run_button.clicked.connect(self._on_run_clicked)
@@ -412,20 +361,7 @@ class ASTPanelWidget(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimumHeight(40)
         self.progress_bar.setVisible(True)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #27ae60;
-                border-radius: 5px;
-                text-align: center;
-                background-color: #f8f9fa;
-                font-weight: bold;
-                color: #2c3e50;
-            }
-            QProgressBar::chunk {
-                background-color: #27ae60;
-                border-radius: 3px;
-            }
-        """)
+        self.progress_bar.setStyleSheet(theme.get_progress_bar_style())
         self.progress_bar.setAlignment(Qt.AlignCenter)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -438,15 +374,7 @@ class ASTPanelWidget(QWidget):
 
         # === MENSAJE DE ESTADO ===
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d; 
-                font-style: italic;
-                padding: 5px;
-                background-color: #f8f9fa;
-                border-radius: 3px;
-            }
-        """)
+        self.status_label.setStyleSheet(theme.get_label_style("info"))
         self.status_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
