@@ -36,6 +36,7 @@ from src.data.models import PanelLayout
 from src.core.ast_simulator import ASTSimulator
 from src.gui.widgets.incubation_progress_widget import IncubationProgressWidget
 from src.gui.styles.theme_manager import get_theme_manager
+from src.utils.security import InputValidator, safe_format_error_message, SecurityLogger
 
 
 class ASTWorker(QThread):
@@ -64,10 +65,31 @@ class ASTWorker(QThread):
         progressive_mode: bool = False,  # NUEVO: modo progresivo
     ):
         super().__init__()
-        self.bacteria_profile_id = bacteria_profile_id
-        self.panel_layout_id = panel_layout_id
-        self.inoculo_mcfarland = inoculo_mcfarland
-        self.temperatura = temperatura
+
+        # RNF-3: Validar inputs antes de usar
+        try:
+            self.bacteria_profile_id = InputValidator.validate_bacteria_profile_id(
+                bacteria_profile_id
+            )
+            self.panel_layout_id = InputValidator.validate_bacteria_profile_id(
+                panel_layout_id
+            )
+            self.inoculo_mcfarland = InputValidator.validate_inoculum(inoculo_mcfarland)
+            self.temperatura = InputValidator.validate_temperature(temperatura)
+            self.duracion_horas = InputValidator.validate_numeric_range(
+                duracion_horas, min_val=1.0, max_val=72.0, field_name="Duración"
+            )
+        except ValueError as e:
+            SecurityLogger.log_validation_error(
+                "ASTWorker.__init__",
+                {
+                    "bacteria_profile_id": bacteria_profile_id,
+                    "inoculo": inoculo_mcfarland,
+                    "temperatura": temperatura,
+                },
+                str(e),
+            )
+            raise
         self.duracion_horas = duracion_horas
         self.progressive_mode = progressive_mode
         self.speed_multiplier = 1  # Velocidad actual (1x, 2x, 4x)
@@ -420,9 +442,21 @@ class ASTPanelWidget(QWidget):
             # Agregar paneles al combo
             for panel in panels:
                 panel_name = panel[0]
-                # Formatear nombre para display
-                display_name = panel_name.replace("_", " ").title()
-                self.panel_combo.addItem(display_name, panel_name)
+
+                # RNF-3: Sanitizar datos de BD
+                try:
+                    panel_name = InputValidator.sanitize_database_string(panel_name)
+                    validated_name = InputValidator.validate_panel_name(panel_name)
+
+                    # Formatear nombre para display
+                    display_name = validated_name.replace("_", " ").title()
+                    self.panel_combo.addItem(display_name, validated_name)
+                except ValueError as e:
+                    SecurityLogger.log_suspicious_activity(
+                        "Panel inválido en BD",
+                        f"Nombre: {panel_name[:50]}, Error: {str(e)}",
+                    )
+                    continue  # Saltar panel inválido
 
             # Seleccionar panel por defecto
             default_index = self.panel_combo.findData("Pseudomonas_Standard_Panel")
@@ -430,10 +464,16 @@ class ASTPanelWidget(QWidget):
                 self.panel_combo.setCurrentIndex(default_index)
 
         except Exception as e:
+            # RNF-3: No exponer detalles internos del sistema
+            SecurityLogger.log_suspicious_activity(
+                "Error cargando paneles",
+                f"Exception: {type(e).__name__}: {str(e)[:100]}",
+            )
             QMessageBox.warning(
                 self,
                 "Error al cargar paneles",
-                f"No se pudieron cargar los paneles disponibles:\n{str(e)}",
+                "No se pudieron cargar los paneles disponibles. "
+                "Por favor, verifique la base de datos.",
             )
             self.run_button.setEnabled(False)
 
@@ -444,11 +484,23 @@ class ASTPanelWidget(QWidget):
         Args:
             bacteria_profile_id: ID del perfil en tabla bacteria_profiles
         """
-        self.current_bacteria_profile_id = bacteria_profile_id
-        self.run_button.setEnabled(True)
-        self.status_label.setText(
-            f"✓ Perfil bacteriano cargado (ID: {bacteria_profile_id})"
-        )
+        # RNF-3: Validar ID de perfil
+        try:
+            validated_id = InputValidator.validate_bacteria_profile_id(
+                bacteria_profile_id
+            )
+            self.current_bacteria_profile_id = validated_id
+            self.run_button.setEnabled(True)
+            self.status_label.setText(
+                f"✓ Perfil bacteriano cargado (ID: {validated_id})"
+            )
+        except ValueError as e:
+            SecurityLogger.log_validation_error(
+                "set_bacteria_profile", bacteria_profile_id, str(e)
+            )
+            QMessageBox.warning(
+                self, "ID de perfil inválido", safe_format_error_message(e)
+            )
 
     def _on_run_clicked(self):
         """Maneja el clic en el botón ejecutar."""

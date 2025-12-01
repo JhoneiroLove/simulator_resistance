@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QFrame,
 )
-from PyQt5.QtCore import pyqtSignal, QThread, QTimer
+from PyQt5.QtCore import pyqtSignal, QThread
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
@@ -39,6 +39,7 @@ from src.core.bacteria_profile_generator import (
     BacteriaProfile,
 )
 from src.core.genotype_phenotype_calculator import GenotypePhenotypeCalculator
+from src.utils.security import InputValidator, SecurityLogger, safe_format_error_message
 
 
 class ProfileGenerationThread(QThread):
@@ -557,13 +558,30 @@ class BacteriaProfileWidget(QWidget):
         """
         import json
 
+        # Validar y sanitizar datos antes de guardar
+        try:
+            sanitized_organismo = InputValidator.sanitize_database_string(
+                profile.organismo
+            )
+            sanitized_escenario = InputValidator.sanitize_database_string(
+                profile.escenario
+            )
+            sanitized_origen = InputValidator.sanitize_database_string(
+                profile.origen_muestra
+            )
+        except ValueError as e:
+            SecurityLogger.log_validation_error("bacteria_profile_widget", str(e))
+            raise ValueError(
+                f"Error al validar datos del perfil: {safe_format_error_message(e)}"
+            )
+
         # Crear registro
         db_profile = BacteriaProfileModel(
-            organismo=profile.organismo,
+            organismo=sanitized_organismo,
             genotipo=json.dumps(profile.genotipo),
             mics_calculated=json.dumps(profile.mics_calculated),
-            escenario=profile.escenario,
-            origen_muestra=profile.origen_muestra,
+            escenario=sanitized_escenario,
+            origen_muestra=sanitized_origen,
             antibioticos_previos=(
                 json.dumps(profile.antibioticos_previos)
                 if profile.antibioticos_previos

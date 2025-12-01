@@ -15,6 +15,8 @@ from typing import Optional, List, Dict
 import csv
 from datetime import datetime
 
+from src.utils.security import InputValidator, SecurityLogger, safe_format_error_message
+
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -425,6 +427,14 @@ class ASTResultsTable(QWidget):
         if not filename:
             return
 
+        # Validar ruta de archivo
+        try:
+            validated_filename = InputValidator.validate_file_path(filename, [".csv"])
+        except ValueError as e:
+            SecurityLogger.log_validation_error("ast_results_table", str(e))
+            QMessageBox.critical(self, "Ruta inválida", safe_format_error_message(e))
+            return
+
         try:
             if self.current_guideline_filter == "Todos":
                 results_to_export = self.current_results
@@ -436,7 +446,7 @@ class ASTResultsTable(QWidget):
                     == self.current_guideline_filter.upper()
                 ]
 
-            with open(filename, "w", newline="", encoding="utf-8") as csvfile:
+            with open(validated_filename, "w", newline="", encoding="utf-8") as csvfile:
                 fieldnames = [
                     "Antibiótico",
                     "MIC (µg/mL)",
@@ -454,13 +464,21 @@ class ASTResultsTable(QWidget):
                 writer.writeheader()
 
                 for result in results_to_export:
+                    # Sanitizar datos antes de escribir
+                    sanitized_antibiotico = InputValidator.sanitize_database_string(
+                        str(result.get("antibiotico", "N/A"))
+                    )
+                    sanitized_guideline = InputValidator.sanitize_database_string(
+                        str(result.get("guideline", "N/A"))
+                    )
+
                     writer.writerow(
                         {
-                            "Antibiótico": result.get("antibiotico", "N/A"),
+                            "Antibiótico": sanitized_antibiotico,
                             "MIC (µg/mL)": f"{result.get('mic_value', 0):.2f}",
                             "Operador": result.get("mic_operador", "="),
                             "Interpretación": result.get("interpretacion", "UNKNOWN"),
-                            "Guideline": result.get("guideline", "N/A"),
+                            "Guideline": sanitized_guideline,
                             "Versión": result.get("version", ""),
                             "Breakpoint S (≤)": f"{result.get('breakpoint_s', 0):.1f}",
                             "Breakpoint R (≥)": f"{result.get('breakpoint_r', 0):.1f}",
@@ -500,6 +518,14 @@ class ASTResultsTable(QWidget):
         if not filename:
             return
 
+        # Validar ruta de archivo
+        try:
+            validated_filename = InputValidator.validate_file_path(filename, [".pdf"])
+        except ValueError as e:
+            SecurityLogger.log_validation_error("ast_results_table", str(e))
+            QMessageBox.critical(self, "Ruta inválida", safe_format_error_message(e))
+            return
+
         try:
             if self.current_guideline_filter == "Todos":
                 results_to_export = self.current_results
@@ -512,7 +538,7 @@ class ASTResultsTable(QWidget):
                 ]
 
             export_ast_to_pdf(
-                filename=filename,
+                filename=validated_filename,
                 mic_results=results_to_export,
                 organism="Pseudomonas aeruginosa",
                 sample_date=datetime.now().strftime("%d/%m/%Y"),
