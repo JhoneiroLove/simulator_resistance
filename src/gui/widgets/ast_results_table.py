@@ -522,7 +522,7 @@ class ASTResultsTable(QWidget):
         try:
             validated_filename = InputValidator.validate_file_path(filename, [".pdf"])
         except ValueError as e:
-            SecurityLogger.log_validation_error("ast_results_table", str(e))
+            SecurityLogger.log_validation_error("export_path", filename, str(e))
             QMessageBox.critical(self, "Ruta inválida", safe_format_error_message(e))
             return
 

@@ -9,6 +9,7 @@ Fecha: 30 de noviembre de 2025
 """
 
 import re
+import os
 from typing import Any, Optional, Union
 import html
 
@@ -240,9 +241,17 @@ class InputValidator:
         if not path:
             raise ValueError("La ruta del archivo no puede estar vacía")
 
-        # Detectar path traversal
-        if ".." in path or path.startswith("/") or ":" in path[1:]:
-            raise ValueError("Ruta de archivo potencialmente insegura detectada")
+        # Normalizar path para Windows/Linux
+        normalized_path = os.path.normpath(path)
+
+        # Detectar path traversal (pero permitir rutas absolutas de Windows)
+        # En Windows, las rutas absolutas tienen formato C:\... o D:\...
+        is_windows_absolute = len(path) >= 3 and path[1:3] == ":\\"
+
+        if ".." in normalized_path and not is_windows_absolute:
+            raise ValueError(
+                "Ruta de archivo potencialmente insegura detectada (path traversal)"
+            )
 
         # Validar extensión si se especifica
         if allowed_extensions:
