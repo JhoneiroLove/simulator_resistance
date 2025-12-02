@@ -15,16 +15,37 @@ from datetime import datetime
 from typing import Optional, Callable, Any
 from functools import wraps
 from PyQt5.QtWidgets import QMessageBox
+from pathlib import Path
 
 
 class ErrorHandler:
     """Manejador centralizado de errores para RNF-4."""
 
     @staticmethod
+    def get_logs_directory() -> Path:
+        """
+        Obtiene el directorio de logs apropiado según el sistema operativo.
+
+        Returns:
+            Path al directorio de logs con permisos de escritura
+        """
+        if os.name == "nt":  # Windows
+            # Usar AppData/Local para logs en Windows
+            appdata = os.getenv("LOCALAPPDATA", os.path.expanduser("~"))
+            logs_dir = Path(appdata) / "ASTSimulator" / "logs"
+        else:  # Linux/macOS
+            # Usar directorio home del usuario
+            logs_dir = Path.home() / ".ast_simulator" / "logs"
+
+        # Crear directorio si no existe
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        return logs_dir
+
+    @staticmethod
     def setup_logging():
         """Configura logging estructurado para toda la aplicación."""
-        # Crear directorio logs si no existe
-        os.makedirs("logs", exist_ok=True)
+        # Obtener directorio de logs con permisos de escritura
+        logs_dir = ErrorHandler.get_logs_directory()
 
         log_format = "[%(asctime)s] %(levelname)-8s | %(name)-20s | %(message)s"
         date_format = "%Y-%m-%d %H:%M:%S"
@@ -34,14 +55,14 @@ class ErrorHandler:
             format=log_format,
             datefmt=date_format,
             handlers=[
-                logging.FileHandler("logs/app.log", encoding="utf-8"),
+                logging.FileHandler(logs_dir / "app.log", encoding="utf-8"),
                 logging.StreamHandler(),
             ],
         )
 
         # Logger específico para errores
         error_logger = logging.getLogger("error")
-        error_handler = logging.FileHandler("logs/errors.log", encoding="utf-8")
+        error_handler = logging.FileHandler(logs_dir / "errors.log", encoding="utf-8")
         error_handler.setLevel(logging.ERROR)
         error_handler.setFormatter(logging.Formatter(log_format, date_format))
         error_logger.addHandler(error_handler)
