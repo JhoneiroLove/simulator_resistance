@@ -20,7 +20,6 @@ dist/
 build/
 *.egg
 *.whl
-*.log
 *.sqlite3
 *.db
 *.DS_Store
@@ -36,7 +35,6 @@ build/
 *.coverage
 *.cover
 resistencia.db
-*.log
 
 *.pot
 

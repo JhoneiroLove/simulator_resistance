@@ -10,6 +10,7 @@ Fecha: 1 de diciembre de 2025
 
 import logging
 import traceback
+import os
 from datetime import datetime
 from typing import Optional, Callable, Any
 from functools import wraps
@@ -22,6 +23,9 @@ class ErrorHandler:
     @staticmethod
     def setup_logging():
         """Configura logging estructurado para toda la aplicación."""
+        # Crear directorio logs si no existe
+        os.makedirs("logs", exist_ok=True)
+
         log_format = "[%(asctime)s] %(levelname)-8s | %(name)-20s | %(message)s"
         date_format = "%Y-%m-%d %H:%M:%S"
 
